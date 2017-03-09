@@ -1,0 +1,11 @@
+
+## strings commands
+* BITCOUNT
+* BITFIELD
+* BITOP
+* BITPOS
+* GETBIT
+* SETBIT
+* INCRBYFLOAT
+* SETEX
+* PSETEX
