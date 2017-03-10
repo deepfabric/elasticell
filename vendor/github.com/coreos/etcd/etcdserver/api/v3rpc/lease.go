@@ -53,15 +53,8 @@ func (ls *LeaseServer) LeaseRevoke(ctx context.Context, rr *pb.LeaseRevokeReques
 
 func (ls *LeaseServer) LeaseTimeToLive(ctx context.Context, rr *pb.LeaseTimeToLiveRequest) (*pb.LeaseTimeToLiveResponse, error) {
 	resp, err := ls.le.LeaseTimeToLive(ctx, rr)
-	if err != nil && err != lease.ErrLeaseNotFound {
+	if err != nil {
 		return nil, togRPCError(err)
-	}
-	if err == lease.ErrLeaseNotFound {
-		resp = &pb.LeaseTimeToLiveResponse{
-			Header: &pb.ResponseHeader{},
-			ID:     rr.ID,
-			TTL:    -1,
-		}
 	}
 	ls.hdr.fill(resp.Header)
 	return resp, nil

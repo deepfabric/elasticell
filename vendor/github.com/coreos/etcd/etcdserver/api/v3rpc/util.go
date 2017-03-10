@@ -63,8 +63,6 @@ func togRPCError(err error) error {
 		return rpctypes.ErrGRPCTimeoutDueToConnectionLost
 	case etcdserver.ErrUnhealthy:
 		return rpctypes.ErrGRPCUnhealthy
-	case etcdserver.ErrKeyNotFound:
-		return rpctypes.ErrGRPCKeyNotFound
 
 	case lease.ErrLeaseNotFound:
 		return rpctypes.ErrGRPCLeaseNotFound

@@ -23,6 +23,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"fmt"
+	"log"
 	"math/big"
 	"net"
 	"os"
@@ -30,6 +31,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/coreos/etcd/pkg/fileutil"
 	"github.com/coreos/etcd/pkg/tlsutil"
 )
 
@@ -85,7 +87,7 @@ func (info TLSInfo) Empty() bool {
 }
 
 func SelfCert(dirpath string, hosts []string) (info TLSInfo, err error) {
-	if err = os.MkdirAll(dirpath, 0700); err != nil {
+	if err = fileutil.TouchDirAll(dirpath); err != nil {
 		return
 	}
 
@@ -233,6 +235,9 @@ func (info TLSInfo) ClientConfig() (*tls.Config, error) {
 		if err != nil {
 			return nil, err
 		}
+		// if given a CA, trust any host with a cert signed by the CA
+		log.Println("warning: ignoring ServerName for user-provided CA for backwards compatibility is deprecated")
+		cfg.ServerName = ""
 	}
 
 	if info.selfCert {

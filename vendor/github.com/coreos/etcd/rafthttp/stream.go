@@ -15,7 +15,6 @@
 package rafthttp
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -52,7 +51,6 @@ var (
 		"2.3.0": {streamTypeMsgAppV2, streamTypeMessage},
 		"3.0.0": {streamTypeMsgAppV2, streamTypeMessage},
 		"3.1.0": {streamTypeMsgAppV2, streamTypeMessage},
-		"3.2.0": {streamTypeMsgAppV2, streamTypeMessage},
 	}
 )
 
@@ -142,8 +140,7 @@ func (cw *streamWriter) run() {
 		flusher    http.Flusher
 		batched    int
 	)
-	tickc := time.NewTicker(ConnReadTimeout / 3)
-	defer tickc.Stop()
+	tickc := time.Tick(ConnReadTimeout / 3)
 	unflushed := 0
 
 	plog.Infof("started streaming with peer %s (writer)", cw.peerID)
@@ -215,7 +212,7 @@ func (cw *streamWriter) run() {
 				plog.Warningf("closed an existing TCP streaming connection with peer %s (%s writer)", cw.peerID, t)
 			}
 			plog.Infof("established a TCP streaming connection with peer %s (%s writer)", cw.peerID, t)
-			heartbeatc, msgc = tickc.C, cw.msgc
+			heartbeatc, msgc = tickc, cw.msgc
 		case <-cw.stopc:
 			if cw.close() {
 				plog.Infof("closed the TCP streaming connection with peer %s (%s writer)", cw.peerID, t)
@@ -429,17 +426,14 @@ func (cr *streamReader) dial(t streamType) (io.ReadCloser, error) {
 
 	setPeerURLsHeader(req, cr.tr.URLs)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	req = req.WithContext(ctx)
-
 	cr.mu.Lock()
-	cr.cancel = cancel
 	select {
 	case <-cr.stopc:
 		cr.mu.Unlock()
 		return nil, fmt.Errorf("stream reader is stopped")
 	default:
 	}
+	cr.cancel = httputil.RequestCanceler(req)
 	cr.mu.Unlock()
 
 	resp, err := cr.tr.streamRt.RoundTrip(req)
