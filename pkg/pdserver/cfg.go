@@ -35,13 +35,19 @@ type Cfg struct {
 	Name    string `json:"name"`
 	DataDir string `json:"dataDir"`
 
+	// for embed etcd server
 	ClientUrls          string `json:"clientUrls"`
 	PeerUrls            string `json:"peerUrls"`
 	AdvertiseClientUrls string `json:"advertiseClientUrls"`
 	AdvertisePeerUrls   string `json:"advertisePeerUrls"`
-
 	InitialCluster      string `json:"initialCluster"`
 	InitialClusterState string `json:"initialClusterState"`
+
+	// for leader election
+	LeaseTTL int64 `json:"leaseTTL"`
+
+	// RPCAddr rpc addr
+	RPCAddr string `json:"rpcAddr"`
 
 	LogLevel string `json:"logLevel, omitempty"`
 	LogFile  string `json:"logFile, omitempty"`

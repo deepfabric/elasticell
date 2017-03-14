@@ -19,6 +19,8 @@ import (
 	"net/url"
 	"strings"
 
+	"time"
+
 	"github.com/coreos/etcd/embed"
 	"github.com/coreos/etcd/etcdserver"
 	"github.com/coreos/etcd/pkg/types"
@@ -51,16 +53,18 @@ func (s *Server) startEmbedEtcd() {
 	case <-s.etcd.Server.ReadyNotify():
 		log.Info("bootstrap: embed etcd server is ready")
 		s.doAfterEmbedEtcdServerReady(cfg)
-	case <-s.stopC:
+	case <-time.After(time.Minute):
 		s.doStop()
 	}
 }
 
 func (s *Server) doAfterEmbedEtcdServerReady(cfg *embed.Config) {
-	// Now, we need do some check for cluster
 	s.checkEctdCluster()
 
 	s.id = uint64(s.etcd.Server.ID())
+	log.Infof("bootstrap: embed server ids, current=<%d>, leader=<%d>",
+		s.id,
+		s.etcd.Server.Leader())
 
 	s.initStore(cfg)
 	s.updateAdvertisePeerUrls()
@@ -118,6 +122,9 @@ func (s *Server) closeEmbedEtcd() {
 	if s.etcd == nil {
 		return
 	}
+
+	s.store.Close()
+	log.Info("stop: ectd v3 client is closed")
 
 	s.etcd.Close()
 	log.Info("stop: embed ectd server is stopped")

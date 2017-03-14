@@ -40,4 +40,8 @@ func InitLog() {
 	if "" != *logFile {
 		log.SetOutputByName(*logFile)
 	}
+
+	if !log.DebugEnabled() {
+		log.SetFlags(log.Ldate | log.Ltime)
+	}
 }

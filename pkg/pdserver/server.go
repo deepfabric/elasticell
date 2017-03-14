@@ -15,21 +15,37 @@ package pdserver
 
 import (
 	"sync"
+	"sync/atomic"
 
 	"github.com/coreos/etcd/embed"
+	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pdserver/storage"
+	"google.golang.org/grpc"
 )
 
 // Server the pd server
 type Server struct {
-	id uint64
+	cfg *Cfg
 
-	cfg  *Cfg
+	// ectd fields
+	id   uint64
 	etcd *embed.Etcd
+
+	// rpc fields
+	rpcServer *grpc.Server
 
 	store *storage.Store
 
+	// cluster fields
+	leaderSignature string
+	clusterID       uint64
+
+	// status
+	closed int64
+
+	// stop fields
 	stopOnce *sync.Once
+	stopWG   *sync.WaitGroup
 	stopC    chan interface{}
 }
 
@@ -39,26 +55,46 @@ func NewServer(cfg *Cfg) *Server {
 	s.cfg = cfg
 	s.stopC = make(chan interface{})
 	s.stopOnce = new(sync.Once)
+	s.stopWG = new(sync.WaitGroup)
+	s.leaderSignature = s.marshalLeader()
+
 	return s
 }
 
 // Start start the pd server
 func (s *Server) Start() {
 	s.printStartENV()
+
+	go s.listenToStop()
+
 	s.startEmbedEtcd()
-	return
+	s.initCluster()
+
+	go s.startRPC()
+
+	s.setServerIsStarted()
+	go s.startLeaderLoop()
 }
 
 // Stop the server
 func (s *Server) Stop() {
-	s.stopOnce.Do(func() {
-		s.doStop()
-	})
+	s.stopWG.Add(1)
+	s.stopC <- ""
+	s.stopWG.Wait()
+}
+
+func (s *Server) listenToStop() {
+	<-s.stopC
+	defer s.stopWG.Done()
+	s.doStop()
 }
 
 func (s *Server) doStop() {
-	// TODO: release resources
-	s.closeEmbedEtcd()
+	s.stopOnce.Do(func() {
+		s.closeRPC()
+		s.closeEmbedEtcd()
+		s.setServerIsStopped()
+	})
 }
 
 func (s *Server) printStartENV() {
@@ -74,4 +110,38 @@ func (s *Server) printStartENV() {
 	// log.Infof(info,
 	// Version,
 	// host.GetOSInfo())
+}
+
+func (s *Server) initCluster() {
+	clusterID, err := s.store.GetClusterID()
+	if err != nil {
+		log.Fatalf("bootstrap: get cluster id failure, errors:\n %+v", err)
+		return
+	}
+
+	log.Infof("bootstrap: get cluster id, clusterID=<%d>", clusterID)
+
+	if clusterID == 0 {
+		clusterID, err = s.store.CreateFirstClusterID()
+		if err != nil {
+			log.Fatalf("bootstrap: create first cluster id failure, errors:\n %+v", err)
+			return
+		}
+
+		log.Infof("bootstrap: first clusterID created, clusterID=<%d>", clusterID)
+	}
+
+	s.clusterID = clusterID
+}
+
+func (s *Server) isClosed() bool {
+	return atomic.LoadInt64(&s.closed) == 1
+}
+
+func (s *Server) setServerIsStopped() {
+	atomic.StoreInt64(&s.closed, 1)
+}
+
+func (s *Server) setServerIsStarted() {
+	atomic.StoreInt64(&s.closed, 0)
 }

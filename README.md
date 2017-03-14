@@ -1,2 +1,2 @@
 # elasticell
-distributed kv based on go
+distributed kv base on go

@@ -20,12 +20,21 @@ import (
 	"github.com/coreos/etcd/embed"
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/pkg/errors"
-	"golang.org/x/net/context"
 )
 
 const (
-	DefaultTimeout        = time.Second * 3
+	// DefaultTimeout default timeout
+	DefaultTimeout = time.Second * 3
+	// DefaultRequestTimeout default request timeout
 	DefaultRequestTimeout = 10 * time.Second
+	// DefaultSlowRequestTime default slow request time
+	DefaultSlowRequestTime = time.Second * 1
+
+	pdRootPath      = "/elasticell/pd"
+	pdIDPath        = "/elasticell/pd/id"
+	pdLeaderPath    = "/elasticell/pd/cluster/leader"
+	pdClusterIDPath = "/elasticell/pd/cluster/id"
+	pdCellPath      = "/elasticell/pd/cells"
 )
 
 // Store used for  metedata
@@ -61,10 +70,11 @@ func initEctdClient(cfg *embed.Config) (*clientv3.Client, error) {
 	return client, nil
 }
 
-// GetCurrentClusterMembers return members in current etcd cluster
-func (s *Store) GetCurrentClusterMembers() (*clientv3.MemberListResponse, error) {
-	ctx, cancel := context.WithTimeout(s.client.Ctx(), DefaultRequestTimeout)
-	members, err := s.client.MemberList(ctx)
-	cancel()
-	return members, errors.Wrap(err, "")
+// Close close ectd client
+func (s *Store) Close() error {
+	if s.client != nil {
+		return s.client.Close()
+	}
+
+	return nil
 }

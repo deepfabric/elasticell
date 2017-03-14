@@ -42,7 +42,6 @@ import (
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/transport"
 )
@@ -67,7 +66,7 @@ func recvResponse(ctx context.Context, dopts dialOptions, t transport.ClientTran
 	}
 	p := &parser{r: stream}
 	var inPayload *stats.InPayload
-	if dopts.copts.StatsHandler != nil {
+	if stats.On() {
 		inPayload = &stats.InPayload{
 			Client: true,
 		}
@@ -83,17 +82,14 @@ func recvResponse(ctx context.Context, dopts dialOptions, t transport.ClientTran
 	if inPayload != nil && err == io.EOF && stream.StatusCode() == codes.OK {
 		// TODO in the current implementation, inTrailer may be handled before inPayload in some cases.
 		// Fix the order if necessary.
-		dopts.copts.StatsHandler.HandleRPC(ctx, inPayload)
+		stats.HandleRPC(ctx, inPayload)
 	}
 	c.trailerMD = stream.Trailer()
-	if peer, ok := peer.FromContext(stream.Context()); ok {
-		c.peer = peer
-	}
 	return nil
 }
 
 // sendRequest writes out various information of an RPC such as Context and Message.
-func sendRequest(ctx context.Context, dopts dialOptions, compressor Compressor, callHdr *transport.CallHdr, t transport.ClientTransport, args interface{}, opts *transport.Options) (_ *transport.Stream, err error) {
+func sendRequest(ctx context.Context, codec Codec, compressor Compressor, callHdr *transport.CallHdr, t transport.ClientTransport, args interface{}, opts *transport.Options) (_ *transport.Stream, err error) {
 	stream, err := t.NewStream(ctx, callHdr)
 	if err != nil {
 		return nil, err
@@ -113,19 +109,19 @@ func sendRequest(ctx context.Context, dopts dialOptions, compressor Compressor, 
 	if compressor != nil {
 		cbuf = new(bytes.Buffer)
 	}
-	if dopts.copts.StatsHandler != nil {
+	if stats.On() {
 		outPayload = &stats.OutPayload{
 			Client: true,
 		}
 	}
-	outBuf, err := encode(dopts.codec, args, compressor, cbuf, outPayload)
+	outBuf, err := encode(codec, args, compressor, cbuf, outPayload)
 	if err != nil {
 		return nil, Errorf(codes.Internal, "grpc: %v", err)
 	}
 	err = t.Write(stream, outBuf, opts)
 	if err == nil && outPayload != nil {
 		outPayload.SentTime = time.Now()
-		dopts.copts.StatsHandler.HandleRPC(ctx, outPayload)
+		stats.HandleRPC(ctx, outPayload)
 	}
 	// t.NewStream(...) could lead to an early rejection of the RPC (e.g., the service/method
 	// does not exist.) so that t.Write could get io.EOF from wait(...). Leave the following
@@ -149,14 +145,6 @@ func Invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 
 func invoke(ctx context.Context, method string, args, reply interface{}, cc *ClientConn, opts ...CallOption) (e error) {
 	c := defaultCallInfo
-	if mc, ok := cc.getMethodConfig(method); ok {
-		c.failFast = !mc.WaitForReady
-		if mc.Timeout > 0 {
-			var cancel context.CancelFunc
-			ctx, cancel = context.WithTimeout(ctx, mc.Timeout)
-			defer cancel()
-		}
-	}
 	for _, o := range opts {
 		if err := o.before(&c); err != nil {
 			return toRPCErr(err)
@@ -183,24 +171,23 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 			}
 		}()
 	}
-	sh := cc.dopts.copts.StatsHandler
-	if sh != nil {
-		ctx = sh.TagRPC(ctx, &stats.RPCTagInfo{FullMethodName: method})
+	if stats.On() {
+		ctx = stats.TagRPC(ctx, &stats.RPCTagInfo{FullMethodName: method})
 		begin := &stats.Begin{
 			Client:    true,
 			BeginTime: time.Now(),
 			FailFast:  c.failFast,
 		}
-		sh.HandleRPC(ctx, begin)
+		stats.HandleRPC(ctx, begin)
 	}
 	defer func() {
-		if sh != nil {
+		if stats.On() {
 			end := &stats.End{
 				Client:  true,
 				EndTime: time.Now(),
 				Error:   e,
 			}
-			sh.HandleRPC(ctx, end)
+			stats.HandleRPC(ctx, end)
 		}
 	}()
 	topts := &transport.Options{
@@ -224,7 +211,6 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 		if cc.dopts.cp != nil {
 			callHdr.SendCompress = cc.dopts.cp.Type()
 		}
-
 		gopts := BalancerGetOptions{
 			BlockingWait: !c.failFast,
 		}
@@ -246,7 +232,7 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 		if c.traceInfo.tr != nil {
 			c.traceInfo.tr.LazyLog(&payload{sent: true, msg: args}, true)
 		}
-		stream, err = sendRequest(ctx, cc.dopts, cc.dopts.cp, callHdr, t, args, topts)
+		stream, err = sendRequest(ctx, cc.dopts.codec, cc.dopts.cp, callHdr, t, args, topts)
 		if err != nil {
 			if put != nil {
 				put()

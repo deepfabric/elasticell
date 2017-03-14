@@ -107,18 +107,11 @@ func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 
 func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, opts ...CallOption) (_ ClientStream, err error) {
 	var (
-		t      transport.ClientTransport
-		s      *transport.Stream
-		put    func()
-		cancel context.CancelFunc
+		t   transport.ClientTransport
+		s   *transport.Stream
+		put func()
 	)
 	c := defaultCallInfo
-	if mc, ok := cc.getMethodConfig(method); ok {
-		c.failFast = !mc.WaitForReady
-		if mc.Timeout > 0 {
-			ctx, cancel = context.WithTimeout(ctx, mc.Timeout)
-		}
-	}
 	for _, o := range opts {
 		if err := o.before(&c); err != nil {
 			return nil, toRPCErr(err)
@@ -151,24 +144,23 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 			}
 		}()
 	}
-	sh := cc.dopts.copts.StatsHandler
-	if sh != nil {
-		ctx = sh.TagRPC(ctx, &stats.RPCTagInfo{FullMethodName: method})
+	if stats.On() {
+		ctx = stats.TagRPC(ctx, &stats.RPCTagInfo{FullMethodName: method})
 		begin := &stats.Begin{
 			Client:    true,
 			BeginTime: time.Now(),
 			FailFast:  c.failFast,
 		}
-		sh.HandleRPC(ctx, begin)
+		stats.HandleRPC(ctx, begin)
 	}
 	defer func() {
-		if err != nil && sh != nil {
+		if err != nil && stats.On() {
 			// Only handle end stats if err != nil.
 			end := &stats.End{
 				Client: true,
 				Error:  err,
 			}
-			sh.HandleRPC(ctx, end)
+			stats.HandleRPC(ctx, end)
 		}
 	}()
 	gopts := BalancerGetOptions{
@@ -208,13 +200,12 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		break
 	}
 	cs := &clientStream{
-		opts:   opts,
-		c:      c,
-		desc:   desc,
-		codec:  cc.dopts.codec,
-		cp:     cc.dopts.cp,
-		dc:     cc.dopts.dc,
-		cancel: cancel,
+		opts:  opts,
+		c:     c,
+		desc:  desc,
+		codec: cc.dopts.codec,
+		cp:    cc.dopts.cp,
+		dc:    cc.dopts.dc,
 
 		put: put,
 		t:   t,
@@ -224,8 +215,7 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		tracing: EnableTracing,
 		trInfo:  trInfo,
 
-		statsCtx:     ctx,
-		statsHandler: cc.dopts.copts.StatsHandler,
+		statsCtx: ctx,
 	}
 	if cc.dopts.cp != nil {
 		cs.cbuf = new(bytes.Buffer)
@@ -259,17 +249,16 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 
 // clientStream implements a client side Stream.
 type clientStream struct {
-	opts   []CallOption
-	c      callInfo
-	t      transport.ClientTransport
-	s      *transport.Stream
-	p      *parser
-	desc   *StreamDesc
-	codec  Codec
-	cp     Compressor
-	cbuf   *bytes.Buffer
-	dc     Decompressor
-	cancel context.CancelFunc
+	opts  []CallOption
+	c     callInfo
+	t     transport.ClientTransport
+	s     *transport.Stream
+	p     *parser
+	desc  *StreamDesc
+	codec Codec
+	cp    Compressor
+	cbuf  *bytes.Buffer
+	dc    Decompressor
 
 	tracing bool // set to EnableTracing when the clientStream is created.
 
@@ -283,8 +272,7 @@ type clientStream struct {
 	// statsCtx keeps the user context for stats handling.
 	// All stats collection should use the statsCtx (instead of the stream context)
 	// so that all the generated stats for a particular RPC can be associated in the processing phase.
-	statsCtx     context.Context
-	statsHandler stats.Handler
+	statsCtx context.Context
 }
 
 func (cs *clientStream) Context() context.Context {
@@ -338,7 +326,7 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 		err = toRPCErr(err)
 	}()
 	var outPayload *stats.OutPayload
-	if cs.statsHandler != nil {
+	if stats.On() {
 		outPayload = &stats.OutPayload{
 			Client: true,
 		}
@@ -355,14 +343,14 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 	err = cs.t.Write(cs.s, out, &transport.Options{Last: false})
 	if err == nil && outPayload != nil {
 		outPayload.SentTime = time.Now()
-		cs.statsHandler.HandleRPC(cs.statsCtx, outPayload)
+		stats.HandleRPC(cs.statsCtx, outPayload)
 	}
 	return err
 }
 
 func (cs *clientStream) RecvMsg(m interface{}) (err error) {
 	defer func() {
-		if err != nil && cs.statsHandler != nil {
+		if err != nil && stats.On() {
 			// Only generate End if err != nil.
 			// If err == nil, it's not the last RecvMsg.
 			// The last RecvMsg gets either an RPC error or io.EOF.
@@ -373,11 +361,11 @@ func (cs *clientStream) RecvMsg(m interface{}) (err error) {
 			if err != io.EOF {
 				end.Error = toRPCErr(err)
 			}
-			cs.statsHandler.HandleRPC(cs.statsCtx, end)
+			stats.HandleRPC(cs.statsCtx, end)
 		}
 	}()
 	var inPayload *stats.InPayload
-	if cs.statsHandler != nil {
+	if stats.On() {
 		inPayload = &stats.InPayload{
 			Client: true,
 		}
@@ -398,7 +386,7 @@ func (cs *clientStream) RecvMsg(m interface{}) (err error) {
 			cs.mu.Unlock()
 		}
 		if inPayload != nil {
-			cs.statsHandler.HandleRPC(cs.statsCtx, inPayload)
+			stats.HandleRPC(cs.statsCtx, inPayload)
 		}
 		if !cs.desc.ClientStreams || cs.desc.ServerStreams {
 			return
@@ -461,11 +449,6 @@ func (cs *clientStream) closeTransportStream(err error) {
 }
 
 func (cs *clientStream) finish(err error) {
-	defer func() {
-		if cs.cancel != nil {
-			cs.cancel()
-		}
-	}()
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
 	for _, o := range cs.opts {
@@ -523,8 +506,6 @@ type serverStream struct {
 	statusDesc string
 	trInfo     *traceInfo
 
-	statsHandler stats.Handler
-
 	mu sync.Mutex // protects trInfo.tr after the service handler runs.
 }
 
@@ -567,7 +548,7 @@ func (ss *serverStream) SendMsg(m interface{}) (err error) {
 		}
 	}()
 	var outPayload *stats.OutPayload
-	if ss.statsHandler != nil {
+	if stats.On() {
 		outPayload = &stats.OutPayload{}
 	}
 	out, err := encode(ss.codec, m, ss.cp, ss.cbuf, outPayload)
@@ -585,7 +566,7 @@ func (ss *serverStream) SendMsg(m interface{}) (err error) {
 	}
 	if outPayload != nil {
 		outPayload.SentTime = time.Now()
-		ss.statsHandler.HandleRPC(ss.s.Context(), outPayload)
+		stats.HandleRPC(ss.s.Context(), outPayload)
 	}
 	return nil
 }
@@ -606,7 +587,7 @@ func (ss *serverStream) RecvMsg(m interface{}) (err error) {
 		}
 	}()
 	var inPayload *stats.InPayload
-	if ss.statsHandler != nil {
+	if stats.On() {
 		inPayload = &stats.InPayload{}
 	}
 	if err := recv(ss.p, ss.codec, ss.s, ss.dc, m, ss.maxMsgSize, inPayload); err != nil {
@@ -619,7 +600,7 @@ func (ss *serverStream) RecvMsg(m interface{}) (err error) {
 		return toRPCErr(err)
 	}
 	if inPayload != nil {
-		ss.statsHandler.HandleRPC(ss.s.Context(), inPayload)
+		stats.HandleRPC(ss.s.Context(), inPayload)
 	}
 	return nil
 }
