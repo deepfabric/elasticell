@@ -56,7 +56,6 @@ func NewServer(cfg *Cfg) *Server {
 	s.stopC = make(chan interface{})
 	s.stopOnce = new(sync.Once)
 	s.stopWG = new(sync.WaitGroup)
-	s.leaderSignature = s.marshalLeader()
 
 	return s
 }

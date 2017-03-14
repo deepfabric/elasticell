@@ -6,5 +6,5 @@
     "peerUrls": "http://127.0.0.1:2380",
     "initialCluster": "pd1=http://127.0.0.1:2380,pd2=http://127.0.0.1:3380,pd3=http://127.0.0.1:4380",
     "initialClusterState": "new",
-    "leaseTTL": 5000
+    "leaseSecsTTL": 5
 }

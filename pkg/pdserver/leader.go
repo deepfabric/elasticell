@@ -25,6 +25,8 @@ var (
 )
 
 func (s *Server) startLeaderLoop() {
+	s.leaderSignature = s.marshalLeader()
+
 	for {
 		if s.isClosed() {
 			log.Infof("leader-loop: server is closed, return leader loop")
@@ -43,27 +45,26 @@ func (s *Server) startLeaderLoop() {
 			if s.isMatchLeader(leader) {
 				// oh, we are already leader, we may meet something wrong
 				// in previous campaignLeader. we can resign and campaign again.
-				log.Warnf("leader-loop: leader is matched, resign and campaign again, leader=<%s>",
+				log.Warnf("leader-loop: leader is matched, resign and campaign again, leader=<%v>",
 					leader)
 				if err = s.store.ResignLeader(s.leaderSignature); err != nil {
-					log.Warnf("leader-loop: resign leader failure, leader=<%s>, errors:\n %+v",
+					log.Warnf("leader-loop: resign leader failure, leader=<%v>, errors:\n %+v",
 						leader,
 						err)
 					time.Sleep(loopInterval)
 					continue
 				}
 			} else {
-				log.Infof("leader-loop: leader is not matched, watch it, leader=<%s>",
+				log.Infof("leader-loop: leader is not matched, watch it, leader=<%v>",
 					leader)
 				s.store.WatchLeader()
-				log.Info("leader-loop: leader changed, try to campaign leader, leader=<%s>", leader)
+				log.Infof("leader-loop: leader changed, try to campaign leader, leader=<%v>", leader)
 			}
 		}
 
-		log.Debugf("leader-loop: begin to campaign leader, name=<%s> leader=<%s>",
-			s.cfg.Name,
-			s.leaderSignature)
-		if err = s.store.CampaignLeader(s.leaderSignature, s.cfg.LeaseTTL); err != nil {
+		log.Debugf("leader-loop: begin to campaign leader, name=<%s>",
+			s.cfg.Name)
+		if err = s.store.CampaignLeader(s.cfg.Name, s.leaderSignature, s.cfg.LeaseSecsTTL); err != nil {
 			log.Errorf("leader-loop: campaign leader failure, errors:\n %+v", err)
 		}
 	}
@@ -79,8 +80,13 @@ func (s *Server) marshalLeader() string {
 	leader := &pb.Leader{
 		Addr: s.cfg.RPCAddr,
 		Id:   s.id,
+		Name: s.cfg.Name,
 	}
 
+	return marshal(leader)
+}
+
+func marshal(leader *pb.Leader) string {
 	data, err := leader.Marshal()
 	if err != nil {
 		// can't fail, so panic here.

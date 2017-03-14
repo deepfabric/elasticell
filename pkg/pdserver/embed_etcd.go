@@ -62,7 +62,7 @@ func (s *Server) doAfterEmbedEtcdServerReady(cfg *embed.Config) {
 	s.checkEctdCluster()
 
 	s.id = uint64(s.etcd.Server.ID())
-	log.Infof("bootstrap: embed server ids, current=<%d>, leader=<%d>",
+	log.Infof("bootstrap: embed server ids, id=<%d>, leader=<%d>",
 		s.id,
 		s.etcd.Server.Leader())
 

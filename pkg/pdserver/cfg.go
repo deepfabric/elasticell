@@ -44,7 +44,7 @@ type Cfg struct {
 	InitialClusterState string `json:"initialClusterState"`
 
 	// for leader election
-	LeaseTTL int64 `json:"leaseTTL"`
+	LeaseSecsTTL int64 `json:"leaseSecsTTL"`
 
 	// RPCAddr rpc addr
 	RPCAddr string `json:"rpcAddr"`
