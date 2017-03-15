@@ -16,23 +16,67 @@ package pdserver
 import (
 	"sync"
 
-	"github.com/deepfabric/elasticell/pkg/pdserver/storage"
+	"github.com/pkg/errors"
+)
+
+const (
+	batch = uint64(1000)
 )
 
 type idAllocator struct {
-	mu    sync.Mutex
-	store *storage.Store
+	mu     sync.Mutex
+	server *Server
+	base   uint64
+	end    uint64
 }
 
-func newIDAllocator(store *storage.Store) *idAllocator {
+func newIDAllocator(server *Server) *idAllocator {
 	return &idAllocator{
-		mu:    sync.Mutex{},
-		store: store,
+		mu:     sync.Mutex{},
+		server: server,
 	}
 }
 
-func (id *idAllocator) newID() (uint64, error) {
-	id.mu.Lock()
-	id.mu.Unlock()
+func (alloc *idAllocator) newID() (uint64, error) {
+	alloc.mu.Lock()
+	alloc.mu.Unlock()
+
+	if alloc.base == alloc.end {
+		end, err := alloc.generate()
+		if err != nil {
+			return 0, errors.Wrap(err, "")
+		}
+
+		alloc.end = end
+		alloc.base = alloc.end - batch
+	}
+
 	return 0, nil
+}
+
+func (alloc *idAllocator) generate() (uint64, error) {
+	value, err := alloc.server.store.GetID()
+	if err != nil {
+		return 0, errors.Wrap(err, "")
+	}
+
+	max := value + batch
+
+	// create id
+	if value == 0 {
+		max := value + batch
+		err := alloc.server.store.CreateID(alloc.server.leaderSignature, max)
+		if err != nil {
+			return 0, err
+		}
+
+		return max, nil
+	}
+
+	err = alloc.server.store.UpdateID(alloc.server.leaderSignature, value, max)
+	if err != nil {
+		return 0, err
+	}
+
+	return max, nil
 }

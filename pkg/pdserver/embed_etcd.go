@@ -123,8 +123,10 @@ func (s *Server) closeEmbedEtcd() {
 		return
 	}
 
-	s.store.Close()
-	log.Info("stop: ectd v3 client is closed")
+	if s.store != nil {
+		s.store.Close()
+		log.Info("stop: ectd v3 client is closed")
+	}
 
 	s.etcd.Close()
 	log.Info("stop: embed ectd server is stopped")

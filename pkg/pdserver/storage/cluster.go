@@ -99,3 +99,37 @@ func (s *Store) CreateFirstClusterID() (uint64, error) {
 
 	return util.BytesToUint64(response.Kvs[0].Value)
 }
+
+// IsClusterBootstrapped check the cluster is bootstrap,
+// if not the kv node will create first cell.
+func (s *Store) IsClusterBootstrapped() (bool, error) {
+	v, err := s.getValue(pdBootstrappedPath)
+	if err != nil {
+		return false, err
+	}
+
+	return v != nil, nil
+}
+
+// SetClusterBootstrapped set cluster bootstrapped flag, only one can succ.
+func (s *Store) SetClusterBootstrapped() (bool, error) {
+	ctx, cancel := context.WithTimeout(s.client.Ctx(), DefaultTimeout)
+	defer cancel()
+
+	resp, err := s.client.Txn(ctx).
+		If(clientv3.Compare(clientv3.CreateRevision(pdBootstrappedPath), "=", 0)).
+		Then(clientv3.OpPut(pdBootstrappedPath, "boot")).
+		Commit()
+
+	if err != nil {
+		return false, errors.Wrap(err, "")
+	}
+
+	// Txn commits ok, return  succ.
+	if resp.Succeeded {
+		return true, nil
+	}
+
+	// Otherwise, other succ
+	return false, nil
+}

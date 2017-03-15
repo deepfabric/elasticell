@@ -91,7 +91,8 @@ func (s *Store) WatchLeader() {
 }
 
 // CampaignLeader is for leader election
-func (s *Store) CampaignLeader(pdName string, leaderSignature string, leaderLeaseTTL int64) error {
+// if we are win the leader election, the enableLeaderFun will call
+func (s *Store) CampaignLeader(leaderSignature string, leaderLeaseTTL int64, enableLeaderFun func()) error {
 	lessor := clientv3.NewLease(s.client)
 	defer lessor.Close()
 
@@ -126,8 +127,7 @@ func (s *Store) CampaignLeader(pdName string, leaderSignature string, leaderLeas
 		return errors.Wrap(err, "")
 	}
 
-	// now, we are leader
-	log.Infof("leader-loop: PD cluster leader is ready, leader=<%s>", pdName)
+	enableLeaderFun()
 
 	for {
 		select {

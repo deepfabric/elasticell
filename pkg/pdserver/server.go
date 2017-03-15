@@ -19,6 +19,7 @@ import (
 
 	"github.com/coreos/etcd/embed"
 	"github.com/deepfabric/elasticell/pkg/log"
+	"github.com/deepfabric/elasticell/pkg/pd"
 	"github.com/deepfabric/elasticell/pkg/pdserver/storage"
 	"google.golang.org/grpc"
 )
@@ -37,8 +38,12 @@ type Server struct {
 	store *storage.Store
 
 	// cluster fields
+	isLeaderValue   int64
 	leaderSignature string
 	clusterID       uint64
+	cluster         *CellCluster
+	leaderProxy     *pd.Client
+	leaderProxyMut  sync.RWMutex
 
 	// status
 	closed int64
@@ -56,6 +61,7 @@ func NewServer(cfg *Cfg) *Server {
 	s.stopC = make(chan interface{})
 	s.stopOnce = new(sync.Once)
 	s.stopWG = new(sync.WaitGroup)
+	s.isLeaderValue = 0
 
 	return s
 }
@@ -66,10 +72,10 @@ func (s *Server) Start() {
 
 	go s.listenToStop()
 
+	go s.startRPC()
+
 	s.startEmbedEtcd()
 	s.initCluster()
-
-	go s.startRPC()
 
 	s.setServerIsStarted()
 	go s.startLeaderLoop()

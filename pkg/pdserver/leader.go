@@ -14,6 +14,7 @@
 package pdserver
 
 import (
+	"sync/atomic"
 	"time"
 
 	"github.com/deepfabric/elasticell/pkg/log"
@@ -57,6 +58,7 @@ func (s *Server) startLeaderLoop() {
 			} else {
 				log.Infof("leader-loop: leader is not matched, watch it, leader=<%v>",
 					leader)
+				s.resetLeaderRPCProxy(leader)
 				s.store.WatchLeader()
 				log.Infof("leader-loop: leader changed, try to campaign leader, leader=<%v>", leader)
 			}
@@ -64,16 +66,35 @@ func (s *Server) startLeaderLoop() {
 
 		log.Debugf("leader-loop: begin to campaign leader, name=<%s>",
 			s.cfg.Name)
-		if err = s.store.CampaignLeader(s.cfg.Name, s.leaderSignature, s.cfg.LeaseSecsTTL); err != nil {
+		if err = s.store.CampaignLeader(s.leaderSignature, s.cfg.LeaseSecsTTL, s.enableLeader); err != nil {
 			log.Errorf("leader-loop: campaign leader failure, errors:\n %+v", err)
 		}
 	}
+}
+
+func (s *Server) enableLeader() {
+	// now, we are leader
+	log.Infof("leader-loop: PD cluster leader is ready, leader=<%s>", s.cfg.Name)
+
+	s.cluster = newCellCluster(s)
+
+	atomic.StoreInt64(&s.isLeaderValue, 1)
+}
+
+func (s *Server) disableLeader() {
+	// now we are not leader
+	atomic.StoreInt64(&s.isLeaderValue, 0)
 }
 
 func (s *Server) isMatchLeader(leader *pb.Leader) bool {
 	return leader != nil &&
 		s.cfg.RPCAddr == leader.GetAddr() &&
 		s.id == leader.GetId()
+}
+
+// IsLeader returns whether server is leader or not.
+func (s *Server) IsLeader() bool {
+	return atomic.LoadInt64(&s.isLeaderValue) == 1
 }
 
 func (s *Server) marshalLeader() string {

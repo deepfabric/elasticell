@@ -12,6 +12,10 @@
 		Leader
 		LeaderReq
 		LeaderRsp
+		IsClusterBootstrapReq
+		IsClusterBootstrapRsp
+		BootstrapClusterReq
+		BootstrapClusterRsp
 */
 package pdpb
 
@@ -72,6 +76,8 @@ func (m *Leader) GetAddr() string {
 }
 
 type LeaderReq struct {
+	From             string `protobuf:"bytes,1,opt,name=from" json:"from"`
+	Id               uint64 `protobuf:"varint,2,opt,name=id" json:"id"`
 	XXX_unrecognized []byte `json:"-"`
 }
 
@@ -79,6 +85,20 @@ func (m *LeaderReq) Reset()                    { *m = LeaderReq{} }
 func (m *LeaderReq) String() string            { return proto.CompactTextString(m) }
 func (*LeaderReq) ProtoMessage()               {}
 func (*LeaderReq) Descriptor() ([]byte, []int) { return fileDescriptorPdpb, []int{1} }
+
+func (m *LeaderReq) GetFrom() string {
+	if m != nil {
+		return m.From
+	}
+	return ""
+}
+
+func (m *LeaderReq) GetId() uint64 {
+	if m != nil {
+		return m.Id
+	}
+	return 0
+}
 
 type LeaderRsp struct {
 	Leader           Leader `protobuf:"bytes,1,opt,name=leader" json:"leader"`
@@ -97,10 +117,98 @@ func (m *LeaderRsp) GetLeader() Leader {
 	return Leader{}
 }
 
+type IsClusterBootstrapReq struct {
+	From             string `protobuf:"bytes,1,opt,name=from" json:"from"`
+	Id               uint64 `protobuf:"varint,2,opt,name=id" json:"id"`
+	XXX_unrecognized []byte `json:"-"`
+}
+
+func (m *IsClusterBootstrapReq) Reset()                    { *m = IsClusterBootstrapReq{} }
+func (m *IsClusterBootstrapReq) String() string            { return proto.CompactTextString(m) }
+func (*IsClusterBootstrapReq) ProtoMessage()               {}
+func (*IsClusterBootstrapReq) Descriptor() ([]byte, []int) { return fileDescriptorPdpb, []int{3} }
+
+func (m *IsClusterBootstrapReq) GetFrom() string {
+	if m != nil {
+		return m.From
+	}
+	return ""
+}
+
+func (m *IsClusterBootstrapReq) GetId() uint64 {
+	if m != nil {
+		return m.Id
+	}
+	return 0
+}
+
+type IsClusterBootstrapRsp struct {
+	Value            bool   `protobuf:"varint,1,opt,name=value" json:"value"`
+	XXX_unrecognized []byte `json:"-"`
+}
+
+func (m *IsClusterBootstrapRsp) Reset()                    { *m = IsClusterBootstrapRsp{} }
+func (m *IsClusterBootstrapRsp) String() string            { return proto.CompactTextString(m) }
+func (*IsClusterBootstrapRsp) ProtoMessage()               {}
+func (*IsClusterBootstrapRsp) Descriptor() ([]byte, []int) { return fileDescriptorPdpb, []int{4} }
+
+func (m *IsClusterBootstrapRsp) GetValue() bool {
+	if m != nil {
+		return m.Value
+	}
+	return false
+}
+
+type BootstrapClusterReq struct {
+	From             string `protobuf:"bytes,1,opt,name=from" json:"from"`
+	Id               uint64 `protobuf:"varint,2,opt,name=id" json:"id"`
+	XXX_unrecognized []byte `json:"-"`
+}
+
+func (m *BootstrapClusterReq) Reset()                    { *m = BootstrapClusterReq{} }
+func (m *BootstrapClusterReq) String() string            { return proto.CompactTextString(m) }
+func (*BootstrapClusterReq) ProtoMessage()               {}
+func (*BootstrapClusterReq) Descriptor() ([]byte, []int) { return fileDescriptorPdpb, []int{5} }
+
+func (m *BootstrapClusterReq) GetFrom() string {
+	if m != nil {
+		return m.From
+	}
+	return ""
+}
+
+func (m *BootstrapClusterReq) GetId() uint64 {
+	if m != nil {
+		return m.Id
+	}
+	return 0
+}
+
+type BootstrapClusterRsp struct {
+	AlreadyBootstrapped bool   `protobuf:"varint,1,opt,name=alreadyBootstrapped" json:"alreadyBootstrapped"`
+	XXX_unrecognized    []byte `json:"-"`
+}
+
+func (m *BootstrapClusterRsp) Reset()                    { *m = BootstrapClusterRsp{} }
+func (m *BootstrapClusterRsp) String() string            { return proto.CompactTextString(m) }
+func (*BootstrapClusterRsp) ProtoMessage()               {}
+func (*BootstrapClusterRsp) Descriptor() ([]byte, []int) { return fileDescriptorPdpb, []int{6} }
+
+func (m *BootstrapClusterRsp) GetAlreadyBootstrapped() bool {
+	if m != nil {
+		return m.AlreadyBootstrapped
+	}
+	return false
+}
+
 func init() {
 	proto.RegisterType((*Leader)(nil), "pdpb.Leader")
 	proto.RegisterType((*LeaderReq)(nil), "pdpb.LeaderReq")
 	proto.RegisterType((*LeaderRsp)(nil), "pdpb.LeaderRsp")
+	proto.RegisterType((*IsClusterBootstrapReq)(nil), "pdpb.IsClusterBootstrapReq")
+	proto.RegisterType((*IsClusterBootstrapRsp)(nil), "pdpb.IsClusterBootstrapRsp")
+	proto.RegisterType((*BootstrapClusterReq)(nil), "pdpb.BootstrapClusterReq")
+	proto.RegisterType((*BootstrapClusterRsp)(nil), "pdpb.BootstrapClusterRsp")
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -115,6 +223,8 @@ const _ = grpc.SupportPackageIsVersion4
 
 type PDServiceClient interface {
 	GetLeader(ctx context.Context, in *LeaderReq, opts ...grpc.CallOption) (*LeaderRsp, error)
+	IsClusterBootstrap(ctx context.Context, in *IsClusterBootstrapReq, opts ...grpc.CallOption) (*IsClusterBootstrapRsp, error)
+	BootstrapCluster(ctx context.Context, in *BootstrapClusterReq, opts ...grpc.CallOption) (*BootstrapClusterRsp, error)
 }
 
 type pDServiceClient struct {
@@ -134,10 +244,30 @@ func (c *pDServiceClient) GetLeader(ctx context.Context, in *LeaderReq, opts ...
 	return out, nil
 }
 
+func (c *pDServiceClient) IsClusterBootstrap(ctx context.Context, in *IsClusterBootstrapReq, opts ...grpc.CallOption) (*IsClusterBootstrapRsp, error) {
+	out := new(IsClusterBootstrapRsp)
+	err := grpc.Invoke(ctx, "/pdpb.PDService/IsClusterBootstrap", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *pDServiceClient) BootstrapCluster(ctx context.Context, in *BootstrapClusterReq, opts ...grpc.CallOption) (*BootstrapClusterRsp, error) {
+	out := new(BootstrapClusterRsp)
+	err := grpc.Invoke(ctx, "/pdpb.PDService/BootstrapCluster", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // Server API for PDService service
 
 type PDServiceServer interface {
 	GetLeader(context.Context, *LeaderReq) (*LeaderRsp, error)
+	IsClusterBootstrap(context.Context, *IsClusterBootstrapReq) (*IsClusterBootstrapRsp, error)
+	BootstrapCluster(context.Context, *BootstrapClusterReq) (*BootstrapClusterRsp, error)
 }
 
 func RegisterPDServiceServer(s *grpc.Server, srv PDServiceServer) {
@@ -162,6 +292,42 @@ func _PDService_GetLeader_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PDService_IsClusterBootstrap_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(IsClusterBootstrapReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PDServiceServer).IsClusterBootstrap(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/pdpb.PDService/IsClusterBootstrap",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PDServiceServer).IsClusterBootstrap(ctx, req.(*IsClusterBootstrapReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PDService_BootstrapCluster_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BootstrapClusterReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PDServiceServer).BootstrapCluster(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/pdpb.PDService/BootstrapCluster",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PDServiceServer).BootstrapCluster(ctx, req.(*BootstrapClusterReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 var _PDService_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "pdpb.PDService",
 	HandlerType: (*PDServiceServer)(nil),
@@ -169,6 +335,14 @@ var _PDService_serviceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetLeader",
 			Handler:    _PDService_GetLeader_Handler,
+		},
+		{
+			MethodName: "IsClusterBootstrap",
+			Handler:    _PDService_IsClusterBootstrap_Handler,
+		},
+		{
+			MethodName: "BootstrapCluster",
+			Handler:    _PDService_BootstrapCluster_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
@@ -222,6 +396,13 @@ func (m *LeaderReq) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
+	dAtA[i] = 0xa
+	i++
+	i = encodeVarintPdpb(dAtA, i, uint64(len(m.From)))
+	i += copy(dAtA[i:], m.From)
+	dAtA[i] = 0x10
+	i++
+	i = encodeVarintPdpb(dAtA, i, uint64(m.Id))
 	if m.XXX_unrecognized != nil {
 		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
@@ -251,6 +432,120 @@ func (m *LeaderRsp) MarshalTo(dAtA []byte) (int, error) {
 		return 0, err
 	}
 	i += n1
+	if m.XXX_unrecognized != nil {
+		i += copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	return i, nil
+}
+
+func (m *IsClusterBootstrapReq) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalTo(dAtA)
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *IsClusterBootstrapReq) MarshalTo(dAtA []byte) (int, error) {
+	var i int
+	_ = i
+	var l int
+	_ = l
+	dAtA[i] = 0xa
+	i++
+	i = encodeVarintPdpb(dAtA, i, uint64(len(m.From)))
+	i += copy(dAtA[i:], m.From)
+	dAtA[i] = 0x10
+	i++
+	i = encodeVarintPdpb(dAtA, i, uint64(m.Id))
+	if m.XXX_unrecognized != nil {
+		i += copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	return i, nil
+}
+
+func (m *IsClusterBootstrapRsp) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalTo(dAtA)
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *IsClusterBootstrapRsp) MarshalTo(dAtA []byte) (int, error) {
+	var i int
+	_ = i
+	var l int
+	_ = l
+	dAtA[i] = 0x8
+	i++
+	if m.Value {
+		dAtA[i] = 1
+	} else {
+		dAtA[i] = 0
+	}
+	i++
+	if m.XXX_unrecognized != nil {
+		i += copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	return i, nil
+}
+
+func (m *BootstrapClusterReq) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalTo(dAtA)
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *BootstrapClusterReq) MarshalTo(dAtA []byte) (int, error) {
+	var i int
+	_ = i
+	var l int
+	_ = l
+	dAtA[i] = 0xa
+	i++
+	i = encodeVarintPdpb(dAtA, i, uint64(len(m.From)))
+	i += copy(dAtA[i:], m.From)
+	dAtA[i] = 0x10
+	i++
+	i = encodeVarintPdpb(dAtA, i, uint64(m.Id))
+	if m.XXX_unrecognized != nil {
+		i += copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	return i, nil
+}
+
+func (m *BootstrapClusterRsp) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalTo(dAtA)
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *BootstrapClusterRsp) MarshalTo(dAtA []byte) (int, error) {
+	var i int
+	_ = i
+	var l int
+	_ = l
+	dAtA[i] = 0x8
+	i++
+	if m.AlreadyBootstrapped {
+		dAtA[i] = 1
+	} else {
+		dAtA[i] = 0
+	}
+	i++
 	if m.XXX_unrecognized != nil {
 		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
@@ -301,6 +596,9 @@ func (m *Leader) Size() (n int) {
 func (m *LeaderReq) Size() (n int) {
 	var l int
 	_ = l
+	l = len(m.From)
+	n += 1 + l + sovPdpb(uint64(l))
+	n += 1 + sovPdpb(uint64(m.Id))
 	if m.XXX_unrecognized != nil {
 		n += len(m.XXX_unrecognized)
 	}
@@ -312,6 +610,50 @@ func (m *LeaderRsp) Size() (n int) {
 	_ = l
 	l = m.Leader.Size()
 	n += 1 + l + sovPdpb(uint64(l))
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *IsClusterBootstrapReq) Size() (n int) {
+	var l int
+	_ = l
+	l = len(m.From)
+	n += 1 + l + sovPdpb(uint64(l))
+	n += 1 + sovPdpb(uint64(m.Id))
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *IsClusterBootstrapRsp) Size() (n int) {
+	var l int
+	_ = l
+	n += 2
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *BootstrapClusterReq) Size() (n int) {
+	var l int
+	_ = l
+	l = len(m.From)
+	n += 1 + l + sovPdpb(uint64(l))
+	n += 1 + sovPdpb(uint64(m.Id))
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *BootstrapClusterRsp) Size() (n int) {
+	var l int
+	_ = l
+	n += 2
 	if m.XXX_unrecognized != nil {
 		n += len(m.XXX_unrecognized)
 	}
@@ -488,6 +830,54 @@ func (m *LeaderReq) Unmarshal(dAtA []byte) error {
 			return fmt.Errorf("proto: LeaderReq: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field From", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowPdpb
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= (uint64(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthPdpb
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.From = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Id", wireType)
+			}
+			m.Id = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowPdpb
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Id |= (uint64(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
 		default:
 			iNdEx = preIndex
 			skippy, err := skipPdpb(dAtA[iNdEx:])
@@ -569,6 +959,346 @@ func (m *LeaderRsp) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipPdpb(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthPdpb
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *IsClusterBootstrapReq) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowPdpb
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= (uint64(b) & 0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: IsClusterBootstrapReq: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: IsClusterBootstrapReq: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field From", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowPdpb
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= (uint64(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthPdpb
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.From = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Id", wireType)
+			}
+			m.Id = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowPdpb
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Id |= (uint64(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		default:
+			iNdEx = preIndex
+			skippy, err := skipPdpb(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthPdpb
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *IsClusterBootstrapRsp) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowPdpb
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= (uint64(b) & 0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: IsClusterBootstrapRsp: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: IsClusterBootstrapRsp: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Value", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowPdpb
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.Value = bool(v != 0)
+		default:
+			iNdEx = preIndex
+			skippy, err := skipPdpb(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthPdpb
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *BootstrapClusterReq) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowPdpb
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= (uint64(b) & 0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: BootstrapClusterReq: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: BootstrapClusterReq: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field From", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowPdpb
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= (uint64(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthPdpb
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.From = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Id", wireType)
+			}
+			m.Id = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowPdpb
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Id |= (uint64(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		default:
+			iNdEx = preIndex
+			skippy, err := skipPdpb(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthPdpb
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *BootstrapClusterRsp) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowPdpb
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= (uint64(b) & 0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: BootstrapClusterRsp: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: BootstrapClusterRsp: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field AlreadyBootstrapped", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowPdpb
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.AlreadyBootstrapped = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := skipPdpb(dAtA[iNdEx:])
@@ -699,19 +1429,27 @@ var (
 func init() { proto.RegisterFile("pdpb.proto", fileDescriptorPdpb) }
 
 var fileDescriptorPdpb = []byte{
-	// 218 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0xe2, 0x2a, 0x48, 0x29, 0x48,
-	0xd2, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0x62, 0x01, 0xb1, 0xa5, 0x74, 0xd3, 0x33, 0x4b, 0x32,
-	0x4a, 0x93, 0xf4, 0x92, 0xf3, 0x73, 0xf5, 0xd3, 0xf3, 0xd3, 0xf3, 0xf5, 0xc1, 0x92, 0x49, 0xa5,
-	0x69, 0x60, 0x1e, 0x98, 0x03, 0x66, 0x41, 0x34, 0x29, 0x05, 0x71, 0xb1, 0xf9, 0xa4, 0x26, 0xa6,
-	0xa4, 0x16, 0x09, 0x89, 0x70, 0x31, 0x65, 0xa6, 0x48, 0x30, 0x2a, 0x30, 0x6a, 0xb0, 0x38, 0xb1,
-	0x9c, 0xb8, 0x27, 0xcf, 0x10, 0xc4, 0x94, 0x99, 0x22, 0x24, 0xc1, 0xc5, 0x92, 0x97, 0x98, 0x9b,
-	0x2a, 0xc1, 0xa4, 0xc0, 0xa8, 0xc1, 0x09, 0x15, 0x07, 0x8b, 0x80, 0x64, 0x12, 0x53, 0x52, 0x8a,
-	0x24, 0x98, 0x91, 0x65, 0x40, 0x22, 0x4a, 0xdc, 0x5c, 0x9c, 0x10, 0x33, 0x83, 0x52, 0x0b, 0x95,
-	0xcc, 0xe1, 0x9c, 0xe2, 0x02, 0x21, 0x2d, 0x2e, 0xb6, 0x1c, 0x30, 0x07, 0x6c, 0x0f, 0xb7, 0x11,
-	0x8f, 0x1e, 0xd8, 0xfd, 0x10, 0x05, 0x50, 0x33, 0xa0, 0x2a, 0x8c, 0x6c, 0xb8, 0x38, 0x03, 0x5c,
-	0x82, 0x53, 0x8b, 0xca, 0x32, 0x93, 0x53, 0x85, 0xf4, 0xb9, 0x38, 0xdd, 0x53, 0x4b, 0xa0, 0x2e,
-	0xe5, 0x47, 0xd6, 0x15, 0x94, 0x5a, 0x28, 0x85, 0x2a, 0x50, 0x5c, 0xa0, 0xc4, 0xe0, 0xc4, 0x73,
-	0xe2, 0x91, 0x1c, 0xe3, 0x85, 0x47, 0x72, 0x8c, 0x0f, 0x1e, 0xc9, 0x31, 0x02, 0x02, 0x00, 0x00,
-	0xff, 0xff, 0x9d, 0xa9, 0x5e, 0xa6, 0x27, 0x01, 0x00, 0x00,
+	// 344 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x9c, 0x51, 0x4f, 0x4b, 0xf3, 0x30,
+	0x18, 0x5f, 0xfa, 0xf6, 0x1d, 0xf6, 0x71, 0xa0, 0x64, 0x0a, 0xb5, 0xc2, 0x1c, 0x3d, 0x0d, 0xc1,
+	0x0d, 0x26, 0xe8, 0xc1, 0xdb, 0x54, 0x86, 0xa2, 0x30, 0xea, 0x27, 0xc8, 0x96, 0x6c, 0x16, 0x3a,
+	0x93, 0x25, 0xed, 0xc0, 0x6f, 0xb8, 0xa3, 0x67, 0x0f, 0x22, 0xfb, 0x24, 0xd2, 0x24, 0x94, 0x55,
+	0xbb, 0xcb, 0x6e, 0x79, 0x7e, 0xff, 0x9e, 0xe4, 0x17, 0x00, 0x41, 0xc5, 0xb8, 0x2b, 0x24, 0x4f,
+	0x39, 0x76, 0xf3, 0x73, 0x70, 0x31, 0x8b, 0xd3, 0xd7, 0x6c, 0xdc, 0x9d, 0xf0, 0x79, 0x6f, 0xc6,
+	0x67, 0xbc, 0xa7, 0xc9, 0x71, 0x36, 0xd5, 0x93, 0x1e, 0xf4, 0xc9, 0x98, 0xc2, 0x08, 0xea, 0x4f,
+	0x8c, 0x50, 0x26, 0xf1, 0x11, 0x38, 0x31, 0xf5, 0x51, 0x1b, 0x75, 0xdc, 0x81, 0xbb, 0xfa, 0x3a,
+	0xab, 0x45, 0x4e, 0x4c, 0xb1, 0x0f, 0xee, 0x1b, 0x99, 0x33, 0xdf, 0x69, 0xa3, 0x8e, 0x67, 0x71,
+	0x8d, 0xe4, 0x0c, 0xa1, 0x54, 0xfa, 0xff, 0x36, 0x99, 0x1c, 0x09, 0x6f, 0xc0, 0x33, 0x99, 0x11,
+	0x5b, 0xe4, 0xb2, 0xa9, 0xe4, 0x73, 0x1d, 0x5c, 0xc8, 0x72, 0xc4, 0x2e, 0x74, 0xca, 0x0b, 0xc3,
+	0xeb, 0xc2, 0xac, 0x04, 0x3e, 0x87, 0x7a, 0xa2, 0x07, 0x6d, 0xdf, 0xef, 0x37, 0xba, 0xfa, 0xbd,
+	0x46, 0x60, 0x4d, 0x56, 0x11, 0x0e, 0xe1, 0xf8, 0x41, 0xdd, 0x26, 0x99, 0x4a, 0x99, 0x1c, 0x70,
+	0x9e, 0xaa, 0x54, 0x12, 0xb1, 0xcb, 0x0d, 0x2e, 0x2b, 0x83, 0x94, 0xc0, 0x01, 0xfc, 0x5f, 0x92,
+	0x24, 0x63, 0x3a, 0x69, 0xcf, 0x3a, 0x0c, 0x14, 0xde, 0x43, 0xb3, 0xd0, 0x5a, 0xef, 0x2e, 0xbb,
+	0x9f, 0x2b, 0x62, 0x94, 0xc0, 0x57, 0xd0, 0x24, 0x89, 0x64, 0x84, 0xbe, 0x17, 0xac, 0x60, 0xb4,
+	0x74, 0x8f, 0x2a, 0x41, 0xff, 0x13, 0x81, 0x37, 0xba, 0x7b, 0x61, 0x72, 0x19, 0x4f, 0x18, 0xee,
+	0x81, 0x37, 0x64, 0xa9, 0xfd, 0xee, 0x83, 0xcd, 0x2a, 0x23, 0xb6, 0x08, 0xca, 0x80, 0x12, 0x61,
+	0x0d, 0x8f, 0x00, 0xff, 0x6d, 0x02, 0x9f, 0x1a, 0x61, 0x65, 0xd9, 0xc1, 0x76, 0x52, 0x27, 0x3e,
+	0xc2, 0xe1, 0xef, 0xf7, 0xe1, 0x13, 0x63, 0xa9, 0xa8, 0x2f, 0xd8, 0x46, 0xe5, 0x59, 0x83, 0xc6,
+	0x6a, 0xdd, 0x42, 0x1f, 0xeb, 0x16, 0xfa, 0x5e, 0xb7, 0xd0, 0x4f, 0x00, 0x00, 0x00, 0xff, 0xff,
+	0x7b, 0x71, 0xcf, 0xcb, 0x0a, 0x03, 0x00, 0x00,
 }

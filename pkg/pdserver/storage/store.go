@@ -30,11 +30,12 @@ const (
 	// DefaultSlowRequestTime default slow request time
 	DefaultSlowRequestTime = time.Second * 1
 
-	pdRootPath      = "/elasticell/pd"
-	pdIDPath        = "/elasticell/pd/id"
-	pdLeaderPath    = "/elasticell/pd/cluster/leader"
-	pdClusterIDPath = "/elasticell/pd/cluster/id"
-	pdCellPath      = "/elasticell/pd/cells"
+	pdRootPath         = "/elasticell/pd"
+	pdIDPath           = "/elasticell/pd/id"
+	pdLeaderPath       = "/elasticell/pd/cluster/leader"
+	pdClusterIDPath    = "/elasticell/pd/cluster/id"
+	pdBootstrappedPath = "/elasticell/pd/cluster/boot"
+	pdCellPath         = "/elasticell/pd/cells"
 )
 
 // Store used for  metedata
