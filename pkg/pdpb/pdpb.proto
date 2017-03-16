@@ -10,6 +10,7 @@ option (gogoproto.unmarshaler_all) = true;
 
 service PDService {
   rpc GetLeader (LeaderReq) returns (LeaderRsp) {}
+  rpc AllocID (AllocIDReq) returns (AllocIDRsp) {}
   rpc IsClusterBootstrap (IsClusterBootstrapReq) returns (IsClusterBootstrapRsp) {}
   rpc BootstrapCluster (BootstrapClusterReq) returns (BootstrapClusterRsp) {}
 }
@@ -27,6 +28,15 @@ message LeaderReq {
 
 message LeaderRsp {
     optional Leader leader = 1 [(gogoproto.nullable) = false];
+}
+
+message AllocIDReq {
+    optional string from = 1 [(gogoproto.nullable) = false];
+    optional uint64 id   = 2 [(gogoproto.nullable) = false];
+}
+
+message AllocIDRsp {
+    optional uint64 id = 1 [(gogoproto.nullable) = false];
 }
 
 message IsClusterBootstrapReq {

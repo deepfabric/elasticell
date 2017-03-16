@@ -51,7 +51,9 @@ func (alloc *idAllocator) newID() (uint64, error) {
 		alloc.base = alloc.end - batch
 	}
 
-	return 0, nil
+	alloc.base++
+
+	return alloc.base, nil
 }
 
 func (alloc *idAllocator) generate() (uint64, error) {

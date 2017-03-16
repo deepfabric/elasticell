@@ -44,6 +44,7 @@ type Server struct {
 	cluster         *CellCluster
 	leaderProxy     *pd.Client
 	leaderProxyMut  sync.RWMutex
+	idAlloc         *idAllocator
 
 	// status
 	closed int64
@@ -72,10 +73,10 @@ func (s *Server) Start() {
 
 	go s.listenToStop()
 
-	go s.startRPC()
-
 	s.startEmbedEtcd()
 	s.initCluster()
+
+	go s.startRPC()
 
 	s.setServerIsStarted()
 	go s.startLeaderLoop()
@@ -137,6 +138,8 @@ func (s *Server) initCluster() {
 	}
 
 	s.clusterID = clusterID
+
+	s.idAlloc = newIDAllocator(s)
 }
 
 func (s *Server) isClosed() bool {

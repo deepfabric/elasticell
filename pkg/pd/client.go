@@ -137,40 +137,41 @@ func createConn(addr string) (*grpc.ClientConn, error) {
 }
 
 // GetLeader get leader
-func (c *Client) GetLeader(ctx context.Context, req *pb.LeaderReq) (string, error) {
-	c.mut.RLock()
-
-	if req.From == "" {
-		req.From = c.name
-	}
-
-	if req.Id == 0 {
-		req.Id = c.seq
-		c.seq++
-	}
-
-	rsp, err := c.pd.GetLeader(ctx, req, grpc.FailFast(true))
+func (c *Client) GetLeader(ctx context.Context, req *pb.LeaderReq) (*pb.LeaderRsp, error) {
+	tmp, err := c.proxyRPC(ctx,
+		req,
+		func() {
+			req.From = c.name
+			req.Id = c.seq
+		},
+		func() (interface{}, error) {
+			return c.pd.GetLeader(ctx, req, grpc.FailFast(true))
+		})
 	if err != nil {
-		c.mut.RUnlock()
-		if needRetry(err) {
-			err = c.resetConn()
-			if err != nil {
-				return "", err
-			}
-
-			return c.GetLeader(ctx, req)
-		}
-
-		return "", err
+		return nil, err
 	}
 
-	c.mut.RUnlock()
-	return rsp.GetLeader().Addr, nil
+	rsp, _ := tmp.(*pb.LeaderRsp)
+	return rsp, nil
 }
 
 // AllocID ask pd for a uniq id
-func (c *Client) AllocID() (int64, error) {
-	return 0, nil
+func (c *Client) AllocID(ctx context.Context, req *pb.AllocIDReq) (*pb.AllocIDRsp, error) {
+	tmp, err := c.proxyRPC(ctx,
+		req,
+		func() {
+			req.From = c.name
+			req.Id = c.seq
+		},
+		func() (interface{}, error) {
+			return c.pd.AllocID(ctx, req, grpc.FailFast(true))
+		})
+	if err != nil {
+		return nil, err
+	}
+
+	rsp, _ := tmp.(*pb.AllocIDRsp)
+	return rsp, nil
 }
 
 // GetClusterID get cluster id from pd
@@ -180,33 +181,20 @@ func (c *Client) GetClusterID() (int64, error) {
 
 // IsClusterBootstrapped ask pd, the cluster is bootstrapped.
 func (c *Client) IsClusterBootstrapped(ctx context.Context, req *pb.IsClusterBootstrapReq) (*pb.IsClusterBootstrapRsp, error) {
-	c.mut.RLock()
-
-	if req.From == "" {
-		req.From = c.name
-	}
-
-	if req.Id == 0 {
-		req.Id = c.seq
-		c.seq++
-	}
-
-	rsp, err := c.pd.IsClusterBootstrap(ctx, req, grpc.FailFast(true))
+	tmp, err := c.proxyRPC(ctx,
+		req,
+		func() {
+			req.From = c.name
+			req.Id = c.seq
+		},
+		func() (interface{}, error) {
+			return c.pd.IsClusterBootstrap(ctx, req, grpc.FailFast(true))
+		})
 	if err != nil {
-		c.mut.RUnlock()
-		if needRetry(err) {
-			err = c.resetConn()
-			if err != nil {
-				return nil, err
-			}
-
-			return c.IsClusterBootstrapped(ctx, req)
-		}
-
 		return nil, err
 	}
 
-	c.mut.RUnlock()
+	rsp, _ := tmp.(*pb.IsClusterBootstrapRsp)
 	return rsp, nil
 }
 
@@ -218,6 +206,33 @@ func (c *Client) BootstrapCluster(ctx context.Context, req *pb.BootstrapClusterR
 // TellPDStoreStarted tell pd the store on this node is started.
 func (c *Client) TellPDStoreStarted(store *storage.Store) error {
 	return nil
+}
+
+func (c *Client) proxyRPC(ctx context.Context, req pb.BaseReq, setFromFun func(), doRPC func() (interface{}, error)) (interface{}, error) {
+	c.mut.RLock()
+
+	if req.GetFrom() == "" && req.GetId() == 0 {
+		setFromFun()
+		c.seq++
+	}
+
+	rsp, err := doRPC()
+	if err != nil {
+		c.mut.RUnlock()
+		if needRetry(err) {
+			err = c.resetConn()
+			if err != nil {
+				return nil, err
+			}
+
+			return c.proxyRPC(ctx, req, setFromFun, doRPC)
+		}
+
+		return nil, err
+	}
+
+	c.mut.RUnlock()
+	return rsp, nil
 }
 
 func needRetry(err error) bool {
