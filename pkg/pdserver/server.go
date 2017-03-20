@@ -63,6 +63,7 @@ func NewServer(cfg *Cfg) *Server {
 	s.stopOnce = new(sync.Once)
 	s.stopWG = new(sync.WaitGroup)
 	s.isLeaderValue = 0
+	s.cluster = newCellCluster(s)
 
 	return s
 }

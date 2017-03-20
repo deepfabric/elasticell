@@ -38,6 +38,26 @@ func NewRPCHandler(server *Server) pb.PDServiceServer {
 	}
 }
 
+// GetClusterID returns cluster id
+func (h *RPCHandler) GetClusterID(c context.Context, req *pb.GetClusterIDReq) (*pb.GetClusterIDRsp, error) {
+	doFun := func() (interface{}, error) {
+		return &pb.GetClusterIDRsp{
+			Id: h.server.GetClusterID(),
+		}, nil
+	}
+
+	forwardFun := func(proxy *pd.Client) (interface{}, error) {
+		return proxy.GetClusterID(c, req)
+	}
+
+	rsp, err := h.doHandle("GetClusterID", req, forwardFun, doFun)
+	if err != nil {
+		return nil, err
+	}
+
+	return rsp.(*pb.GetClusterIDRsp), nil
+}
+
 // AllocID returns alloc id for kv node
 func (h *RPCHandler) AllocID(c context.Context, req *pb.AllocIDReq) (*pb.AllocIDRsp, error) {
 	doFun := func() (interface{}, error) {
@@ -55,27 +75,37 @@ func (h *RPCHandler) AllocID(c context.Context, req *pb.AllocIDReq) (*pb.AllocID
 		return proxy.AllocID(c, req)
 	}
 
-	tmp, err := h.doHandle("AllocID", req, forwardFun, doFun)
+	rsp, err := h.doHandle("AllocID", req, forwardFun, doFun)
 	if err != nil {
 		return nil, err
 	}
 
-	rsp, _ := tmp.(*pb.AllocIDRsp)
-	return rsp, nil
+	return rsp.(*pb.AllocIDRsp), nil
 }
 
 // GetLeader returns current leader
 func (h *RPCHandler) GetLeader(c context.Context, req *pb.LeaderReq) (*pb.LeaderRsp, error) {
-	log.Debugf("rpc: get a req, type=<%s> req=<%v>", "LeaderReq", req)
+	doFun := func() (interface{}, error) {
+		leader, err := h.server.store.GetCurrentLeader()
+		if err != nil {
+			return nil, err
+		}
 
-	leader, err := h.server.store.GetCurrentLeader()
+		return &pb.LeaderRsp{
+			Leader: *leader,
+		}, nil
+	}
+
+	forwardFun := func(proxy *pd.Client) (interface{}, error) {
+		return proxy.GetLeader(c, req)
+	}
+
+	rsp, err := h.doHandle("GetLeader", req, forwardFun, doFun)
 	if err != nil {
 		return nil, err
 	}
 
-	return &pb.LeaderRsp{
-		Leader: *leader,
-	}, nil
+	return rsp.(*pb.LeaderRsp), nil
 }
 
 // IsClusterBootstrap returns cluster is bootstrap already
@@ -90,13 +120,12 @@ func (h *RPCHandler) IsClusterBootstrap(c context.Context, req *pb.IsClusterBoot
 		return proxy.IsClusterBootstrapped(c, req)
 	}
 
-	tmp, err := h.doHandle("IsClusterBootstrap", req, forwardFun, doFun)
+	rsp, err := h.doHandle("IsClusterBootstrap", req, forwardFun, doFun)
 	if err != nil {
 		return nil, err
 	}
 
-	rsp, _ := tmp.(*pb.IsClusterBootstrapRsp)
-	return rsp, nil
+	return rsp.(*pb.IsClusterBootstrapRsp), nil
 }
 
 // BootstrapCluster used for bootstrap cluster
@@ -109,17 +138,16 @@ func (h *RPCHandler) BootstrapCluster(c context.Context, req *pb.BootstrapCluste
 		return proxy.BootstrapCluster(c, req)
 	}
 
-	tmp, err := h.doHandle("BootstrapCluster", req, forwardFun, doFun)
+	rsp, err := h.doHandle("BootstrapCluster", req, forwardFun, doFun)
 	if err != nil {
 		return nil, err
 	}
 
-	rsp, _ := tmp.(*pb.BootstrapClusterRsp)
-	return rsp, nil
+	return rsp.(*pb.BootstrapClusterRsp), nil
 }
 
 func (h *RPCHandler) doHandle(name string, req pb.BaseReq, forwardFun func(*pd.Client) (interface{}, error), doFun func() (interface{}, error)) (interface{}, error) {
-	log.Debugf("rpc: get a req<%s-%d>, type=<%s> req=<%v>",
+	log.Debugf("rpc: req<%s-%d>, type=<%s> req=<%v>",
 		req.GetFrom(),
 		req.GetId(),
 		name,
@@ -139,5 +167,14 @@ func (h *RPCHandler) doHandle(name string, req pb.BaseReq, forwardFun func(*pd.C
 		return forwardFun(proxy)
 	}
 
-	return doFun()
+	rsp, err := doFun()
+	if err == nil {
+		log.Debugf("rpc: rsp<%s-%d>, rsp=<%v>",
+			req.GetFrom(),
+			req.GetId(),
+			rsp,
+		)
+	}
+
+	return rsp, err
 }

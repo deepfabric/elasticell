@@ -27,7 +27,7 @@ import (
 func main() {
 	flag.Parse()
 
-	server.InitLog()
+	log.InitLog()
 	cfg := server.GetCfg()
 
 	f, err := os.OpenFile(fmt.Sprintf("./%s-etcd.log", cfg.Name), os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666)

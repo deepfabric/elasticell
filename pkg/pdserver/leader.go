@@ -56,7 +56,7 @@ func (s *Server) startLeaderLoop() {
 					continue
 				}
 			} else {
-				log.Infof("leader-loop: leader is not matched, watch it, leader=<%v>",
+				log.Infof("leader-loop: we are not leader, watch the leader, leader=<%v>",
 					leader)
 				s.resetLeaderRPCProxy(leader)
 				s.store.WatchLeader()
@@ -74,11 +74,16 @@ func (s *Server) startLeaderLoop() {
 
 func (s *Server) enableLeader() {
 	// now, we are leader
+	atomic.StoreInt64(&s.isLeaderValue, 1)
 	log.Infof("leader-loop: PD cluster leader is ready, leader=<%s>", s.cfg.Name)
 
-	s.cluster = newCellCluster(s)
-
-	atomic.StoreInt64(&s.isLeaderValue, 1)
+	// if we start cell cluster failure, exit pd.
+	// Than other pd will become leader and try to start cell cluster
+	err := s.cluster.start()
+	if err != nil {
+		log.Fatalf("leader-loop: start cell cluster failure, errors:\n %+v", err)
+		return
+	}
 }
 
 func (s *Server) disableLeader() {

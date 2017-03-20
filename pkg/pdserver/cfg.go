@@ -49,8 +49,8 @@ type Cfg struct {
 	// RPCAddr rpc addr
 	RPCAddr string `json:"rpcAddr"`
 
-	LogLevel string `json:"logLevel, omitempty"`
-	LogFile  string `json:"logFile, omitempty"`
+	// for replication
+	MaxReplicas int `json:"maxReplicas"`
 }
 
 // GetCfg get cfg from command

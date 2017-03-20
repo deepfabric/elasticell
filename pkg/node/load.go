@@ -11,16 +11,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package pdserver
+package node
 
-import (
-	"io"
+func (n *Node) loadLocalMeta() error {
+	return nil
+}
 
-	"github.com/coreos/pkg/capnslog"
-)
-
-// RedirectEmbedEctdLog because of our used embed ectd,
-// so we need redirect ectd log to spec.
-func RedirectEmbedEctdLog(w io.Writer) {
-	capnslog.SetFormatter(capnslog.NewPrettyFormatter(w, false))
+func (n *Node) loadClusterID() error {
+	// TODO: check clusterID is match with get from pd client
+	return nil
 }

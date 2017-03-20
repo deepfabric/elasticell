@@ -13,9 +13,26 @@
 
 package node
 
+import (
+	"time"
+
+	"github.com/deepfabric/elasticell/pkg/storage/meta"
+)
+
 // Cfg node cfg
 type Cfg struct {
-	PDEndpoints                   string
-	StoreHeartbeatIntervalMs      int
-	CellLeaderHeartbeatIntervalMs int
+	StoreAddr   string        `json:"storeAddr"`
+	StoreLables []*meta.Label `json:"labels, omitempty"`
+
+	PDEndpoints              []string `json:"pdRPCAddr"`
+	StoreHeartbeatIntervalMs int      `json:"storeHeartbeatIntervalMs"`
+	CellHeartbeatIntervalMs  int      `json:"cellHeartbeatIntervalMs"`
+}
+
+func (c *Cfg) getStoreHeartbeatDuration() time.Duration {
+	return time.Duration(c.StoreHeartbeatIntervalMs) * time.Millisecond
+}
+
+func (c *Cfg) getCellHeartbeatDuration() time.Duration {
+	return time.Duration(c.CellHeartbeatIntervalMs) * time.Millisecond
 }

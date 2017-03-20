@@ -11,16 +11,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package pdserver
+package server
 
 import (
-	"io"
-
-	"github.com/coreos/pkg/capnslog"
+	"github.com/deepfabric/elasticell/pkg/redis"
+	"github.com/fagongzi/goetty"
 )
 
-// RedirectEmbedEctdLog because of our used embed ectd,
-// so we need redirect ectd log to spec.
-func RedirectEmbedEctdLog(w io.Writer) {
-	capnslog.SetFormatter(capnslog.NewPrettyFormatter(w, false))
+func (s *Server) setCmd(cmd *redis.Command, session goetty.IOSession) error {
+	if len(cmd.Args) != 2 {
+		return ErrInvlidArgs
+	}
+
+	return s.sd.Set(cmd.Args[0], cmd.Args[1])
+}
+
+func (s *Server) getCmd(cmd *redis.Command, session goetty.IOSession) error {
+	if len(cmd.Args) != 1 {
+		return ErrInvlidArgs
+	}
+
+	// v, err := s.sd.Get(cmd.Args[0])
+
+	return nil
 }

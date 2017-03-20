@@ -11,16 +11,37 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package pdserver
+package log
 
 import (
-	"io"
-
-	"github.com/coreos/pkg/capnslog"
+	"flag"
 )
 
-// RedirectEmbedEctdLog because of our used embed ectd,
-// so we need redirect ectd log to spec.
-func RedirectEmbedEctdLog(w io.Writer) {
-	capnslog.SetFormatter(capnslog.NewPrettyFormatter(w, false))
+var (
+	logFile  = flag.String("log-file", "", "The external log file. Default log to console.")
+	logLevel = flag.String("log-level", "info", "The log level, default is info")
+)
+
+// Cfg is the log cfg
+type Cfg struct {
+	LogLevel string
+	LogFile  string
+}
+
+// InitLog init log
+func InitLog() {
+	if !flag.Parsed() {
+		flag.Parse()
+	}
+
+	SetRotateByHour()
+	SetHighlighting(false)
+	SetLevelByString(*logLevel)
+	if "" != *logFile {
+		SetOutputByName(*logFile)
+	}
+
+	if !DebugEnabled() {
+		SetFlags(Ldate | Ltime)
+	}
 }

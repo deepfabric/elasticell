@@ -13,6 +13,12 @@
 
 package storage
 
+import (
+	"sync"
+
+	"github.com/deepfabric/elasticell/pkg/storage/meta"
+)
+
 // Cell cell is a set of continuous key, it's the base unit of data relocation.
 // The first cell is created by pd server when cluster is first bootstrap.
 // Cell has features as below:
@@ -20,18 +26,27 @@ package storage
 // 2. Merge, when some cells is too small.
 // 3. Replication of cells compose a raft group.
 type Cell struct {
-	CellID int64
-	Min    int64
-	Max    int64
+	mux  sync.RWMutex
+	meta *meta.CellMeta
 }
 
 // NewCell create a empty cell, used for create a first cell
-func NewCell(id int64) *Cell {
+func NewCell(id, storeID uint64) *Cell {
 	return &Cell{
-		CellID: id,
+		meta: meta.NewCellMeta(id, storeID),
 	}
 }
 
-func (c *Cell) String() string {
-	return ""
+// GetCellMeta returns meta data of cell
+func (c *Cell) GetCellMeta() ([]byte, error) {
+	c.mux.RLock()
+	data, err := c.meta.Marshal()
+	c.mux.RUnlock()
+
+	return data, err
+}
+
+// GetID returns cell id
+func (c *Cell) GetID() uint64 {
+	return c.meta.ID
 }

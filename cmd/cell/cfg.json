@@ -1,0 +1,16 @@
+{
+    "redis": {
+        "listen": ":6379",
+        "readBufferSize": 512,
+        "writeBufferSize": 512
+    },
+
+    "node": {
+        "pdRPCAddr": [
+            ":20800",
+            ":20801"
+        ],
+        "storeHeartbeatIntervalMs": 2000,
+        "cellHeartbeatIntervalMs": 1000
+    }
+}

@@ -11,16 +11,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package pdserver
+package server
 
 import (
-	"io"
-
-	"github.com/coreos/pkg/capnslog"
+	"github.com/deepfabric/elasticell/pkg/node"
 )
 
-// RedirectEmbedEctdLog because of our used embed ectd,
-// so we need redirect ectd log to spec.
-func RedirectEmbedEctdLog(w io.Writer) {
-	capnslog.SetFormatter(capnslog.NewPrettyFormatter(w, false))
+// CellServer used for muti raft
+type CellServer struct {
+	node *node.Node
+}
+
+func newCellServer(cfg *Cfg) *CellServer {
+	s := new(CellServer)
+	// s.node = node.
+
+	return s
 }

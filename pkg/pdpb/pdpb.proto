@@ -11,6 +11,7 @@ option (gogoproto.unmarshaler_all) = true;
 service PDService {
   rpc GetLeader (LeaderReq) returns (LeaderRsp) {}
   rpc AllocID (AllocIDReq) returns (AllocIDRsp) {}
+  rpc GetClusterID(GetClusterIDReq) returns (GetClusterIDRsp) {}
   rpc IsClusterBootstrap (IsClusterBootstrapReq) returns (IsClusterBootstrapRsp) {}
   rpc BootstrapCluster (BootstrapClusterReq) returns (BootstrapClusterRsp) {}
 }
@@ -21,6 +22,11 @@ message Leader {
     optional string addr = 3 [(gogoproto.nullable) = false];
 }
 
+
+message Meta {
+    required bytes data = 1;
+}
+
 message LeaderReq {
     optional string from = 1 [(gogoproto.nullable) = false];
     optional uint64 id   = 2 [(gogoproto.nullable) = false];
@@ -28,6 +34,15 @@ message LeaderReq {
 
 message LeaderRsp {
     optional Leader leader = 1 [(gogoproto.nullable) = false];
+}
+
+message GetClusterIDReq {
+    optional string from = 1 [(gogoproto.nullable) = false];
+    optional uint64 id   = 2 [(gogoproto.nullable) = false];
+}
+
+message GetClusterIDRsp {
+    optional uint64 id = 1 [(gogoproto.nullable) = false];
 }
 
 message AllocIDReq {
@@ -49,10 +64,23 @@ message IsClusterBootstrapRsp {
 }
 
 message BootstrapClusterReq {
-    optional string from = 1 [(gogoproto.nullable) = false];
-    optional uint64 id   = 2 [(gogoproto.nullable) = false];
+    optional string from  = 1 [(gogoproto.nullable) = false];
+    optional uint64 id    = 2 [(gogoproto.nullable) = false];
+    optional Meta   store = 3 [(gogoproto.nullable) = false];
+    optional Meta   cell  = 4 [(gogoproto.nullable) = false];
 }
 
 message BootstrapClusterRsp {
     optional bool alreadyBootstrapped = 1 [(gogoproto.nullable) = false];
+}
+
+message HeartbeatReq {
+    optional string from  = 1 [(gogoproto.nullable) = false];
+    optional uint64 id    = 2 [(gogoproto.nullable) = false];
+    optional Meta   store = 3 [(gogoproto.nullable) = false];
+    repeated Meta   cells = 4 [(gogoproto.nullable) = false];
+}
+
+message HeartbeatRsp {
+    
 }

@@ -15,12 +15,40 @@ package main
 
 import (
 	"flag"
-)
+	"os"
+	"os/signal"
+	"syscall"
 
-var (
-	conf = flag.String("conf", "", "redis port")
+	"github.com/deepfabric/elasticell/pkg/log"
+	"github.com/deepfabric/elasticell/pkg/server"
 )
 
 func main() {
+	flag.Parse()
 
+	log.InitLog()
+	cfg := server.GetCfg()
+
+	s := server.NewServer(cfg)
+
+	sc := make(chan os.Signal, 1)
+	signal.Notify(sc,
+		syscall.SIGHUP,
+		syscall.SIGINT,
+		syscall.SIGTERM,
+		syscall.SIGQUIT)
+
+	s.Start()
+
+	sig := <-sc
+	s.Stop()
+	log.Infof("exit: signal=<%d>.", sig)
+	switch sig {
+	case syscall.SIGTERM:
+		log.Infof("exit: bye :-).")
+		os.Exit(0)
+	default:
+		log.Infof("exit: bye :-(.")
+		os.Exit(1)
+	}
 }

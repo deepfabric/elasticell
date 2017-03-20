@@ -11,16 +11,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package pdserver
+package server
 
 import (
-	"io"
-
-	"github.com/coreos/pkg/capnslog"
+	"errors"
 )
 
-// RedirectEmbedEctdLog because of our used embed ectd,
-// so we need redirect ectd log to spec.
-func RedirectEmbedEctdLog(w io.Writer) {
-	capnslog.SetFormatter(capnslog.NewPrettyFormatter(w, false))
-}
+var (
+	// ErrInvlidArgs invalid args error
+	ErrInvlidArgs = errors.New("invalid args")
+)

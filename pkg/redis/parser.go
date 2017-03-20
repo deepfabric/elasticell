@@ -40,8 +40,7 @@ const (
 	defaultBufferSize = 64
 )
 
-// ReadCommand read a redis command from buf
-func ReadCommand(in *goetty.ByteBuf) (bool, *Command, error) {
+func readCommand(in *goetty.ByteBuf) (bool, *Command, error) {
 	for {
 		// remember the begin read index,
 		// if we found has no enough data, we will resume this read index,

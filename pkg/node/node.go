@@ -14,24 +14,34 @@
 package node
 
 import (
+	"fmt"
+
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pd"
+	pb "github.com/deepfabric/elasticell/pkg/pdpb"
 	"github.com/deepfabric/elasticell/pkg/storage"
+	"github.com/pkg/errors"
+	"golang.org/x/net/context"
 )
 
 // Node node
 type Node struct {
 	cfg *Cfg
 
-	clusterID int64
-	nodeID    int64
-	pdClient  *pd.Client
-	store     *storage.Store
+	clusterID uint64
+
+	pdClient *pd.Client
+	store    *storage.Store
+	cells    []*storage.Cell
+
+	storeHeartbeat *loop
+	cellHeartbeats []*loop
 }
 
 // NewNode create a node instance, then init store, pd connection and init the cluster ID
 func NewNode(cfg *Cfg) (*Node, error) {
 	n := new(Node)
+	n.cfg = cfg
 
 	err := n.initPDClient()
 	if err != nil {
@@ -43,8 +53,10 @@ func NewNode(cfg *Cfg) (*Node, error) {
 		return nil, err
 	}
 
-	n.fetchClusterIDFromStore()
-	n.fetchNodeIDFromStore()
+	err = n.loadLocalMeta()
+	if err != nil {
+		return nil, err
+	}
 
 	return n, nil
 }
@@ -57,29 +69,58 @@ func (n *Node) Start() {
 
 // Stop the node
 func (n *Node) Stop() error {
+	n.stopHeartbeat()
+	n.closePDClient()
 	return nil
 }
 
-func (n *Node) bootstrapCluster() {
-	id, err := n.pdClient.GetClusterID()
+func (n *Node) initStore() error {
+	n.store = storage.NewStore(&storage.Cfg{})
+	return nil
+}
+
+func (n *Node) closePDClient() {
+	if n.pdClient != nil {
+		err := n.pdClient.Close()
+		if err != nil {
+			log.Errorf("stop: stop pd client failure, errors:\n %+v", err)
+			return
+		}
+	}
+
+	log.Info("stop: stop pd client succ")
+}
+
+func (n *Node) initPDClient() error {
+	c, err := pd.NewClient("", n.cfg.PDEndpoints...)
+	if err != nil {
+		return errors.Wrap(err, "")
+	}
+
+	n.pdClient = c
+	rsp, err := n.pdClient.GetClusterID(context.TODO(), new(pb.GetClusterIDReq))
 	if err != nil {
 		log.Fatalf("bootstrap: get cluster id from pd failure, pd=<%s>, errors:\n %+v",
 			n.cfg.PDEndpoints,
 			err)
-		return
+		return errors.Wrap(err, "")
 	}
 
-	n.clusterID = id
-	log.Infof("bootstrap: clusterID=<%d>", id)
+	n.clusterID = rsp.GetId()
+	log.Infof("bootstrap: clusterID=<%d>", n.clusterID)
 
-	ok, err := n.pdClient.IsClusterBootstrapped()
+	return nil
+}
+
+func (n *Node) bootstrapCluster() {
+	rsp, err := n.pdClient.IsClusterBootstrapped(context.TODO(), new(pb.IsClusterBootstrapReq))
 	if err != nil {
 		log.Fatalf("bootstrap: check cluster bootstrap status failure,  errors:\n %+v", err)
 		return
 	}
 
 	// If cluster is not bootstrapped, we will bootstrap the cluster, and create the first cell
-	if !ok {
+	if !rsp.GetValue() {
 		// The cluster is not bootstrap, but current node has a normal store id.
 		// So there has some error.
 		if n.store.GetStoreID() > pd.ZeroID {
@@ -93,67 +134,95 @@ func (n *Node) bootstrapCluster() {
 
 		n.doBootstrapCluster()
 	}
-}
 
-func (n *Node) initStore() error {
-	return nil
-}
-
-func (n *Node) initPDClient() error {
-	return nil
-}
-
-func (n *Node) fetchClusterIDFromStore() {
-
-}
-
-func (n *Node) fetchNodeIDFromStore() {
-
+	// we use heartbeat loop to driver left things
+	n.startHeartbeat()
 }
 
 func (n *Node) doBootstrapCluster() {
+	err := n.createStore()
+	if err != nil {
+		log.Fatalf("bootstrap: create store failure, errors:\n %+v", err)
+		return
+	}
+
+	n.storeHeartbeat = newLoop(fmt.Sprintf("store-%d", n.store.GetStoreID()),
+		n.cfg.getStoreHeartbeatDuration(),
+		n.doStoreHeartbeat,
+		n.store.GetStoreID())
+	log.Infof("bootstrap: store created, store=<%v>", n.store)
+
 	cell, err := n.createFirstCell()
 	if err != nil {
-		log.Fatalf("bootstrap: create first cell filaure, errors:\n %+v", err)
+		log.Fatalf("bootstrap: create first cell failure, errors:\n %+v", err)
 		return
 	}
 
-	log.Infof("bootstrap: first cell created, cell=<%s>", cell.String())
+	n.cellHeartbeats = append(n.cellHeartbeats, newLoop(fmt.Sprintf("cell-%d", cell.GetID()),
+		n.cfg.getCellHeartbeatDuration(),
+		n.doCellHeartbeat,
+		cell.GetID()))
+	log.Infof("bootstrap: first cell created, cell=<%v>", cell)
+
+	sm, err := n.store.GetStoreMeta()
+	if err != nil {
+		log.Fatalf("bootstrap: get store meta data failure, errors:\n %+v", err)
+		return
+	}
+
+	cm, err := cell.GetCellMeta()
+	if err != nil {
+		log.Fatalf("bootstrap: get cell meta data failure, errors:\n %+v", err)
+		return
+	}
+	n.cells = append(n.cells, cell)
+
+	req := &pb.BootstrapClusterReq{
+		Store: pb.Meta{
+			Data: sm,
+		},
+		Cell: pb.Meta{
+			Data: cm,
+		},
+	}
 
 	// If more than one node try to bootstrap the cluster at the same time,
-	// Only one can succeed, others will get the `ErrClusterIsAlreadyBootstrapped` error.
-	// If we get any error, we will delete locale cell
-	err = n.pdClient.BootstrapCluster(cell)
-	if err != nil && err != pd.ErrClusterIsAlreadyBootstrapped {
-		log.Fatalf("bootstrap: bootstrap cluster failure, errors:\n %+v", err)
-		n.rollbackFirstCell(cell.CellID)
-		return
-	} else if err != nil && err == pd.ErrClusterIsAlreadyBootstrapped {
-		log.Info("bootstrap: the cluster is already bootstrapped")
-		n.rollbackFirstCell(cell.CellID)
-	}
-
-	// That's ok, the cluster is bootstrapped succ.
-	// Now we can start store, and report info to pd.
-	err = n.startStoreAndTellToPD()
+	// Only one can succeed, others will get the `AlreadyBootstrapped` flag.
+	// If we get any error, we will delete local cell
+	rsp, err := n.pdClient.BootstrapCluster(context.TODO(), req)
 	if err != nil {
-		log.Fatalf("bootstrap: start local store and tell to pd server failure, errors:\n %+v", err)
+		log.Fatalf("bootstrap: bootstrap cluster failure, req=<%v> errors:\n %+v",
+			req,
+			err)
+		n.rollbackFirstCell(cell.GetID())
 		return
+	} else if err == nil && rsp.GetAlreadyBootstrapped() {
+		log.Info("bootstrap: the cluster is already bootstrapped")
+		n.rollbackFirstCell(cell.GetID())
+	}
+}
+
+func (n *Node) createStore() error {
+	id, err := n.getAllocID()
+	if err != nil {
+		return err
 	}
 
-	// ok, left thing driverd by pd.
+	n.store.InitStoreInfo(id, n.cfg.StoreAddr, n.cfg.StoreLables)
+
+	return n.store.Save()
 }
 
 func (n *Node) createFirstCell() (*storage.Cell, error) {
-	id, err := n.pdClient.AllocID()
+	id, err := n.getAllocID()
 	if err != nil {
 		return nil, err
 	}
 
-	return storage.NewCell(id), nil
+	return storage.NewCell(id, n.store.GetStoreID()), nil
 }
 
-func (n *Node) rollbackFirstCell(id int64) {
+func (n *Node) rollbackFirstCell(id uint64) {
 	err := n.store.DeleteLocalCell(id)
 	if err != nil {
 		log.Errorf("bootstrap: rollback cell failure, cell=<%d>, errors:\n %+v", id, err)
@@ -163,16 +232,11 @@ func (n *Node) rollbackFirstCell(id int64) {
 	log.Infof("bootstrap: cell rollback succ, cell=<%d>", id)
 }
 
-func (n *Node) startStoreAndTellToPD() error {
-	err := n.store.Start()
+func (n *Node) getAllocID() (uint64, error) {
+	rsp, err := n.pdClient.AllocID(context.TODO(), new(pb.AllocIDReq))
 	if err != nil {
-		return err
+		return pd.ZeroID, err
 	}
 
-	err = n.pdClient.TellPDStoreStarted(n.store)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return rsp.GetId(), nil
 }

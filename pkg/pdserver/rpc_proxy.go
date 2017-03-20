@@ -35,7 +35,6 @@ func (s *Server) resetLeaderRPCProxy(leader *pb.Leader) {
 			s.leaderProxy.GetLastPD())
 
 		s.leaderProxy = nil
-		return
 	}
 
 	var err error

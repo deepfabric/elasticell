@@ -11,16 +11,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package pdserver
+package meta
 
-import (
-	"io"
-
-	"github.com/coreos/pkg/capnslog"
-)
-
-// RedirectEmbedEctdLog because of our used embed ectd,
-// so we need redirect ectd log to spec.
-func RedirectEmbedEctdLog(w io.Writer) {
-	capnslog.SetFormatter(capnslog.NewPrettyFormatter(w, false))
+// Label used for scheduler
+type Label struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
 }

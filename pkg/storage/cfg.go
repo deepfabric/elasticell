@@ -15,4 +15,6 @@ package storage
 
 // Cfg store cfg
 type Cfg struct {
+	// PeerURL used for raft
+	PeerURL string
 }
