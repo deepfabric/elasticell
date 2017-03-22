@@ -20,8 +20,8 @@ import (
 )
 
 func (s *Server) resetLeaderRPCProxy(leader *pb.Leader) {
-	s.leaderProxyMut.Lock()
-	defer s.leaderProxyMut.Unlock()
+	s.leaderMux.Lock()
+	defer s.leaderMux.Unlock()
 
 	if s.leaderProxy != nil {
 		err := s.leaderProxy.Close()
@@ -52,7 +52,7 @@ func (s *Server) resetLeaderRPCProxy(leader *pb.Leader) {
 
 // GetLeaderProxy returns current leader proxy
 func (s *Server) GetLeaderProxy() *pd.Client {
-	s.leaderProxyMut.RLock()
-	defer s.leaderProxyMut.RUnlock()
+	s.leaderMux.RLock()
+	defer s.leaderMux.RUnlock()
 	return s.leaderProxy
 }

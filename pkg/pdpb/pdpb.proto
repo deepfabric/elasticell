@@ -14,6 +14,17 @@ service PDService {
   rpc GetClusterID(GetClusterIDReq) returns (GetClusterIDRsp) {}
   rpc IsClusterBootstrap (IsClusterBootstrapReq) returns (IsClusterBootstrapRsp) {}
   rpc BootstrapCluster (BootstrapClusterReq) returns (BootstrapClusterRsp) {}
+  rpc CellHeartbeat (CellHeartbeatReq) returns (CellHeartbeatRsp) {}
+}
+
+enum ConfChangeType {
+    AddNode    = 0;
+    RemoveNode = 1;
+}
+
+message ChangePeer {
+    optional ConfChangeType type = 1 [(gogoproto.nullable) = false];
+    optional Meta peer           = 2 [(gogoproto.nullable) = true];
 }
 
 message Leader {
@@ -74,13 +85,13 @@ message BootstrapClusterRsp {
     optional bool alreadyBootstrapped = 1 [(gogoproto.nullable) = false];
 }
 
-message HeartbeatReq {
-    optional string from  = 1 [(gogoproto.nullable) = false];
-    optional uint64 id    = 2 [(gogoproto.nullable) = false];
-    optional Meta   store = 3 [(gogoproto.nullable) = false];
-    repeated Meta   cells = 4 [(gogoproto.nullable) = false];
+message CellHeartbeatReq {
+    optional string from   = 1 [(gogoproto.nullable) = false];
+    optional uint64 id     = 2 [(gogoproto.nullable) = false];
+    optional Meta   cell   = 3 [(gogoproto.nullable) = false];
+    optional Meta   leader = 4 [(gogoproto.nullable) = true];
 }
 
-message HeartbeatRsp {
-    
+message CellHeartbeatRsp {
+    optional ChangePeer changePeer = 1 [(gogoproto.nullable) = false];
 }

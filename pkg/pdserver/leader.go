@@ -67,7 +67,9 @@ func (s *Server) startLeaderLoop() {
 		log.Debugf("leader-loop: begin to campaign leader, name=<%s>",
 			s.cfg.Name)
 		if err = s.store.CampaignLeader(s.leaderSignature, s.cfg.LeaseSecsTTL, s.enableLeader); err != nil {
-			log.Errorf("leader-loop: campaign leader failure, errors:\n %+v", err)
+			if !s.callStop {
+				log.Errorf("leader-loop: campaign leader failure, errors:\n %+v", err)
+			}
 		}
 	}
 }

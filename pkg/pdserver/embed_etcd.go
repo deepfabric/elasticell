@@ -92,16 +92,18 @@ func (s *Server) updateAdvertisePeerUrls() {
 	for _, m := range members.Members {
 		if s.id == m.ID {
 			etcdPeerURLs := strings.Join(m.PeerURLs, ",")
-			if s.cfg.AdvertisePeerUrls != etcdPeerURLs {
-				log.Infof("bootstrap: update advertise peer urls succ, old=<%s>, new=<%s>", s.cfg.AdvertisePeerUrls, etcdPeerURLs)
-				s.cfg.AdvertisePeerUrls = etcdPeerURLs
+			if s.cfg.EmbedEtcd.AdvertisePeerUrls != etcdPeerURLs {
+				log.Infof("bootstrap: update advertise peer urls succ, old=<%s>, new=<%s>",
+					s.cfg.EmbedEtcd.AdvertisePeerUrls,
+					etcdPeerURLs)
+				s.cfg.EmbedEtcd.AdvertisePeerUrls = etcdPeerURLs
 			}
 		}
 	}
 }
 
 func (s *Server) checkEctdCluster() {
-	um, err := types.NewURLsMap(s.cfg.InitialCluster)
+	um, err := types.NewURLsMap(s.cfg.EmbedEtcd.InitialCluster)
 	if err != nil {
 		s.closeEmbedEtcd()
 		log.Fatalf("bootstrap: check embed etcd server failure, errors:\n %+v",
@@ -167,7 +169,7 @@ func checkClusterID(localClusterID types.ID, um types.URLsMap) error {
 
 		remoteClusterID := remoteCluster.ID()
 		if remoteClusterID != localClusterID {
-			return errors.Wrapf(ErrEmbedEctdClusterIDNotMatch,
+			return errors.Wrapf(errEmbedEctdClusterIDNotMatch,
 				"expect=<%d>, got=<%d>",
 				localClusterID,
 				remoteClusterID)

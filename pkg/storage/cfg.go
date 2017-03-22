@@ -15,6 +15,9 @@ package storage
 
 // Cfg store cfg
 type Cfg struct {
+	// DiskPartitionPath used for calculate disk storage size
+	DiskPartitionPath string `json:"diskPartitionPath"`
+
 	// PeerURL used for raft
-	PeerURL string
+	PeerURL string `json:"peerURL"`
 }

@@ -23,6 +23,12 @@ import (
 )
 
 func (s *Server) startRPC() {
+	defer func() {
+		if err := recover(); err != nil {
+			log.Errorf("rpc: crash, errors:\n %+v", err)
+		}
+	}()
+
 	lis, err := net.Listen("tcp", s.cfg.RPCAddr)
 	if err != nil {
 		log.Fatalf("bootstrap: start grpc server failure, listen=<%s> errors:\n %+v",
@@ -36,9 +42,12 @@ func (s *Server) startRPC() {
 	reflection.Register(s.rpcServer)
 
 	if err := s.rpcServer.Serve(lis); err != nil {
-		log.Fatalf("bootstrap: start grpc server failure, listen=<%s> errors:\n %+v",
-			s.cfg.RPCAddr,
-			err)
+		if !s.callStop {
+			log.Fatalf("bootstrap: start grpc server failure, listen=<%s> errors:\n %+v",
+				s.cfg.RPCAddr,
+				err)
+		}
+
 		return
 	}
 

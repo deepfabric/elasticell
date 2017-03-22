@@ -16,7 +16,7 @@ package node
 import (
 	"time"
 
-	"github.com/deepfabric/elasticell/pkg/storage/meta"
+	"github.com/deepfabric/elasticell/pkg/meta"
 )
 
 // Cfg node cfg

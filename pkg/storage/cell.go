@@ -14,9 +14,8 @@
 package storage
 
 import (
-	"sync"
-
-	"github.com/deepfabric/elasticell/pkg/storage/meta"
+	"github.com/deepfabric/elasticell/pkg/meta"
+	pb "github.com/deepfabric/elasticell/pkg/pdpb"
 )
 
 // Cell cell is a set of continuous key, it's the base unit of data relocation.
@@ -26,7 +25,6 @@ import (
 // 2. Merge, when some cells is too small.
 // 3. Replication of cells compose a raft group.
 type Cell struct {
-	mux  sync.RWMutex
 	meta *meta.CellMeta
 }
 
@@ -39,11 +37,12 @@ func NewCell(id, storeID uint64) *Cell {
 
 // GetCellMeta returns meta data of cell
 func (c *Cell) GetCellMeta() ([]byte, error) {
-	c.mux.RLock()
-	data, err := c.meta.Marshal()
-	c.mux.RUnlock()
+	return c.meta.Marshal()
+}
 
-	return data, err
+// GetPBMeta returns pb meta data of cell
+func (c *Cell) GetPBMeta() *pb.Meta {
+	return pb.GetMetaPB(c.meta)
 }
 
 // GetID returns cell id

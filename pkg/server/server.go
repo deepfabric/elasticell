@@ -25,7 +25,7 @@ import (
 type Server struct {
 	cfg *Cfg
 
-	sd storage.Driver
+	store *storage.Store
 
 	redisServer *RedisServer
 	nodeServer  *node.Node
@@ -38,10 +38,18 @@ type Server struct {
 // NewServer create a server use spec cfg
 func NewServer(cfg *Cfg) *Server {
 	s := new(Server)
+	s.cfg = cfg
+
 	s.redisServer = newRedisServer(cfg)
 
 	cfg.Node.StoreAddr = cfg.Redis.Listen
-	n, err := node.NewNode(cfg.Node)
+	err := s.initStore()
+	if err != nil {
+		log.Fatalf("bootstrap: bootstrap failure, errors:\n %+v", err)
+		return nil
+	}
+
+	n, err := node.NewNode(s.cfg.Node, s.store)
 	if err != nil {
 		log.Fatalf("bootstrap: bootstrap failure, errors:\n %+v", err)
 		return nil
@@ -121,4 +129,9 @@ func (s *Server) stopNode() {
 	}
 
 	log.Info("stop: stop node succ")
+}
+
+func (s *Server) initStore() error {
+	s.store = storage.NewStore(s.cfg.Storage)
+	return nil
 }

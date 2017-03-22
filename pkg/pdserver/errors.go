@@ -18,6 +18,7 @@ import (
 )
 
 var (
-	// ErrEmbedEctdClusterIDNotMatch error for not match
-	ErrEmbedEctdClusterIDNotMatch = errors.New("embed etcd cluster id not match")
+	errEmbedEctdClusterIDNotMatch = errors.New("embed etcd cluster id not match")
+	errRPCReq                     = errors.New("invalid rpc req")
+	errStaleCell                  = errors.New("stale cell epoch")
 )

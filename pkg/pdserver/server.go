@@ -43,11 +43,12 @@ type Server struct {
 	clusterID       uint64
 	cluster         *CellCluster
 	leaderProxy     *pd.Client
-	leaderProxyMut  sync.RWMutex
+	leaderMux       sync.RWMutex
 	idAlloc         *idAllocator
 
 	// status
-	closed int64
+	callStop bool
+	closed   int64
 
 	// stop fields
 	stopOnce *sync.Once
@@ -74,10 +75,10 @@ func (s *Server) Start() {
 
 	go s.listenToStop()
 
+	go s.startRPC()
+
 	s.startEmbedEtcd()
 	s.initCluster()
-
-	go s.startRPC()
 
 	s.setServerIsStarted()
 	go s.startLeaderLoop()
@@ -98,6 +99,7 @@ func (s *Server) listenToStop() {
 
 func (s *Server) doStop() {
 	s.stopOnce.Do(func() {
+		s.callStop = true
 		s.closeRPC()
 		s.closeEmbedEtcd()
 		s.setServerIsStopped()

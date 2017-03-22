@@ -16,6 +16,8 @@ package node
 import (
 	"fmt"
 
+	"sync"
+
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pd"
 	pb "github.com/deepfabric/elasticell/pkg/pdpb"
@@ -26,29 +28,28 @@ import (
 
 // Node node
 type Node struct {
+	sync.RWMutex
+
 	cfg *Cfg
 
 	clusterID uint64
 
 	pdClient *pd.Client
 	store    *storage.Store
-	cells    []*storage.Cell
+	cells    map[uint64]*storage.Cell
 
 	storeHeartbeat *loop
 	cellHeartbeats []*loop
 }
 
 // NewNode create a node instance, then init store, pd connection and init the cluster ID
-func NewNode(cfg *Cfg) (*Node, error) {
+func NewNode(cfg *Cfg, store *storage.Store) (*Node, error) {
 	n := new(Node)
 	n.cfg = cfg
+	n.cells = make(map[uint64]*storage.Cell, 64)
+	n.store = store
 
 	err := n.initPDClient()
-	if err != nil {
-		return nil, err
-	}
-
-	err = n.initStore()
 	if err != nil {
 		return nil, err
 	}
@@ -71,11 +72,6 @@ func (n *Node) Start() {
 func (n *Node) Stop() error {
 	n.stopHeartbeat()
 	n.closePDClient()
-	return nil
-}
-
-func (n *Node) initStore() error {
-	n.store = storage.NewStore(&storage.Cfg{})
 	return nil
 }
 
@@ -175,7 +171,7 @@ func (n *Node) doBootstrapCluster() {
 		log.Fatalf("bootstrap: get cell meta data failure, errors:\n %+v", err)
 		return
 	}
-	n.cells = append(n.cells, cell)
+	n.cells[cell.GetID()] = cell
 
 	req := &pb.BootstrapClusterReq{
 		Store: pb.Meta{
@@ -239,4 +235,11 @@ func (n *Node) getAllocID() (uint64, error) {
 	}
 
 	return rsp.GetId(), nil
+}
+
+func (n *Node) getCell(id uint64) *storage.Cell {
+	n.RLock()
+	defer n.RUnlock()
+
+	return n.cells[id]
 }

@@ -22,7 +22,6 @@ import (
 
 	"github.com/deepfabric/elasticell/pkg/log"
 	pb "github.com/deepfabric/elasticell/pkg/pdpb"
-	"github.com/deepfabric/elasticell/pkg/storage"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -136,7 +135,7 @@ func createConn(addr string) (*grpc.ClientConn, error) {
 		grpc.WithBlock())
 }
 
-// GetLeader get leader
+// GetLeader returns current leader
 func (c *Client) GetLeader(ctx context.Context, req *pb.LeaderReq) (*pb.LeaderRsp, error) {
 	rsp, err := c.proxyRPC(ctx,
 		req,
@@ -154,7 +153,7 @@ func (c *Client) GetLeader(ctx context.Context, req *pb.LeaderReq) (*pb.LeaderRs
 	return rsp.(*pb.LeaderRsp), nil
 }
 
-// AllocID ask pd for a uniq id
+// AllocID returns a uniq id
 func (c *Client) AllocID(ctx context.Context, req *pb.AllocIDReq) (*pb.AllocIDRsp, error) {
 	rsp, err := c.proxyRPC(ctx,
 		req,
@@ -190,7 +189,7 @@ func (c *Client) GetClusterID(ctx context.Context, req *pb.GetClusterIDReq) (*pb
 	return rsp.(*pb.GetClusterIDRsp), nil
 }
 
-// IsClusterBootstrapped ask pd, the cluster is bootstrapped.
+// IsClusterBootstrapped returns cluster is bootstrapped response
 func (c *Client) IsClusterBootstrapped(ctx context.Context, req *pb.IsClusterBootstrapReq) (*pb.IsClusterBootstrapRsp, error) {
 	rsp, err := c.proxyRPC(ctx,
 		req,
@@ -208,7 +207,7 @@ func (c *Client) IsClusterBootstrapped(ctx context.Context, req *pb.IsClusterBoo
 	return rsp.(*pb.IsClusterBootstrapRsp), nil
 }
 
-// BootstrapCluster tell pd to bootstart cluster.
+// BootstrapCluster returns bootstrap cluster response
 func (c *Client) BootstrapCluster(ctx context.Context, req *pb.BootstrapClusterReq) (*pb.BootstrapClusterRsp, error) {
 	rsp, err := c.proxyRPC(ctx,
 		req,
@@ -226,9 +225,22 @@ func (c *Client) BootstrapCluster(ctx context.Context, req *pb.BootstrapClusterR
 	return rsp.(*pb.BootstrapClusterRsp), nil
 }
 
-// TellPDStoreStarted tell pd the store on this node is started.
-func (c *Client) TellPDStoreStarted(store *storage.Store) error {
-	return nil
+// CellHeartbeat returns cell heartbeat response
+func (c *Client) CellHeartbeat(ctx context.Context, req *pb.CellHeartbeatReq) (*pb.CellHeartbeatRsp, error) {
+	rsp, err := c.proxyRPC(ctx,
+		req,
+		func() {
+			req.From = c.name
+			req.Id = c.seq
+		},
+		func() (interface{}, error) {
+			return c.pd.CellHeartbeat(ctx, req, grpc.FailFast(true))
+		})
+	if err != nil {
+		return nil, err
+	}
+
+	return rsp.(*pb.CellHeartbeatRsp), nil
 }
 
 func (c *Client) proxyRPC(ctx context.Context, req pb.BaseReq, setFromFun func(), doRPC func() (interface{}, error)) (interface{}, error) {

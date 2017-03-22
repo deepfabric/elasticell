@@ -18,6 +18,7 @@ import (
 )
 
 var (
+	crashLog = flag.String("crash", "./crash.log", "The crash log file.")
 	logFile  = flag.String("log-file", "", "The external log file. Default log to console.")
 	logLevel = flag.String("log-level", "info", "The log level, default is info")
 )
@@ -34,6 +35,7 @@ func InitLog() {
 		flag.Parse()
 	}
 
+	//CrashLog(*crashLog)
 	SetRotateByHour()
 	SetHighlighting(false)
 	SetLevelByString(*logLevel)

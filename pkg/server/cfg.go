@@ -20,6 +20,7 @@ import (
 	"log"
 
 	"github.com/deepfabric/elasticell/pkg/node"
+	"github.com/deepfabric/elasticell/pkg/storage"
 	"github.com/pkg/errors"
 )
 
@@ -29,8 +30,9 @@ var (
 
 // Cfg server configuration
 type Cfg struct {
-	Redis *RedisCfg `json:"redis"`
-	Node  *node.Cfg `json:"node"`
+	Redis   *RedisCfg    `json:"redis"`
+	Node    *node.Cfg    `json:"node"`
+	Storage *storage.Cfg `json:"storage"`
 }
 
 // RedisCfg is used for configuration

@@ -24,7 +24,7 @@ import (
 	"math"
 
 	"github.com/coreos/etcd/clientv3"
-	"github.com/deepfabric/elasticell/pkg/storage/meta"
+	"github.com/deepfabric/elasticell/pkg/meta"
 	"github.com/deepfabric/elasticell/pkg/util"
 	"github.com/pkg/errors"
 )
@@ -238,6 +238,17 @@ func (s *Store) LoadCellMeta(clusterID uint64, limit int64, do func(*meta.CellMe
 	}
 
 	return nil
+}
+
+// SetCellMeta returns nil if cell is add or update succ
+func (s *Store) SetCellMeta(clusterID uint64, cell *meta.CellMeta) error {
+	cellKey := s.getCellMetaKey(clusterID, cell.ID)
+	meta, err := cell.Marshal()
+	if err != nil {
+		return errors.Wrap(err, "")
+	}
+
+	return s.save(cellKey, string(meta))
 }
 
 func (s *Store) getClusterMetaKey(clusterID uint64) string {

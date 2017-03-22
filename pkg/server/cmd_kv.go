@@ -23,7 +23,8 @@ func (s *Server) setCmd(cmd *redis.Command, session goetty.IOSession) error {
 		return ErrInvlidArgs
 	}
 
-	return s.sd.Set(cmd.Args[0], cmd.Args[1])
+	// return s.sd.Set(cmd.Args[0], cmd.Args[1])
+	return nil
 }
 
 func (s *Server) getCmd(cmd *redis.Command, session goetty.IOSession) error {

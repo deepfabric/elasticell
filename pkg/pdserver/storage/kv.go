@@ -58,3 +58,16 @@ func (s *Store) get(key string, opts ...clientv3.OpOption) (*clientv3.GetRespons
 
 	return resp, nil
 }
+
+func (s *Store) save(key, value string) error {
+	resp, err := s.txn().Then(clientv3.OpPut(key, value)).Commit()
+	if err != nil {
+		return errors.Wrap(err, "")
+	}
+
+	if !resp.Succeeded {
+		return errors.Wrap(errTxnFailed, "")
+	}
+
+	return nil
+}

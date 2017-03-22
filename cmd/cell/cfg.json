@@ -12,5 +12,10 @@
         ],
         "storeHeartbeatIntervalMs": 2000,
         "cellHeartbeatIntervalMs": 1000
+    },
+
+    "storage": {
+        "diskPartitionPath": "/",
+        "peerURL": "127.0.0.1:9998"
     }
 }

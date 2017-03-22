@@ -15,6 +15,8 @@ package node
 
 import (
 	"github.com/deepfabric/elasticell/pkg/log"
+	pb "github.com/deepfabric/elasticell/pkg/pdpb"
+	"golang.org/x/net/context"
 )
 
 func (n *Node) startHeartbeat() {
@@ -47,5 +49,15 @@ func (n *Node) doStoreHeartbeat(storeID uint64) {
 }
 
 func (n *Node) doCellHeartbeat(cellID uint64) {
+	req := &pb.CellHeartbeatReq{
+		Cell: *n.getCell(cellID).GetPBMeta(),
+	}
 
+	_, err := n.pdClient.CellHeartbeat(context.TODO(), req)
+	if err != nil {
+		log.Errorf("heartbeat: cell heartbeat failure, req=<%v> errors:\n %+v",
+			req,
+			err)
+		return
+	}
 }

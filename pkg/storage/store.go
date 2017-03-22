@@ -16,7 +16,8 @@ package storage
 import (
 	"sync"
 
-	"github.com/deepfabric/elasticell/pkg/storage/meta"
+	"github.com/deepfabric/elasticell/pkg/meta"
+	"github.com/deepfabric/elasticell/pkg/util"
 )
 
 // Store is used for data persistent. It's contains many cells.
@@ -37,12 +38,34 @@ func NewStore(cfg *Cfg) *Store {
 	}
 }
 
+// GetTotalDiskSize returns the total disk space
+func (s *Store) GetTotalDiskSize() uint64 {
+	return util.TotalDisk(s.cfg.DiskPartitionPath)
+}
+
+// GetAvailableDiskSize returns the available disk space
+func (s *Store) GetAvailableDiskSize() uint64 {
+	// TODO: GetTotalDiskSize() - used
+	return 0
+}
+
+// GetCellCount returns the count of cells in this store
+func (s *Store) GetCellCount() int {
+	return 1
+}
+
 // InitStoreInfo use store and cluster id init
 func (s *Store) InitStoreInfo(storeID uint64, addr string, labels []*meta.Label) {
 	s.mux.Lock()
 	s.meta.ID = storeID
 	s.meta.Address = addr
 	s.meta.Lables = labels
+	s.meta.State = meta.StoreStateUp
+	s.meta.Metrics = &meta.StoreMetrics{
+		Capacity:  s.GetTotalDiskSize(),
+		Available: s.GetAvailableDiskSize(),
+		CellCount: s.GetCellCount(),
+	}
 	s.mux.Unlock()
 }
 

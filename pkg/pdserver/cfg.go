@@ -21,8 +21,6 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/coreos/etcd/embed"
-	"github.com/deepfabric/elasticell/pkg/util"
 	"github.com/pkg/errors"
 )
 
@@ -35,22 +33,15 @@ type Cfg struct {
 	Name    string `json:"name"`
 	DataDir string `json:"dataDir"`
 
-	// for embed etcd server
-	ClientUrls          string `json:"clientUrls"`
-	PeerUrls            string `json:"peerUrls"`
-	AdvertiseClientUrls string `json:"advertiseClientUrls"`
-	AdvertisePeerUrls   string `json:"advertisePeerUrls"`
-	InitialCluster      string `json:"initialCluster"`
-	InitialClusterState string `json:"initialClusterState"`
-
 	// for leader election
 	LeaseSecsTTL int64 `json:"leaseSecsTTL"`
-
 	// RPCAddr rpc addr
 	RPCAddr string `json:"rpcAddr"`
 
-	// for replication
-	MaxReplicas int `json:"maxReplicas"`
+	// EmbedEtcd is the embed ectd configuration
+	EmbedEtcd *EmbedEtcdCfg `json:"embedEtcd"`
+	// Replication is the replication configuration
+	Replication *ReplicationCfg `json:"replication"`
 }
 
 // GetCfg get cfg from command
@@ -84,39 +75,6 @@ func unmarshal(data []byte) (*Cfg, error) {
 	}
 
 	return v, nil
-}
-
-func (c *Cfg) getEmbedEtcdConfig() (*embed.Config, error) {
-	cfg := embed.NewConfig()
-	cfg.Name = c.Name
-	cfg.Dir = c.DataDir
-	cfg.WalDir = ""
-	cfg.InitialCluster = c.InitialCluster
-	cfg.ClusterState = c.InitialClusterState
-	cfg.EnablePprof = true
-
-	var err error
-	cfg.LPUrls, err = parseUrls(c.PeerUrls)
-	if err != nil {
-		return nil, err
-	}
-
-	cfg.APUrls, err = parseUrls(util.GetStringValue(c.AdvertisePeerUrls, c.PeerUrls))
-	if err != nil {
-		return nil, err
-	}
-
-	cfg.LCUrls, err = parseUrls(c.ClientUrls)
-	if err != nil {
-		return nil, err
-	}
-
-	cfg.ACUrls, err = parseUrls(util.GetStringValue(c.AdvertiseClientUrls, c.ClientUrls))
-	if err != nil {
-		return nil, err
-	}
-
-	return cfg, nil
 }
 
 func (c *Cfg) string() string {

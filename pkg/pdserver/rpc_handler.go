@@ -128,7 +128,7 @@ func (h *RPCHandler) IsClusterBootstrap(c context.Context, req *pb.IsClusterBoot
 	return rsp.(*pb.IsClusterBootstrapRsp), nil
 }
 
-// BootstrapCluster used for bootstrap cluster
+// BootstrapCluster returns bootstrap cluster response
 func (h *RPCHandler) BootstrapCluster(c context.Context, req *pb.BootstrapClusterReq) (*pb.BootstrapClusterRsp, error) {
 	doFun := func() (interface{}, error) {
 		return h.server.bootstrapCluster(req)
@@ -144,6 +144,24 @@ func (h *RPCHandler) BootstrapCluster(c context.Context, req *pb.BootstrapCluste
 	}
 
 	return rsp.(*pb.BootstrapClusterRsp), nil
+}
+
+// CellHeartbeat returns cell heartbeat response
+func (h *RPCHandler) CellHeartbeat(c context.Context, req *pb.CellHeartbeatReq) (*pb.CellHeartbeatRsp, error) {
+	doFun := func() (interface{}, error) {
+		return h.server.cellHeartbeat(req)
+	}
+
+	forwardFun := func(proxy *pd.Client) (interface{}, error) {
+		return proxy.CellHeartbeat(c, req)
+	}
+
+	rsp, err := h.doHandle("CellHeartbeat", req, forwardFun, doFun)
+	if err != nil {
+		return nil, err
+	}
+
+	return rsp.(*pb.CellHeartbeatRsp), nil
 }
 
 func (h *RPCHandler) doHandle(name string, req pb.BaseReq, forwardFun func(*pd.Client) (interface{}, error), doFun func() (interface{}, error)) (interface{}, error) {

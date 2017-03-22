@@ -29,13 +29,23 @@ const (
 	StoreStateDown = 2
 )
 
+// StoreMetrics is the store some metrix used for scheduler
+type StoreMetrics struct {
+	// Capacity for the store.
+	Capacity uint64 `json:"capacity"`
+	// Available size for the store.
+	Available uint64 `json:"available"`
+	// CellCount total cell count in this store.
+	CellCount int `json:"cellCount"`
+}
+
 // StoreMeta store meta info
 type StoreMeta struct {
-	ID      uint64   `json:"id"`
-	Address string   `json:"address"`
-	Lables  []*Label `json:"labels"`
-
-	State StoreState `json:"state"`
+	ID      uint64        `json:"id"`
+	Address string        `json:"address"`
+	Lables  []*Label      `json:"labels"`
+	State   StoreState    `json:"state"`
+	Metrics *StoreMetrics `json:"metrics"`
 }
 
 // NewStoreMeta returns a store meta
@@ -53,4 +63,12 @@ func UnmarshalStoreMeta(data []byte) (*StoreMeta, error) {
 	s := new(StoreMeta)
 	err := json.Unmarshal(data, s)
 	return s, err
+}
+
+// Clone returns the clone value
+func (m *StoreMeta) Clone() *StoreMeta {
+	d, _ := m.Marshal()
+	v, _ := UnmarshalStoreMeta(d)
+
+	return v
 }

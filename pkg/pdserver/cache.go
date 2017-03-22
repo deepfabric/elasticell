@@ -16,7 +16,10 @@ package pdserver
 import (
 	"sync"
 
-	"github.com/deepfabric/elasticell/pkg/storage/meta"
+	"github.com/deepfabric/elasticell/pkg/log"
+	"github.com/deepfabric/elasticell/pkg/meta"
+	"github.com/deepfabric/elasticell/pkg/pdserver/storage"
+	"github.com/pkg/errors"
 )
 
 const (
@@ -35,17 +38,96 @@ func newClusterRuntime(cluster *meta.ClusterMeta) *clusterRuntime {
 
 type cache struct {
 	sync.RWMutex
-	cluster *clusterRuntime
-	sc      *storeCache
-	cc      *cellCache
+	clusterID uint64
+	cluster   *clusterRuntime
+	sc        *storeCache
+	cc        *cellCache
+	store     *storage.Store
+	allocator *idAllocator
 }
 
-func newCache() *cache {
+type storeCache struct {
+	stores map[uint64]*storeRuntime
+}
+
+type cellCache struct {
+	tree      *cellTree
+	cells     map[uint64]*cellRuntime            // cellID -> cellRuntime
+	leaders   map[uint64]map[uint64]*cellRuntime // storeID -> cellID -> cellRuntime
+	followers map[uint64]map[uint64]*cellRuntime // storeID -> cellID -> cellRuntime
+}
+
+func newCache(clusterID uint64, store *storage.Store, allocator *idAllocator) *cache {
 	c := new(cache)
+	c.clusterID = clusterID
 	c.sc = newStoreCache()
 	c.cc = newCellCache()
+	c.store = store
+	c.allocator = allocator
 
 	return c
+}
+
+func newStoreCache() *storeCache {
+	sc := new(storeCache)
+	sc.stores = make(map[uint64]*storeRuntime)
+
+	return sc
+}
+
+func newCellCache() *cellCache {
+	cc := new(cellCache)
+	cc.tree = newCellTree()
+	cc.cells = make(map[uint64]*cellRuntime)
+	cc.leaders = make(map[uint64]map[uint64]*cellRuntime)
+	cc.followers = make(map[uint64]map[uint64]*cellRuntime)
+
+	return cc
+}
+
+func (c *cache) allocPeer(storeID uint64) (*meta.PeerMeta, error) {
+	peerID, err := c.allocator.newID()
+	if err != nil {
+		return nil, errors.Wrap(err, "")
+	}
+
+	peer := &meta.PeerMeta{
+		ID:      peerID,
+		StoreID: storeID,
+	}
+	return peer, nil
+}
+
+func (c *cache) getStores() []*storeRuntime {
+	c.RLock()
+	defer c.RUnlock()
+
+	stores := make([]*storeRuntime, 0, len(c.sc.stores))
+	for _, store := range c.sc.stores {
+		stores = append(stores, store.clone())
+	}
+	return stores
+}
+
+func (c *cache) getCellStores(cell *cellRuntime) []*storeRuntime {
+	c.RLock()
+	defer c.RUnlock()
+
+	var stores []*storeRuntime
+	for id := range cell.getStoreIDs() {
+		if store := c.doGetStore(id); store != nil {
+			stores = append(stores, store.clone())
+		}
+	}
+	return stores
+}
+
+func (c *cache) doGetStore(storeID uint64) *storeRuntime {
+	store, ok := c.sc.stores[storeID]
+	if !ok {
+		return nil
+	}
+	return store
 }
 
 func (c *cache) addStore(store *meta.StoreMeta) {
@@ -64,4 +146,109 @@ func (c *cache) addCell(cell *meta.CellMeta) {
 	defer c.Unlock()
 
 	c.cc.addCell(newCellRuntime(cell))
+}
+
+func (c *cache) getCell(id uint64) *cellRuntime {
+	c.RLock()
+	defer c.RUnlock()
+
+	return c.cc.cells[id]
+}
+
+func (c *cache) doCellHeartbeat(source *meta.CellMeta) error {
+	current := c.getCell(source.ID)
+
+	// add new cell
+	if nil == current {
+		return c.doSave(source)
+	}
+
+	// update cell
+	currentEpoch := current.cell.Epoch
+	sourceEpoch := source.Epoch
+
+	// cell meta is stale, return an error.
+	if sourceEpoch.CellVer < currentEpoch.CellVer ||
+		sourceEpoch.ConfVer < currentEpoch.ConfVer {
+		log.Warnf("cell-heartbeat: cell is stale, cell=<%d> current<%d,%d> source<%d,%d>",
+			source.ID,
+			currentEpoch.CellVer,
+			currentEpoch.ConfVer,
+			sourceEpoch.CellVer,
+			sourceEpoch.ConfVer)
+		return errStaleCell
+	}
+
+	// cell meta is updated, update kv and cache.
+	if sourceEpoch.CellVer > currentEpoch.CellVer ||
+		sourceEpoch.ConfVer > currentEpoch.ConfVer {
+		log.Infof("cell-heartbeat: cell version updated, cell=<%d> cellVer=<%d->%d> confVer=<%d->%d>",
+			source.ID,
+			currentEpoch.CellVer,
+			sourceEpoch.CellVer,
+			currentEpoch.ConfVer,
+			sourceEpoch.ConfVer)
+		return c.doSave(source)
+	}
+
+	// cell meta is the same, update cache only.
+	c.addCell(source)
+	return nil
+}
+
+func (c *cache) doSave(cell *meta.CellMeta) error {
+	err := c.store.SetCellMeta(c.clusterID, cell)
+	if err != nil {
+		return err
+	}
+	c.addCell(cell)
+	return nil
+}
+
+func (cc *cellCache) addCell(origin *cellRuntime) {
+	if cell, ok := cc.cells[origin.getID()]; ok {
+		cc.removeCell(cell)
+	}
+
+	// Add to tree and regions.
+	cc.tree.update(origin.cell)
+	cc.cells[origin.getID()] = origin
+
+	if origin.leader == nil {
+		return
+	}
+
+	// Add to leaders and followers.
+	for _, peer := range origin.getPeers() {
+		storeID := peer.StoreID
+		if peer.ID == origin.leader.ID {
+			// Add leader peer to leaders.
+			store, ok := cc.leaders[storeID]
+			if !ok {
+				store = make(map[uint64]*cellRuntime)
+				cc.leaders[storeID] = store
+			}
+			store[origin.getID()] = origin
+		} else {
+			// Add follower peer to followers.
+			store, ok := cc.followers[storeID]
+			if !ok {
+				store = make(map[uint64]*cellRuntime)
+				cc.followers[storeID] = store
+			}
+			store[origin.getID()] = origin
+		}
+	}
+}
+
+func (cc *cellCache) removeCell(origin *cellRuntime) {
+	// Remove from tree and cells.
+	cc.tree.remove(origin.cell)
+	delete(cc.cells, origin.getID())
+
+	// Remove from leaders and followers.
+	for _, peer := range origin.getPeers() {
+		delete(cc.leaders[peer.StoreID], origin.getID())
+		delete(cc.followers[peer.StoreID], origin.getID())
+	}
 }

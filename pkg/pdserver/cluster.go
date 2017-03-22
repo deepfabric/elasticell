@@ -4,8 +4,8 @@ import (
 	"sync"
 
 	"github.com/deepfabric/elasticell/pkg/log"
+	"github.com/deepfabric/elasticell/pkg/meta"
 	pb "github.com/deepfabric/elasticell/pkg/pdpb"
-	"github.com/deepfabric/elasticell/pkg/storage/meta"
 	"github.com/pkg/errors"
 )
 
@@ -46,6 +46,26 @@ func (s *Server) bootstrapCluster(req *pb.BootstrapClusterReq) (*pb.BootstrapClu
 	}
 
 	return rsp, nil
+}
+
+func (s *Server) cellHeartbeat(req *pb.CellHeartbeatReq) (*pb.CellHeartbeatRsp, error) {
+	cellMeta, err := meta.UnmarshalCellMeta(req.GetCell().Data)
+	if err != nil {
+		return nil, err
+	}
+
+	if req.GetLeader() == nil && len(cellMeta.Peers) != 1 {
+		return nil, errRPCReq
+	}
+
+	// TODO: for peer is down or pending
+
+	if cellMeta.ID == 0 {
+		return nil, errRPCReq
+	}
+
+	cluster := s.GetCellCluster()
+	return cluster.doCellHeartbeat(cellMeta)
 }
 
 // GetClusterID returns cluster id
@@ -100,23 +120,28 @@ func (s *Server) checkForBootstrap(req *pb.BootstrapClusterReq) (*meta.StoreMeta
 
 // CellCluster is used for cluster config management.
 type CellCluster struct {
-	mux     sync.RWMutex
-	s       *Server
-	cache   *cache
-	running bool
+	mux         sync.RWMutex
+	s           *Server
+	coordinator *coordinator
+	cache       *cache
+	running     bool
 }
 
 func newCellCluster(s *Server) *CellCluster {
-	return &CellCluster{
+	c := &CellCluster{
 		s:     s,
-		cache: newCache(),
+		cache: newCache(s.clusterID, s.store, s.idAlloc),
 	}
+
+	c.coordinator = newCoordinator(s.cfg, c.cache)
+
+	return c
 }
 
 func (c *CellCluster) doBootstrap(store *meta.StoreMeta, cell *meta.CellMeta) (*pb.BootstrapClusterRsp, error) {
 	cluster := &meta.ClusterMeta{
 		ID:          c.s.GetClusterID(),
-		MaxReplicas: c.s.cfg.MaxReplicas,
+		MaxReplicas: c.s.cfg.getMaxReplicas(),
 	}
 
 	ok, err := c.s.store.SetClusterBootstrapped(c.s.GetClusterID(), cluster, store, cell)
@@ -127,6 +152,24 @@ func (c *CellCluster) doBootstrap(store *meta.StoreMeta, cell *meta.CellMeta) (*
 	return &pb.BootstrapClusterRsp{
 		AlreadyBootstrapped: !ok,
 	}, nil
+}
+
+func (c *CellCluster) doCellHeartbeat(cellMeta *meta.CellMeta) (*pb.CellHeartbeatRsp, error) {
+	err := c.cache.doCellHeartbeat(cellMeta)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(cellMeta.Peers) == 0 {
+		return nil, errRPCReq
+	}
+
+	rsp := c.coordinator.dispatch(c.cache.getCell(cellMeta.ID))
+	if rsp == nil {
+		return emptyRsp, nil
+	}
+
+	return rsp, nil
 }
 
 func (c *CellCluster) isRunning() bool {

@@ -26,12 +26,6 @@ type CellEpoch struct {
 	CellVer int64
 }
 
-// PeerMeta is peer meta info
-type PeerMeta struct {
-	ID      uint64 `json:"id"`
-	StoreID uint64 `json:"storeID"`
-}
-
 // CellMeta is cell meta info
 type CellMeta struct {
 	sync.Mutex
@@ -41,13 +35,6 @@ type CellMeta struct {
 	Max   []byte      `json:"max"`
 	Epoch *CellEpoch  `json:"epoch"`
 	Peers []*PeerMeta `json:"peers"`
-}
-
-func newCellEpoch() *CellEpoch {
-	return &CellEpoch{
-		ConfVer: 1,
-		CellVer: 1,
-	}
 }
 
 // NewCellMeta returns a cell meta
@@ -64,6 +51,13 @@ func NewCellMeta(id, storeID uint64) *CellMeta {
 	return c
 }
 
+func newCellEpoch() *CellEpoch {
+	return &CellEpoch{
+		ConfVer: 1,
+		CellVer: 1,
+	}
+}
+
 // Marshal marshal
 func (m *CellMeta) Marshal() ([]byte, error) {
 	return json.Marshal(m)
@@ -71,6 +65,10 @@ func (m *CellMeta) Marshal() ([]byte, error) {
 
 // UnmarshalCellMeta returns the spec cell meta
 func UnmarshalCellMeta(data []byte) (*CellMeta, error) {
+	if data == nil {
+		return nil, nil
+	}
+
 	s := new(CellMeta)
 	err := json.Unmarshal(data, s)
 	return s, err
@@ -82,4 +80,12 @@ func (m *CellMeta) AddPeer(peer *PeerMeta) {
 	m.Unlock()
 
 	m.Peers = append(m.Peers, peer)
+}
+
+// Clone returns the clone value
+func (m *CellMeta) Clone() *CellMeta {
+	d, _ := m.Marshal()
+	v, _ := UnmarshalCellMeta(d)
+
+	return v
 }

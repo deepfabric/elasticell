@@ -19,4 +19,5 @@ import (
 
 var (
 	errMaybeNotLeader = errors.New("may be not leader")
+	errTxnFailed      = errors.New("failed to commit transaction")
 )

@@ -1,10 +1,15 @@
 {
     "name": "pd1",
-    "dataDir": "/root/pd1",
+    "dataDir": "/root/pd1/data",
+    "leaseSecsTTL": 5,
     "rpcAddr": ":20800",
-    "clientUrls": "http://127.0.0.1:2379",
-    "peerUrls": "http://127.0.0.1:2380",
-    "initialCluster": "pd1=http://127.0.0.1:2380,pd2=http://127.0.0.1:3380,pd3=http://127.0.0.1:4380",
-    "initialClusterState": "new",
-    "leaseSecsTTL": 5
+    "embedEtcd": {
+        "clientUrls": "http://127.0.0.1:2379",
+        "peerUrls": "http://127.0.0.1:2380",
+        "initialCluster": "pd1=http://127.0.0.1:2380,pd2=http://127.0.0.1:3380,pd3=http://127.0.0.1:4380",
+        "initialClusterState": "new"
+    },
+    "replication": {
+            "maxReplicas": 3
+    }
 }
