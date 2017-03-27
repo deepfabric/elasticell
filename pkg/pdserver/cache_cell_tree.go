@@ -16,7 +16,7 @@ package pdserver
 import (
 	"bytes"
 
-	"github.com/deepfabric/elasticell/pkg/meta"
+	meta "github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/google/btree"
 )
 
@@ -25,7 +25,7 @@ const (
 )
 
 type cellItem struct {
-	cell *meta.CellMeta
+	cell meta.Cell
 }
 
 type cellTree struct {
@@ -41,13 +41,13 @@ func newCellTree() *cellTree {
 // Less returns true if the cell start key is greater than the other.
 // So we will sort the cell with start key reversely.
 func (r *cellItem) Less(other btree.Item) bool {
-	left := r.cell.Min
-	right := other.(*cellItem).cell.Min
+	left := r.cell.Start
+	right := other.(*cellItem).cell.Start
 	return bytes.Compare(left, right) > 0
 }
 
 func (r *cellItem) Contains(key []byte) bool {
-	start, end := r.cell.Min, r.cell.Max
+	start, end := r.cell.Start, r.cell.End
 	// len(end) == 0: max field is positive infinity
 	return bytes.Compare(key, start) >= 0 && (len(end) == 0 || bytes.Compare(key, end) < 0)
 }
@@ -59,7 +59,7 @@ func (t *cellTree) length() int {
 // update updates the tree with the cell.
 // It finds and deletes all the overlapped cells first, and then
 // insert the cell.
-func (t *cellTree) update(cell *meta.CellMeta) {
+func (t *cellTree) update(cell meta.Cell) {
 	item := &cellItem{cell: cell}
 
 	result := t.find(cell)
@@ -75,7 +75,7 @@ func (t *cellTree) update(cell *meta.CellMeta) {
 		over := i.(*cellItem)
 		// cell.max <= i.start, so cell and i has no overlaps,
 		// otherwise cell and i has overlaps
-		if len(cell.Max) > 0 && bytes.Compare(cell.Max, over.cell.Min) <= 0 {
+		if len(cell.End) > 0 && bytes.Compare(cell.End, over.cell.Start) <= 0 {
 			return false
 		}
 		overlaps = append(overlaps, over)
@@ -92,9 +92,9 @@ func (t *cellTree) update(cell *meta.CellMeta) {
 // remove removes a cell if the cell is in the tree.
 // It will do nothing if it cannot find the cell or the found cell
 // is not the same with the cell.
-func (t *cellTree) remove(cell *meta.CellMeta) {
+func (t *cellTree) remove(cell meta.Cell) {
 	result := t.find(cell)
-	if result == nil || result.cell.ID != cell.ID {
+	if result == nil || result.cell.Id != cell.Id {
 		return
 	}
 
@@ -102,16 +102,16 @@ func (t *cellTree) remove(cell *meta.CellMeta) {
 }
 
 // search returns a cell that contains the key.
-func (t *cellTree) search(key []byte) *meta.CellMeta {
-	cell := &meta.CellMeta{Min: key}
+func (t *cellTree) search(key []byte) meta.Cell {
+	cell := meta.Cell{Start: key}
 	result := t.find(cell)
 	if result == nil {
-		return nil
+		return meta.Cell{}
 	}
 	return result.cell
 }
 
-func (t *cellTree) find(cell *meta.CellMeta) *cellItem {
+func (t *cellTree) find(cell meta.Cell) *cellItem {
 	item := &cellItem{cell: cell}
 
 	var result *cellItem
@@ -120,7 +120,7 @@ func (t *cellTree) find(cell *meta.CellMeta) *cellItem {
 		return false
 	})
 
-	if result == nil || !result.Contains(cell.Min) {
+	if result == nil || !result.Contains(cell.Start) {
 		return nil
 	}
 

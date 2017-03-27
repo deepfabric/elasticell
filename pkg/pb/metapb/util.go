@@ -11,10 +11,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package meta
+package metapb
 
-// Label used for scheduler
-type Label struct {
-	Key   string `json:"key"`
-	Value string `json:"value"`
+// NewCell returns a cell meta
+func NewCell(cellID, peerID, storeID uint64) Cell {
+	c := Cell{
+		Id:    cellID,
+		Epoch: newCellEpoch(),
+	}
+
+	c.Peers = append(c.Peers, &Peer{
+		Id:      peerID,
+		StoreID: storeID,
+	})
+
+	return c
+}
+
+func newCellEpoch() CellEpoch {
+	return CellEpoch{
+		ConfVer: 1,
+		CellVer: 1,
+	}
 }

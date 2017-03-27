@@ -16,13 +16,13 @@ package node
 import (
 	"time"
 
-	"github.com/deepfabric/elasticell/pkg/meta"
+	meta "github.com/deepfabric/elasticell/pkg/pb/metapb"
 )
 
 // Cfg node cfg
 type Cfg struct {
-	StoreAddr   string        `json:"storeAddr"`
-	StoreLables []*meta.Label `json:"labels, omitempty"`
+	StoreAddr   string       `json:"storeAddr"`
+	StoreLables []meta.Label `json:"labels, omitempty"`
 
 	PDEndpoints              []string `json:"pdRPCAddr"`
 	StoreHeartbeatIntervalMs int      `json:"storeHeartbeatIntervalMs"`

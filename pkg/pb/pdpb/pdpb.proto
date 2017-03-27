@@ -2,6 +2,8 @@ syntax = "proto2";
 package pdpb;
 
 import "github.com/gogo/protobuf/gogoproto/gogo.proto";
+import "github.com/deepfabric/elasticell/pkg/pb/metapb/metapb.proto";
+
 
 option (gogoproto.marshaler_all) = true;
 option (gogoproto.sizer_all) = true;
@@ -24,18 +26,13 @@ enum ConfChangeType {
 
 message ChangePeer {
     optional ConfChangeType type = 1 [(gogoproto.nullable) = false];
-    optional Meta peer           = 2 [(gogoproto.nullable) = true];
+    optional metapb.Peer    peer = 2 [(gogoproto.nullable) = true];
 }
 
 message Leader {
     optional uint64 id   = 1 [(gogoproto.nullable) = false];
     optional string name = 2 [(gogoproto.nullable) = false];
     optional string addr = 3 [(gogoproto.nullable) = false];
-}
-
-
-message Meta {
-    required bytes data = 1;
 }
 
 message LeaderReq {
@@ -75,10 +72,10 @@ message IsClusterBootstrapRsp {
 }
 
 message BootstrapClusterReq {
-    optional string from  = 1 [(gogoproto.nullable) = false];
-    optional uint64 id    = 2 [(gogoproto.nullable) = false];
-    optional Meta   store = 3 [(gogoproto.nullable) = false];
-    optional Meta   cell  = 4 [(gogoproto.nullable) = false];
+    optional string from         = 1 [(gogoproto.nullable) = false];
+    optional uint64 id           = 2 [(gogoproto.nullable) = false];
+    optional metapb.Store store  = 3 [(gogoproto.nullable) = false];
+    optional metapb.Cell  cell   = 4 [(gogoproto.nullable) = false];
 }
 
 message BootstrapClusterRsp {
@@ -86,10 +83,10 @@ message BootstrapClusterRsp {
 }
 
 message CellHeartbeatReq {
-    optional string from   = 1 [(gogoproto.nullable) = false];
-    optional uint64 id     = 2 [(gogoproto.nullable) = false];
-    optional Meta   cell   = 3 [(gogoproto.nullable) = false];
-    optional Meta   leader = 4 [(gogoproto.nullable) = true];
+    optional string from        = 1 [(gogoproto.nullable) = false];
+    optional uint64 id          = 2 [(gogoproto.nullable) = false];
+    optional metapb.Cell cell   = 3 [(gogoproto.nullable) = false];
+    optional metapb.Peer leader = 4 [(gogoproto.nullable) = true];
 }
 
 message CellHeartbeatRsp {

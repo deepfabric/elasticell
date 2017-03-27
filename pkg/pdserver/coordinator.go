@@ -16,7 +16,7 @@ package pdserver
 import (
 	"sync"
 
-	pb "github.com/deepfabric/elasticell/pkg/pdpb"
+	pb "github.com/deepfabric/elasticell/pkg/pb/pdpb"
 	"golang.org/x/net/context"
 )
 

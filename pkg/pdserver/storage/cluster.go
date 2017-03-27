@@ -24,7 +24,7 @@ import (
 	"math"
 
 	"github.com/coreos/etcd/clientv3"
-	"github.com/deepfabric/elasticell/pkg/meta"
+	meta "github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/util"
 	"github.com/pkg/errors"
 )
@@ -109,13 +109,13 @@ func (s *Store) CreateFirstClusterID() (uint64, error) {
 }
 
 // SetClusterBootstrapped set cluster bootstrapped flag, only one can succ.
-func (s *Store) SetClusterBootstrapped(clusterID uint64, cluster *meta.ClusterMeta, store *meta.StoreMeta, cell *meta.CellMeta) (bool, error) {
+func (s *Store) SetClusterBootstrapped(clusterID uint64, cluster meta.Cluster, store meta.Store, cell meta.Cell) (bool, error) {
 	ctx, cancel := context.WithTimeout(s.client.Ctx(), DefaultTimeout)
 	defer cancel()
 
 	clusterBaseKey := s.getClusterMetaKey(clusterID)
-	storeKey := s.getStoreMetaKey(clusterID, store.ID)
-	cellKey := s.getCellMetaKey(clusterID, cell.ID)
+	storeKey := s.getStoreMetaKey(clusterID, store.Id)
+	cellKey := s.getCellMetaKey(clusterID, cell.Id)
 
 	// build operations
 	var ops []clientv3.Op
@@ -157,7 +157,7 @@ func (s *Store) SetClusterBootstrapped(clusterID uint64, cluster *meta.ClusterMe
 }
 
 // LoadClusterMeta returns cluster meta info
-func (s *Store) LoadClusterMeta(clusterID uint64) (*meta.ClusterMeta, error) {
+func (s *Store) LoadClusterMeta(clusterID uint64) (*meta.Cluster, error) {
 	key := s.getClusterMetaKey(clusterID)
 
 	data, err := s.getValue(key)
@@ -169,12 +169,14 @@ func (s *Store) LoadClusterMeta(clusterID uint64) (*meta.ClusterMeta, error) {
 		return nil, nil
 	}
 
-	return meta.UnmarshalClusterMeta(data)
+	v := &meta.Cluster{}
+	err = v.Unmarshal(data)
+	return v, err
 }
 
 // LoadStoreMeta returns load error,
 // do funcation will call on each loaded store meta info
-func (s *Store) LoadStoreMeta(clusterID uint64, limit int64, do func(*meta.StoreMeta)) error {
+func (s *Store) LoadStoreMeta(clusterID uint64, limit int64, do func(meta.Store)) error {
 	startID := uint64(0)
 	endStore := s.getStoreMetaKey(clusterID, endID)
 	withRange := clientv3.WithRange(endStore)
@@ -188,13 +190,14 @@ func (s *Store) LoadStoreMeta(clusterID uint64, limit int64, do func(*meta.Store
 		}
 
 		for _, item := range resp.Kvs {
-			v, err := meta.UnmarshalStoreMeta(item.Value)
+			v := &meta.Store{}
+			err := v.Unmarshal(item.Value)
 			if err != nil {
 				return errors.Wrap(err, "")
 			}
 
-			startID = v.ID + 1
-			do(v)
+			startID = v.Id + 1
+			do(*v)
 		}
 
 		// read complete
@@ -208,7 +211,7 @@ func (s *Store) LoadStoreMeta(clusterID uint64, limit int64, do func(*meta.Store
 
 // LoadCellMeta returns load error,
 // do funcation will call on each loaded cell meta info
-func (s *Store) LoadCellMeta(clusterID uint64, limit int64, do func(*meta.CellMeta)) error {
+func (s *Store) LoadCellMeta(clusterID uint64, limit int64, do func(meta.Cell)) error {
 	startID := uint64(0)
 	endCellKey := s.getCellMetaKey(clusterID, endID)
 	withRange := clientv3.WithRange(endCellKey)
@@ -222,13 +225,15 @@ func (s *Store) LoadCellMeta(clusterID uint64, limit int64, do func(*meta.CellMe
 		}
 
 		for _, item := range resp.Kvs {
-			v, err := meta.UnmarshalCellMeta(item.Value)
+			v := &meta.Cell{}
+			err := v.Unmarshal(item.Value)
+
 			if err != nil {
 				return errors.Wrap(err, "")
 			}
 
-			startID = v.ID + 1
-			do(v)
+			startID = v.Id + 1
+			do(*v)
 		}
 
 		// read complete
@@ -241,8 +246,8 @@ func (s *Store) LoadCellMeta(clusterID uint64, limit int64, do func(*meta.CellMe
 }
 
 // SetCellMeta returns nil if cell is add or update succ
-func (s *Store) SetCellMeta(clusterID uint64, cell *meta.CellMeta) error {
-	cellKey := s.getCellMetaKey(clusterID, cell.ID)
+func (s *Store) SetCellMeta(clusterID uint64, cell meta.Cell) error {
+	cellKey := s.getCellMetaKey(clusterID, cell.Id)
 	meta, err := cell.Marshal()
 	if err != nil {
 		return errors.Wrap(err, "")

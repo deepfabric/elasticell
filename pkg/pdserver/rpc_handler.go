@@ -18,7 +18,7 @@ import (
 
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pd"
-	pb "github.com/deepfabric/elasticell/pkg/pdpb"
+	pb "github.com/deepfabric/elasticell/pkg/pb/pdpb"
 	"golang.org/x/net/context"
 )
 

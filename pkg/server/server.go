@@ -18,14 +18,14 @@ import (
 
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/node"
+	"github.com/deepfabric/elasticell/pkg/redis"
 	"github.com/deepfabric/elasticell/pkg/storage"
+	"github.com/fagongzi/goetty"
 )
 
 // Server a server provide kv cache based on redis protocol
 type Server struct {
 	cfg *Cfg
-
-	store *storage.Store
 
 	redisServer *RedisServer
 	nodeServer  *node.Node
@@ -39,23 +39,10 @@ type Server struct {
 func NewServer(cfg *Cfg) *Server {
 	s := new(Server)
 	s.cfg = cfg
-
-	s.redisServer = newRedisServer(cfg)
-
-	cfg.Node.StoreAddr = cfg.Redis.Listen
-	err := s.initStore()
-	if err != nil {
-		log.Fatalf("bootstrap: bootstrap failure, errors:\n %+v", err)
-		return nil
-	}
-
-	n, err := node.NewNode(s.cfg.Node, s.store)
-	if err != nil {
-		log.Fatalf("bootstrap: bootstrap failure, errors:\n %+v", err)
-		return nil
-	}
-	s.nodeServer = n
 	s.stopC = make(chan interface{})
+
+	s.initRedis()
+	s.initNode()
 
 	return s
 }
@@ -83,8 +70,8 @@ func (s *Server) listenToStop() {
 func (s *Server) doStop() {
 	s.stopOnce.Do(func() {
 		defer s.stopWG.Done()
-		s.stopRedis()
 		s.stopNode()
+		s.stopRedis()
 	})
 }
 
@@ -131,7 +118,43 @@ func (s *Server) stopNode() {
 	log.Info("stop: stop node succ")
 }
 
-func (s *Server) initStore() error {
-	s.store = storage.NewStore(s.cfg.Storage)
-	return nil
+func (s *Server) initRedis() {
+	rs := new(RedisServer)
+	rs.s = goetty.NewServerSize(s.cfg.Redis.Listen,
+		redis.Decoder,
+		redis.Encoder,
+		s.cfg.Redis.ReadBufferSize,
+		s.cfg.Redis.WriteBufferSize,
+		goetty.NewInt64IDGenerator())
+
+	s.redisServer = rs
+}
+
+func (s *Server) initNode() {
+	metadb, err := s.initDB()
+	if err != nil {
+		log.Fatalf("bootstrap: init meta db failure, errors:\n %+v", err)
+		return
+	}
+
+	n, err := node.NewNode(s.cfg.Node, metadb)
+	if err != nil {
+		log.Fatalf("bootstrap: create node failure, errors:\n %+v", err)
+		return
+	}
+	s.nodeServer = n
+}
+
+func (s *Server) initDB() (*storage.MetaDB, error) {
+	d, err := s.initDriver()
+	if err != nil {
+		return nil, err
+	}
+
+	return storage.NewMetaDB(s.cfg.Storage, d), nil
+}
+
+func (s *Server) initDriver() (storage.Driver, error) {
+	// TODO: impl
+	return nil, nil
 }

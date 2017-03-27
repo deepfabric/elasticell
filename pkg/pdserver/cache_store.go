@@ -14,45 +14,45 @@
 package pdserver
 
 import (
-	"github.com/deepfabric/elasticell/pkg/meta"
+	meta "github.com/deepfabric/elasticell/pkg/pb/metapb"
 )
 
 type storeRuntime struct {
-	store *meta.StoreMeta
+	store meta.Store
 }
 
-func newStoreRuntime(store *meta.StoreMeta) *storeRuntime {
+func newStoreRuntime(store meta.Store) *storeRuntime {
 	return &storeRuntime{
 		store: store,
 	}
 }
 
 func (s *storeRuntime) getID() uint64 {
-	return s.store.ID
+	return s.store.Id
 }
 
 func (s *storeRuntime) isUp() bool {
-	return s.store.State == meta.StoreStateUp
+	return s.store.State == meta.StoreState_UP
 }
 
 func (s *storeRuntime) storageRatio() int {
-	if s.store.Metrics.Capacity == 0 {
+	if s.store.Metric.Capacity == 0 {
 		return 0
 	}
 
-	return int(float64(s.storageSize()) * 100 / float64(s.store.Metrics.Capacity))
+	return int(float64(s.storageSize()) * 100 / float64(s.store.Metric.Capacity))
 }
 
 func (s *storeRuntime) storageSize() uint64 {
-	return s.store.Metrics.Capacity - s.store.Metrics.Available
+	return s.store.Metric.Capacity - s.store.Metric.Available
 }
 
 func (s *storeRuntime) cellScore() float64 {
-	if s.store.Metrics.Capacity == 0 {
+	if s.store.Metric.Capacity == 0 {
 		return 0
 	}
 
-	return float64(s.store.Metrics.CellCount) / float64(s.store.Metrics.Capacity)
+	return float64(s.store.Metric.CellCount) / float64(s.store.Metric.Capacity)
 }
 
 func (s *storeRuntime) getLocationID(keys []string) string {

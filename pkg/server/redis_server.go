@@ -25,18 +25,6 @@ type RedisServer struct {
 	s *goetty.Server
 }
 
-func newRedisServer(cfg *Cfg) *RedisServer {
-	s := new(RedisServer)
-	s.s = goetty.NewServerSize(cfg.Redis.Listen,
-		redis.Decoder,
-		redis.Encoder,
-		cfg.Redis.ReadBufferSize,
-		cfg.Redis.WriteBufferSize,
-		goetty.NewInt64IDGenerator())
-
-	return s
-}
-
 // Start used for start the redis server
 func (s *RedisServer) Start() error {
 	return s.s.Start(s.doConnection)

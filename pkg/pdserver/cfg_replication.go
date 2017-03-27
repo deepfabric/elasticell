@@ -21,7 +21,7 @@ import (
 type ReplicationCfg struct {
 	sync.RWMutex
 	// MaxReplicas is the number of replicas for each cell.
-	MaxReplicas int `json:"maxReplicas"`
+	MaxReplicas uint32 `json:"maxReplicas"`
 
 	// The label keys specified the location of a store.
 	// The placement priorities is implied by the order of label keys.
@@ -30,7 +30,7 @@ type ReplicationCfg struct {
 	LocationLabels []string `json:"location-labels"`
 }
 
-func (c *Cfg) getMaxReplicas() int {
+func (c *Cfg) getMaxReplicas() uint32 {
 	c.Replication.RLock()
 	defer c.Replication.RUnlock()
 

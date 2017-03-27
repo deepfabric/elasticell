@@ -16,8 +16,7 @@ package pdserver
 import (
 	"fmt"
 
-	"github.com/deepfabric/elasticell/pkg/meta"
-	pb "github.com/deepfabric/elasticell/pkg/pdpb"
+	pb "github.com/deepfabric/elasticell/pkg/pb/pdpb"
 )
 
 // changePeerOperator is sub operator of cellOperator
@@ -36,23 +35,20 @@ func (op *changePeerOperator) GetCellID() uint64 {
 
 func (op *changePeerOperator) Do(cell *cellRuntime) (*pb.CellHeartbeatRsp, bool) {
 	// Check if operator is finished.
-	peer, err := meta.UnmarshalPeerMeta(op.ChangePeer.Peer.Data)
-	if err != nil {
-		return nil, true
-	}
+	peer := op.ChangePeer.Peer
 
 	switch op.ChangePeer.Type {
 	case pb.ConfChangeType_AddNode:
-		if cell.getPendingPeer(peer.ID) != nil {
+		if cell.getPendingPeer(peer.Id) != nil {
 			// Peer is added but not finished.
 			return nil, false
 		}
-		if cell.getPeer(peer.ID) != nil {
+		if cell.getPeer(peer.Id) != nil {
 			// Peer is added and finished.
 			return nil, true
 		}
 	case pb.ConfChangeType_RemoveNode:
-		if cell.getPeer(peer.ID) == nil {
+		if cell.getPeer(peer.Id) == nil {
 			// Peer is removed.
 			return nil, true
 		}

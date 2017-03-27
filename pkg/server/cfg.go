@@ -61,6 +61,8 @@ func GetCfg() *Cfg {
 		return nil
 	}
 
+	// The node store addr is the redis addr
+	cfg.Node.StoreAddr = cfg.Redis.Listen
 	return cfg
 }
 

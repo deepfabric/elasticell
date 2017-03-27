@@ -14,53 +14,46 @@
 package pdserver
 
 import (
-	"github.com/deepfabric/elasticell/pkg/meta"
+	meta "github.com/deepfabric/elasticell/pkg/pb/metapb"
 )
 
 type cellRuntime struct {
-	cell   *meta.CellMeta
-	leader *meta.CellMeta
+	cell   meta.Cell
+	leader meta.Cell
 	// downPeers    []*pdpb.PeerStats
-	pendingPeers []*meta.PeerMeta
+	pendingPeers []*meta.Peer
 }
 
-func newCellRuntime(cell *meta.CellMeta) *cellRuntime {
+func newCellRuntime(cell meta.Cell) *cellRuntime {
 	return &cellRuntime{
 		cell: cell,
 	}
 }
 
-func (cc *cellRuntime) getPendingPeer(peerID uint64) *meta.PeerMeta {
+func (cc *cellRuntime) getPendingPeer(peerID uint64) *meta.Peer {
 	for _, peer := range cc.pendingPeers {
-		if peer.ID == peerID {
+		if peer.Id == peerID {
 			return peer
 		}
 	}
 	return nil
 }
 
-func (cc *cellRuntime) getPeer(peerID uint64) *meta.PeerMeta {
+func (cc *cellRuntime) getPeer(peerID uint64) *meta.Peer {
 	for _, peer := range cc.cell.Peers {
-		if peer.ID == peerID {
+		if peer.Id == peerID {
 			return peer
 		}
 	}
+
 	return nil
 }
 
 func (cc *cellRuntime) getID() uint64 {
-	if cc.cell == nil {
-		return 0
-	}
-
-	return cc.cell.ID
+	return cc.cell.Id
 }
 
-func (cc *cellRuntime) getPeers() []*meta.PeerMeta {
-	if cc.cell == nil {
-		return nil
-	}
-
+func (cc *cellRuntime) getPeers() []*meta.Peer {
 	return cc.cell.Peers
 }
 

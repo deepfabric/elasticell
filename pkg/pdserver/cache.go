@@ -17,7 +17,7 @@ import (
 	"sync"
 
 	"github.com/deepfabric/elasticell/pkg/log"
-	"github.com/deepfabric/elasticell/pkg/meta"
+	meta "github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/pdserver/storage"
 	"github.com/pkg/errors"
 )
@@ -27,10 +27,10 @@ const (
 )
 
 type clusterRuntime struct {
-	cluster *meta.ClusterMeta
+	cluster meta.Cluster
 }
 
-func newClusterRuntime(cluster *meta.ClusterMeta) *clusterRuntime {
+func newClusterRuntime(cluster meta.Cluster) *clusterRuntime {
 	return &clusterRuntime{
 		cluster: cluster,
 	}
@@ -85,14 +85,14 @@ func newCellCache() *cellCache {
 	return cc
 }
 
-func (c *cache) allocPeer(storeID uint64) (*meta.PeerMeta, error) {
+func (c *cache) allocPeer(storeID uint64) (meta.Peer, error) {
 	peerID, err := c.allocator.newID()
 	if err != nil {
-		return nil, errors.Wrap(err, "")
+		return meta.Peer{}, errors.Wrap(err, "")
 	}
 
-	peer := &meta.PeerMeta{
-		ID:      peerID,
+	peer := meta.Peer{
+		Id:      peerID,
 		StoreID: storeID,
 	}
 	return peer, nil
@@ -130,18 +130,18 @@ func (c *cache) doGetStore(storeID uint64) *storeRuntime {
 	return store
 }
 
-func (c *cache) addStore(store *meta.StoreMeta) {
+func (c *cache) addStore(store meta.Store) {
 	c.Lock()
 	defer c.Unlock()
 
-	if _, ok := c.sc.stores[store.ID]; ok {
+	if _, ok := c.sc.stores[store.Id]; ok {
 		return
 	}
 
-	c.sc.stores[store.ID] = newStoreRuntime(store)
+	c.sc.stores[store.Id] = newStoreRuntime(store)
 }
 
-func (c *cache) addCell(cell *meta.CellMeta) {
+func (c *cache) addCell(cell meta.Cell) {
 	c.Lock()
 	defer c.Unlock()
 
@@ -155,8 +155,8 @@ func (c *cache) getCell(id uint64) *cellRuntime {
 	return c.cc.cells[id]
 }
 
-func (c *cache) doCellHeartbeat(source *meta.CellMeta) error {
-	current := c.getCell(source.ID)
+func (c *cache) doCellHeartbeat(source meta.Cell) error {
+	current := c.getCell(source.Id)
 
 	// add new cell
 	if nil == current {
@@ -171,7 +171,7 @@ func (c *cache) doCellHeartbeat(source *meta.CellMeta) error {
 	if sourceEpoch.CellVer < currentEpoch.CellVer ||
 		sourceEpoch.ConfVer < currentEpoch.ConfVer {
 		log.Warnf("cell-heartbeat: cell is stale, cell=<%d> current<%d,%d> source<%d,%d>",
-			source.ID,
+			source.Id,
 			currentEpoch.CellVer,
 			currentEpoch.ConfVer,
 			sourceEpoch.CellVer,
@@ -183,7 +183,7 @@ func (c *cache) doCellHeartbeat(source *meta.CellMeta) error {
 	if sourceEpoch.CellVer > currentEpoch.CellVer ||
 		sourceEpoch.ConfVer > currentEpoch.ConfVer {
 		log.Infof("cell-heartbeat: cell version updated, cell=<%d> cellVer=<%d->%d> confVer=<%d->%d>",
-			source.ID,
+			source.Id,
 			currentEpoch.CellVer,
 			sourceEpoch.CellVer,
 			currentEpoch.ConfVer,
@@ -196,7 +196,7 @@ func (c *cache) doCellHeartbeat(source *meta.CellMeta) error {
 	return nil
 }
 
-func (c *cache) doSave(cell *meta.CellMeta) error {
+func (c *cache) doSave(cell meta.Cell) error {
 	err := c.store.SetCellMeta(c.clusterID, cell)
 	if err != nil {
 		return err
@@ -214,14 +214,14 @@ func (cc *cellCache) addCell(origin *cellRuntime) {
 	cc.tree.update(origin.cell)
 	cc.cells[origin.getID()] = origin
 
-	if origin.leader == nil {
+	if origin.leader.Id <= 0 {
 		return
 	}
 
 	// Add to leaders and followers.
 	for _, peer := range origin.getPeers() {
 		storeID := peer.StoreID
-		if peer.ID == origin.leader.ID {
+		if peer.Id == origin.leader.Id {
 			// Add leader peer to leaders.
 			store, ok := cc.leaders[storeID]
 			if !ok {

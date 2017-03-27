@@ -18,7 +18,7 @@ import (
 	"time"
 
 	"github.com/deepfabric/elasticell/pkg/log"
-	pb "github.com/deepfabric/elasticell/pkg/pdpb"
+	pb "github.com/deepfabric/elasticell/pkg/pb/pdpb"
 )
 
 var (

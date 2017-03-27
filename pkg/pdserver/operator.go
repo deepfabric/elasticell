@@ -17,8 +17,8 @@ import (
 	"time"
 
 	"github.com/deepfabric/elasticell/pkg/log"
-	"github.com/deepfabric/elasticell/pkg/meta"
-	pb "github.com/deepfabric/elasticell/pkg/pdpb"
+	meta "github.com/deepfabric/elasticell/pkg/pb/metapb"
+	pb "github.com/deepfabric/elasticell/pkg/pb/pdpb"
 )
 
 // Operator is an interface to scheduler cell
@@ -27,17 +27,17 @@ type Operator interface {
 	Do(cell *cellRuntime) (*pb.CellHeartbeatRsp, bool)
 }
 
-func newAddPeerAggregationOp(cell *cellRuntime, peer *meta.PeerMeta) Operator {
+func newAddPeerAggregationOp(cell *cellRuntime, peer meta.Peer) Operator {
 	addPeerOp := newAddPeerOp(cell.getID(), peer)
 	return newAggregationOp(cell, addPeerOp)
 }
 
-func newAddPeerOp(cellID uint64, peer *meta.PeerMeta) *changePeerOperator {
+func newAddPeerOp(cellID uint64, peer meta.Peer) *changePeerOperator {
 	return &changePeerOperator{
 		CellID: cellID,
 		ChangePeer: pb.ChangePeer{
 			Type: pb.ConfChangeType_AddNode,
-			Peer: pb.GetMetaPB(peer),
+			Peer: &peer,
 		},
 	}
 }

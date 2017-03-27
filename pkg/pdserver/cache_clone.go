@@ -15,6 +15,6 @@ package pdserver
 
 func (s *storeRuntime) clone() *storeRuntime {
 	v := new(storeRuntime)
-	v.store = s.store.Clone()
+	v.store = s.store
 	return v
 }

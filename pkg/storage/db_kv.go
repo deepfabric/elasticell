@@ -11,21 +11,4 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package pdpb
-
-// MetaType is a interface for Marshal types
-type MetaType interface {
-	Marshal() ([]byte, error)
-}
-
-// GetMetaPB returns pb meta instance
-func GetMetaPB(value MetaType) *Meta {
-	v, err := value.Marshal()
-	if err != nil {
-		return nil
-	}
-
-	return &Meta{
-		Data: v,
-	}
-}
+package storage

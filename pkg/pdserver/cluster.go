@@ -4,8 +4,8 @@ import (
 	"sync"
 
 	"github.com/deepfabric/elasticell/pkg/log"
-	"github.com/deepfabric/elasticell/pkg/meta"
-	pb "github.com/deepfabric/elasticell/pkg/pdpb"
+	meta "github.com/deepfabric/elasticell/pkg/pb/metapb"
+	pb "github.com/deepfabric/elasticell/pkg/pb/pdpb"
 	"github.com/pkg/errors"
 )
 
@@ -49,23 +49,18 @@ func (s *Server) bootstrapCluster(req *pb.BootstrapClusterReq) (*pb.BootstrapClu
 }
 
 func (s *Server) cellHeartbeat(req *pb.CellHeartbeatReq) (*pb.CellHeartbeatRsp, error) {
-	cellMeta, err := meta.UnmarshalCellMeta(req.GetCell().Data)
-	if err != nil {
-		return nil, err
-	}
-
-	if req.GetLeader() == nil && len(cellMeta.Peers) != 1 {
+	if req.GetLeader() == nil && len(req.Cell.Peers) != 1 {
 		return nil, errRPCReq
 	}
 
 	// TODO: for peer is down or pending
 
-	if cellMeta.ID == 0 {
+	if req.Cell.Id == 0 {
 		return nil, errRPCReq
 	}
 
 	cluster := s.GetCellCluster()
-	return cluster.doCellHeartbeat(cellMeta)
+	return cluster.doCellHeartbeat(req.Cell)
 }
 
 // GetClusterID returns cluster id
@@ -73,46 +68,32 @@ func (s *Server) GetClusterID() uint64 {
 	return s.clusterID
 }
 
-func (s *Server) checkForBootstrap(req *pb.BootstrapClusterReq) (*meta.StoreMeta, *meta.CellMeta, error) {
+func (s *Server) checkForBootstrap(req *pb.BootstrapClusterReq) (meta.Store, meta.Cell, error) {
 	clusterID := s.GetClusterID()
 
-	data := req.GetStore()
-	if data.GetData() == nil {
-		return nil, nil, errors.Errorf("missing store meta for bootstrap, clusterID=<%d>", clusterID)
-	}
-	store, err := meta.UnmarshalStoreMeta(data.GetData())
-	if err != nil {
-		return nil, nil, errors.Wrapf(err, "unmarshal store meta failure for bootstrap cluster, clusterID=<%d>", clusterID)
-	} else if store.ID == 0 {
-		return nil, nil, errors.New("invalid zero store id for bootstrap cluster")
+	store := req.GetStore()
+	if store.Id == 0 {
+		return meta.Store{}, meta.Cell{}, errors.New("invalid zero store id for bootstrap cluster")
 	}
 
-	data = req.GetCell()
-	if data.GetData() == nil {
-		return nil, nil, errors.Errorf("missing cell meta for bootstrap, clusterID=<%d>",
-			clusterID)
-	}
-	cell, err := meta.UnmarshalCellMeta(data.GetData())
-	if err != nil {
-		return nil, nil, errors.Wrapf(err, "unmarshal cell meta failure for bootstrap cluster, clusterID=<%d>",
-			clusterID)
-	} else if cell.ID == 0 {
-		return nil, nil, errors.New("invalid zero cell id for bootstrap cluster")
+	cell := req.GetCell()
+	if cell.Id == 0 {
+		return meta.Store{}, meta.Cell{}, errors.New("invalid zero cell id for bootstrap cluster")
 	} else if len(cell.Peers) == 0 || len(cell.Peers) != 1 {
-		return nil, nil, errors.Errorf("invalid first cell peer count must be 1, count=<%d> clusterID=<%d>",
+		return meta.Store{}, meta.Cell{}, errors.Errorf("invalid first cell peer count must be 1, count=<%d> clusterID=<%d>",
 			len(cell.Peers),
 			clusterID)
-	} else if cell.Peers[0].ID == 0 {
-		return nil, nil, errors.New("invalid zero peer id for bootstrap cluster")
-	} else if cell.Peers[0].StoreID != store.ID {
-		return nil, nil, errors.Errorf("invalid cell store id for bootstrap cluster, cell=<%d> expect=<%d> clusterID=<%d>",
+	} else if cell.Peers[0].Id == 0 {
+		return meta.Store{}, meta.Cell{}, errors.New("invalid zero peer id for bootstrap cluster")
+	} else if cell.Peers[0].StoreID != store.Id {
+		return meta.Store{}, meta.Cell{}, errors.Errorf("invalid cell store id for bootstrap cluster, cell=<%d> expect=<%d> clusterID=<%d>",
 			cell.Peers[0].StoreID,
-			store.ID,
+			store.Id,
 			clusterID)
-	} else if cell.Peers[0].ID != cell.ID {
-		return nil, nil, errors.Errorf("first cell peer must be self, self=<%d> peer=<%d>",
-			cell.ID,
-			cell.Peers[0].ID)
+	} else if cell.Peers[0].Id != cell.Id {
+		return meta.Store{}, meta.Cell{}, errors.Errorf("first cell peer must be self, self=<%d> peer=<%d>",
+			cell.Id,
+			cell.Peers[0].Id)
 	}
 
 	return store, cell, nil
@@ -138,9 +119,9 @@ func newCellCluster(s *Server) *CellCluster {
 	return c
 }
 
-func (c *CellCluster) doBootstrap(store *meta.StoreMeta, cell *meta.CellMeta) (*pb.BootstrapClusterRsp, error) {
-	cluster := &meta.ClusterMeta{
-		ID:          c.s.GetClusterID(),
+func (c *CellCluster) doBootstrap(store meta.Store, cell meta.Cell) (*pb.BootstrapClusterRsp, error) {
+	cluster := meta.Cluster{
+		Id:          c.s.GetClusterID(),
 		MaxReplicas: c.s.cfg.getMaxReplicas(),
 	}
 
@@ -154,17 +135,17 @@ func (c *CellCluster) doBootstrap(store *meta.StoreMeta, cell *meta.CellMeta) (*
 	}, nil
 }
 
-func (c *CellCluster) doCellHeartbeat(cellMeta *meta.CellMeta) (*pb.CellHeartbeatRsp, error) {
-	err := c.cache.doCellHeartbeat(cellMeta)
+func (c *CellCluster) doCellHeartbeat(cell meta.Cell) (*pb.CellHeartbeatRsp, error) {
+	err := c.cache.doCellHeartbeat(cell)
 	if err != nil {
 		return nil, err
 	}
 
-	if len(cellMeta.Peers) == 0 {
+	if len(cell.Peers) == 0 {
 		return nil, errRPCReq
 	}
 
-	rsp := c.coordinator.dispatch(c.cache.getCell(cellMeta.ID))
+	rsp := c.coordinator.dispatch(c.cache.getCell(cell.Id))
 	if rsp == nil {
 		return emptyRsp, nil
 	}
@@ -201,7 +182,7 @@ func (c *CellCluster) start() error {
 		log.Warn("cell-cluster: start cluster skipped, cluster is not bootstapped")
 		return nil
 	}
-	c.cache.cluster = newClusterRuntime(cluster)
+	c.cache.cluster = newClusterRuntime(*cluster)
 
 	err = c.s.store.LoadStoreMeta(clusterID, batchLimit, c.cache.addStore)
 	if err != nil {

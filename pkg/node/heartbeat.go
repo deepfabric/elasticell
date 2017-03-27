@@ -14,12 +14,16 @@
 package node
 
 import (
+	"fmt"
+
 	"github.com/deepfabric/elasticell/pkg/log"
-	pb "github.com/deepfabric/elasticell/pkg/pdpb"
+	pb "github.com/deepfabric/elasticell/pkg/pb/pdpb"
 	"golang.org/x/net/context"
 )
 
 func (n *Node) startHeartbeat() {
+	n.initHeartbeatLoop()
+
 	// That's ok, the cluster is bootstrapped succ.
 	// We will start 1+N heartbeat loop to report store and cell info to pd.
 	if nil != n.storeHeartbeat {
@@ -29,6 +33,24 @@ func (n *Node) startHeartbeat() {
 	// N cell loop
 	for _, h := range n.cellHeartbeats {
 		go h.start()
+	}
+}
+
+func (n *Node) initHeartbeatLoop() {
+	if n.store.Id > 0 {
+		n.storeHeartbeat = newLoop(fmt.Sprintf("store-%d", n.store.Id),
+			n.cfg.getStoreHeartbeatDuration(),
+			n.doStoreHeartbeat,
+			n.store.Id)
+	}
+
+	if nil != n.cells {
+		for id := range n.cells {
+			n.cellHeartbeats = append(n.cellHeartbeats, newLoop(fmt.Sprintf("cell-%d", id),
+				n.cfg.getCellHeartbeatDuration(),
+				n.doCellHeartbeat,
+				id))
+		}
 	}
 }
 
@@ -50,7 +72,7 @@ func (n *Node) doStoreHeartbeat(storeID uint64) {
 
 func (n *Node) doCellHeartbeat(cellID uint64) {
 	req := &pb.CellHeartbeatReq{
-		Cell: *n.getCell(cellID).GetPBMeta(),
+		Cell: n.getCell(cellID),
 	}
 
 	_, err := n.pdClient.CellHeartbeat(context.TODO(), req)

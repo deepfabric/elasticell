@@ -17,7 +17,7 @@ import (
 	"math"
 
 	"github.com/deepfabric/elasticell/pkg/log"
-	"github.com/deepfabric/elasticell/pkg/meta"
+	meta "github.com/deepfabric/elasticell/pkg/pb/metapb"
 )
 
 const replicaBaseScore = 100
@@ -46,13 +46,13 @@ func (r *replicaChecker) Check(target *cellRuntime) Operator {
 		return op
 	}
 
-	if len(target.getPeers()) < r.cfg.getMaxReplicas() {
+	if uint32(len(target.getPeers())) < r.cfg.getMaxReplicas() {
 		newPeer, _ := r.selectBestPeer(target, r.filters...)
 		if newPeer == nil {
 			return nil
 		}
 
-		return newAddPeerAggregationOp(target, newPeer)
+		return newAddPeerAggregationOp(target, *newPeer)
 	}
 
 	// if len(region.GetPeers()) > r.rep.GetMaxReplicas() {
@@ -80,7 +80,7 @@ func (r *replicaChecker) checkOfflinePeer(cell *cellRuntime) Operator {
 }
 
 // selectBestPeer returns the best peer in other stores.
-func (r *replicaChecker) selectBestPeer(target *cellRuntime, filters ...Filter) (*meta.PeerMeta, float64) {
+func (r *replicaChecker) selectBestPeer(target *cellRuntime, filters ...Filter) (*meta.Peer, float64) {
 	// Add some must have filters.
 	filters = append(filters, newStateFilter(r.cfg))
 	filters = append(filters, newStorageThresholdFilter(r.cfg))
@@ -115,7 +115,7 @@ func (r *replicaChecker) selectBestPeer(target *cellRuntime, filters ...Filter) 
 		log.Errorf("scheduler: allocate peer failure, errors:\n %+v", err)
 		return nil, 0
 	}
-	return newPeer, bestScore
+	return &newPeer, bestScore
 }
 
 // getDistinctScore returns the score that the other is distinct from the stores.

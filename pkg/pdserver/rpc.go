@@ -17,7 +17,7 @@ import (
 	"net"
 
 	"github.com/deepfabric/elasticell/pkg/log"
-	pb "github.com/deepfabric/elasticell/pkg/pdpb"
+	pb "github.com/deepfabric/elasticell/pkg/pb/pdpb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 )

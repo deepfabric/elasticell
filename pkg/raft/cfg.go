@@ -11,13 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package node
+package raft
 
-func (n *Node) loadLocalMeta() error {
-	return nil
-}
-
-func (n *Node) loadClusterID() error {
-	// TODO: check clusterID is match with get from pd client
-	return nil
+type Cfg struct {
 }

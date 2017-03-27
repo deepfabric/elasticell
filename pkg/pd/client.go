@@ -21,7 +21,7 @@ import (
 	"sync"
 
 	"github.com/deepfabric/elasticell/pkg/log"
-	pb "github.com/deepfabric/elasticell/pkg/pdpb"
+	pb "github.com/deepfabric/elasticell/pkg/pb/pdpb"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -63,6 +63,11 @@ func NewClient(name string, initAddrs ...string) (*Client, error) {
 	}
 
 	return c, nil
+}
+
+// SetName set name of client
+func (c *Client) SetName(name string) {
+	c.name = name
 }
 
 // Close close conn
