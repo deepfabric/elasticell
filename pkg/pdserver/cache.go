@@ -92,7 +92,7 @@ func (c *cache) allocPeer(storeID uint64) (meta.Peer, error) {
 	}
 
 	peer := meta.Peer{
-		Id:      peerID,
+		ID:      peerID,
 		StoreID: storeID,
 	}
 	return peer, nil
@@ -134,11 +134,11 @@ func (c *cache) addStore(store meta.Store) {
 	c.Lock()
 	defer c.Unlock()
 
-	if _, ok := c.sc.stores[store.Id]; ok {
+	if _, ok := c.sc.stores[store.ID]; ok {
 		return
 	}
 
-	c.sc.stores[store.Id] = newStoreRuntime(store)
+	c.sc.stores[store.ID] = newStoreRuntime(store)
 }
 
 func (c *cache) addCell(cell meta.Cell) {
@@ -156,7 +156,7 @@ func (c *cache) getCell(id uint64) *cellRuntime {
 }
 
 func (c *cache) doCellHeartbeat(source meta.Cell) error {
-	current := c.getCell(source.Id)
+	current := c.getCell(source.ID)
 
 	// add new cell
 	if nil == current {
@@ -171,7 +171,7 @@ func (c *cache) doCellHeartbeat(source meta.Cell) error {
 	if sourceEpoch.CellVer < currentEpoch.CellVer ||
 		sourceEpoch.ConfVer < currentEpoch.ConfVer {
 		log.Warnf("cell-heartbeat: cell is stale, cell=<%d> current<%d,%d> source<%d,%d>",
-			source.Id,
+			source.ID,
 			currentEpoch.CellVer,
 			currentEpoch.ConfVer,
 			sourceEpoch.CellVer,
@@ -183,7 +183,7 @@ func (c *cache) doCellHeartbeat(source meta.Cell) error {
 	if sourceEpoch.CellVer > currentEpoch.CellVer ||
 		sourceEpoch.ConfVer > currentEpoch.ConfVer {
 		log.Infof("cell-heartbeat: cell version updated, cell=<%d> cellVer=<%d->%d> confVer=<%d->%d>",
-			source.Id,
+			source.ID,
 			currentEpoch.CellVer,
 			sourceEpoch.CellVer,
 			currentEpoch.ConfVer,
@@ -214,14 +214,14 @@ func (cc *cellCache) addCell(origin *cellRuntime) {
 	cc.tree.update(origin.cell)
 	cc.cells[origin.getID()] = origin
 
-	if origin.leader.Id <= 0 {
+	if origin.leader.ID <= 0 {
 		return
 	}
 
 	// Add to leaders and followers.
 	for _, peer := range origin.getPeers() {
 		storeID := peer.StoreID
-		if peer.Id == origin.leader.Id {
+		if peer.ID == origin.leader.ID {
 			// Add leader peer to leaders.
 			store, ok := cc.leaders[storeID]
 			if !ok {

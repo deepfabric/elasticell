@@ -18,7 +18,7 @@ import (
 
 	"github.com/deepfabric/elasticell/pkg/log"
 	meta "github.com/deepfabric/elasticell/pkg/pb/metapb"
-	pb "github.com/deepfabric/elasticell/pkg/pb/pdpb"
+	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
 	"github.com/deepfabric/elasticell/pkg/pd"
 	"github.com/deepfabric/elasticell/pkg/storage"
 	"github.com/pkg/errors"
@@ -97,7 +97,7 @@ func (n *Node) initPDClient() error {
 	}
 
 	n.pdClient = c
-	rsp, err := n.pdClient.GetClusterID(context.TODO(), new(pb.GetClusterIDReq))
+	rsp, err := n.pdClient.GetClusterID(context.TODO(), new(pdpb.GetClusterIDReq))
 	if err != nil {
 		log.Fatalf("bootstrap: get cluster id from pd failure, pd=<%s>, errors:\n %+v",
 			n.cfg.PDEndpoints,
@@ -112,7 +112,7 @@ func (n *Node) initPDClient() error {
 }
 
 func (n *Node) getAllocID() (uint64, error) {
-	rsp, err := n.pdClient.AllocID(context.TODO(), new(pb.AllocIDReq))
+	rsp, err := n.pdClient.AllocID(context.TODO(), new(pdpb.AllocIDReq))
 	if err != nil {
 		return pd.ZeroID, err
 	}

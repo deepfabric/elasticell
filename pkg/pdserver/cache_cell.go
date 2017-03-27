@@ -32,7 +32,7 @@ func newCellRuntime(cell meta.Cell) *cellRuntime {
 
 func (cc *cellRuntime) getPendingPeer(peerID uint64) *meta.Peer {
 	for _, peer := range cc.pendingPeers {
-		if peer.Id == peerID {
+		if peer.ID == peerID {
 			return peer
 		}
 	}
@@ -41,7 +41,7 @@ func (cc *cellRuntime) getPendingPeer(peerID uint64) *meta.Peer {
 
 func (cc *cellRuntime) getPeer(peerID uint64) *meta.Peer {
 	for _, peer := range cc.cell.Peers {
-		if peer.Id == peerID {
+		if peer.ID == peerID {
 			return peer
 		}
 	}
@@ -50,7 +50,7 @@ func (cc *cellRuntime) getPeer(peerID uint64) *meta.Peer {
 }
 
 func (cc *cellRuntime) getID() uint64 {
-	return cc.cell.Id
+	return cc.cell.ID
 }
 
 func (cc *cellRuntime) getPeers() []*meta.Peer {

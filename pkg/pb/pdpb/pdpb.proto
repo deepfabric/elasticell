@@ -1,13 +1,13 @@
 syntax = "proto2";
 package pdpb;
 
-import "github.com/gogo/protobuf/gogoproto/gogo.proto";
-import "github.com/deepfabric/elasticell/pkg/pb/metapb/metapb.proto";
-
+import "gogoproto/gogo.proto";
+import "metapb/metapb.proto";
 
 option (gogoproto.marshaler_all) = true;
 option (gogoproto.sizer_all) = true;
 option (gogoproto.unmarshaler_all) = true;
+option (gogoproto.goproto_enum_prefix_all) = false;
 
 
 service PDService {

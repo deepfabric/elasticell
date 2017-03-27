@@ -114,8 +114,8 @@ func (s *Store) SetClusterBootstrapped(clusterID uint64, cluster meta.Cluster, s
 	defer cancel()
 
 	clusterBaseKey := s.getClusterMetaKey(clusterID)
-	storeKey := s.getStoreMetaKey(clusterID, store.Id)
-	cellKey := s.getCellMetaKey(clusterID, cell.Id)
+	storeKey := s.getStoreMetaKey(clusterID, store.ID)
+	cellKey := s.getCellMetaKey(clusterID, cell.ID)
 
 	// build operations
 	var ops []clientv3.Op
@@ -196,7 +196,7 @@ func (s *Store) LoadStoreMeta(clusterID uint64, limit int64, do func(meta.Store)
 				return errors.Wrap(err, "")
 			}
 
-			startID = v.Id + 1
+			startID = v.ID + 1
 			do(*v)
 		}
 
@@ -232,7 +232,7 @@ func (s *Store) LoadCellMeta(clusterID uint64, limit int64, do func(meta.Cell)) 
 				return errors.Wrap(err, "")
 			}
 
-			startID = v.Id + 1
+			startID = v.ID + 1
 			do(*v)
 		}
 
@@ -247,7 +247,7 @@ func (s *Store) LoadCellMeta(clusterID uint64, limit int64, do func(meta.Cell)) 
 
 // SetCellMeta returns nil if cell is add or update succ
 func (s *Store) SetCellMeta(clusterID uint64, cell meta.Cell) error {
-	cellKey := s.getCellMetaKey(clusterID, cell.Id)
+	cellKey := s.getCellMetaKey(clusterID, cell.ID)
 	meta, err := cell.Marshal()
 	if err != nil {
 		return errors.Wrap(err, "")

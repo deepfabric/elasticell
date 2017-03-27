@@ -15,15 +15,16 @@ package node
 
 import (
 	"github.com/deepfabric/elasticell/pkg/log"
+	"github.com/deepfabric/elasticell/pkg/pb"
 	meta "github.com/deepfabric/elasticell/pkg/pb/metapb"
-	pb "github.com/deepfabric/elasticell/pkg/pb/pdpb"
+	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
 	"github.com/deepfabric/elasticell/pkg/pd"
 
 	"golang.org/x/net/context"
 )
 
 func (n *Node) bootstrapCluster() {
-	rsp, err := n.pdClient.IsClusterBootstrapped(context.TODO(), new(pb.IsClusterBootstrapReq))
+	rsp, err := n.pdClient.IsClusterBootstrapped(context.TODO(), new(pdpb.IsClusterBootstrapReq))
 	if err != nil {
 		log.Fatalf("bootstrap: check cluster bootstrap status failure,  errors:\n %+v", err)
 		return
@@ -33,12 +34,12 @@ func (n *Node) bootstrapCluster() {
 	if !rsp.GetValue() {
 		// The cluster is not bootstrap, but current node has a normal store id.
 		// So there has some error.
-		if n.store.Id > pd.ZeroID {
+		if n.store.ID > pd.ZeroID {
 			log.Fatalf(`bootstrap: the cluster is not bootstrapped, 
 			            but local store has a normal id<%d>, 
 			            please check your configuration, 
 			            maybe you are connect to a wrong pd server.`,
-				n.store.Id)
+				n.store.ID)
 			return
 		}
 
@@ -64,7 +65,7 @@ func (n *Node) doBootstrapCluster() {
 	}
 	log.Infof("bootstrap: first cell created, cell=<%v>", cell)
 
-	req := &pb.BootstrapClusterReq{
+	req := &pdpb.BootstrapClusterReq{
 		Store: n.store,
 		Cell:  cell,
 	}
@@ -74,9 +75,11 @@ func (n *Node) doBootstrapCluster() {
 	// If we get any error, we will delete local cell
 	rsp, err := n.pdClient.BootstrapCluster(context.TODO(), req)
 	if err != nil {
-		err := n.deleteCell(cell.Id)
+		err := n.deleteCell(cell.ID)
 		if err != nil {
-			log.Errorf("bootstrap: cell delete failure, cell=<%d>, errors:\n %+v", cell.Id, err)
+			log.Errorf("bootstrap: cell delete failure, cell=<%d>, errors:\n %+v",
+				cell.ID,
+				err)
 		}
 
 		log.Fatalf("bootstrap: bootstrap cluster failure, req=<%v> errors:\n %+v",
@@ -86,9 +89,11 @@ func (n *Node) doBootstrapCluster() {
 	} else if err == nil && rsp.GetAlreadyBootstrapped() {
 		log.Info("bootstrap: the cluster is already bootstrapped")
 
-		err := n.deleteCell(cell.Id)
+		err := n.deleteCell(cell.ID)
 		if err != nil {
-			log.Fatalf("bootstrap: cell delete failure, cell=<%d>, errors:\n %+v", cell.Id, err)
+			log.Fatalf("bootstrap: cell delete failure, cell=<%d>, errors:\n %+v",
+				cell.ID,
+				err)
 		}
 	}
 }
@@ -120,12 +125,12 @@ func (n *Node) initFirstCell() (meta.Cell, error) {
 		return meta.Cell{}, err
 	}
 
-	m := meta.NewCell(cellID, peerID, n.store.Id)
+	m := pb.NewCell(cellID, peerID, n.store.ID)
 	err = n.metaDB.SaveCell(m)
 	if err != nil {
 		return meta.Cell{}, err
 	}
 
-	n.cells[m.Id] = &m
+	n.cells[m.ID] = &m
 	return m, nil
 }

@@ -11,25 +11,35 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package metapb
+package pb
+
+import (
+	meta "github.com/deepfabric/elasticell/pkg/pb/metapb"
+)
+
+// BaseReq is for abstract
+type BaseReq interface {
+	GetFrom() string
+	GetId() uint64
+}
 
 // NewCell returns a cell meta
-func NewCell(cellID, peerID, storeID uint64) Cell {
-	c := Cell{
-		Id:    cellID,
+func NewCell(cellID, peerID, storeID uint64) meta.Cell {
+	c := meta.Cell{
+		ID:    cellID,
 		Epoch: newCellEpoch(),
 	}
 
-	c.Peers = append(c.Peers, &Peer{
-		Id:      peerID,
+	c.Peers = append(c.Peers, &meta.Peer{
+		ID:      peerID,
 		StoreID: storeID,
 	})
 
 	return c
 }
 
-func newCellEpoch() CellEpoch {
-	return CellEpoch{
+func newCellEpoch() meta.CellEpoch {
+	return meta.CellEpoch{
 		ConfVer: 1,
 		CellVer: 1,
 	}

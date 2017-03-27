@@ -17,8 +17,9 @@ import (
 	"errors"
 
 	"github.com/deepfabric/elasticell/pkg/log"
+	"github.com/deepfabric/elasticell/pkg/pb"
+	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
 	"github.com/deepfabric/elasticell/pkg/pd"
-	pb "github.com/deepfabric/elasticell/pkg/pb/pdpb"
 	"golang.org/x/net/context"
 )
 
@@ -32,16 +33,16 @@ type RPCHandler struct {
 }
 
 // NewRPCHandler create a new instance
-func NewRPCHandler(server *Server) pb.PDServiceServer {
+func NewRPCHandler(server *Server) pdpb.PDServiceServer {
 	return &RPCHandler{
 		server: server,
 	}
 }
 
 // GetClusterID returns cluster id
-func (h *RPCHandler) GetClusterID(c context.Context, req *pb.GetClusterIDReq) (*pb.GetClusterIDRsp, error) {
+func (h *RPCHandler) GetClusterID(c context.Context, req *pdpb.GetClusterIDReq) (*pdpb.GetClusterIDRsp, error) {
 	doFun := func() (interface{}, error) {
-		return &pb.GetClusterIDRsp{
+		return &pdpb.GetClusterIDRsp{
 			Id: h.server.GetClusterID(),
 		}, nil
 	}
@@ -55,18 +56,18 @@ func (h *RPCHandler) GetClusterID(c context.Context, req *pb.GetClusterIDReq) (*
 		return nil, err
 	}
 
-	return rsp.(*pb.GetClusterIDRsp), nil
+	return rsp.(*pdpb.GetClusterIDRsp), nil
 }
 
 // AllocID returns alloc id for kv node
-func (h *RPCHandler) AllocID(c context.Context, req *pb.AllocIDReq) (*pb.AllocIDRsp, error) {
+func (h *RPCHandler) AllocID(c context.Context, req *pdpb.AllocIDReq) (*pdpb.AllocIDRsp, error) {
 	doFun := func() (interface{}, error) {
 		id, err := h.server.idAlloc.newID()
 		if err != nil {
 			return nil, err
 		}
 
-		return &pb.AllocIDRsp{
+		return &pdpb.AllocIDRsp{
 			Id: id,
 		}, nil
 	}
@@ -80,18 +81,18 @@ func (h *RPCHandler) AllocID(c context.Context, req *pb.AllocIDReq) (*pb.AllocID
 		return nil, err
 	}
 
-	return rsp.(*pb.AllocIDRsp), nil
+	return rsp.(*pdpb.AllocIDRsp), nil
 }
 
 // GetLeader returns current leader
-func (h *RPCHandler) GetLeader(c context.Context, req *pb.LeaderReq) (*pb.LeaderRsp, error) {
+func (h *RPCHandler) GetLeader(c context.Context, req *pdpb.LeaderReq) (*pdpb.LeaderRsp, error) {
 	doFun := func() (interface{}, error) {
 		leader, err := h.server.store.GetCurrentLeader()
 		if err != nil {
 			return nil, err
 		}
 
-		return &pb.LeaderRsp{
+		return &pdpb.LeaderRsp{
 			Leader: *leader,
 		}, nil
 	}
@@ -105,13 +106,13 @@ func (h *RPCHandler) GetLeader(c context.Context, req *pb.LeaderReq) (*pb.Leader
 		return nil, err
 	}
 
-	return rsp.(*pb.LeaderRsp), nil
+	return rsp.(*pdpb.LeaderRsp), nil
 }
 
 // IsClusterBootstrap returns cluster is bootstrap already
-func (h *RPCHandler) IsClusterBootstrap(c context.Context, req *pb.IsClusterBootstrapReq) (*pb.IsClusterBootstrapRsp, error) {
+func (h *RPCHandler) IsClusterBootstrap(c context.Context, req *pdpb.IsClusterBootstrapReq) (*pdpb.IsClusterBootstrapRsp, error) {
 	doFun := func() (interface{}, error) {
-		return &pb.IsClusterBootstrapRsp{
+		return &pdpb.IsClusterBootstrapRsp{
 			Value: h.server.isClusterBootstrapped(),
 		}, nil
 	}
@@ -125,11 +126,11 @@ func (h *RPCHandler) IsClusterBootstrap(c context.Context, req *pb.IsClusterBoot
 		return nil, err
 	}
 
-	return rsp.(*pb.IsClusterBootstrapRsp), nil
+	return rsp.(*pdpb.IsClusterBootstrapRsp), nil
 }
 
 // BootstrapCluster returns bootstrap cluster response
-func (h *RPCHandler) BootstrapCluster(c context.Context, req *pb.BootstrapClusterReq) (*pb.BootstrapClusterRsp, error) {
+func (h *RPCHandler) BootstrapCluster(c context.Context, req *pdpb.BootstrapClusterReq) (*pdpb.BootstrapClusterRsp, error) {
 	doFun := func() (interface{}, error) {
 		return h.server.bootstrapCluster(req)
 	}
@@ -143,11 +144,11 @@ func (h *RPCHandler) BootstrapCluster(c context.Context, req *pb.BootstrapCluste
 		return nil, err
 	}
 
-	return rsp.(*pb.BootstrapClusterRsp), nil
+	return rsp.(*pdpb.BootstrapClusterRsp), nil
 }
 
 // CellHeartbeat returns cell heartbeat response
-func (h *RPCHandler) CellHeartbeat(c context.Context, req *pb.CellHeartbeatReq) (*pb.CellHeartbeatRsp, error) {
+func (h *RPCHandler) CellHeartbeat(c context.Context, req *pdpb.CellHeartbeatReq) (*pdpb.CellHeartbeatRsp, error) {
 	doFun := func() (interface{}, error) {
 		return h.server.cellHeartbeat(req)
 	}
@@ -161,7 +162,7 @@ func (h *RPCHandler) CellHeartbeat(c context.Context, req *pb.CellHeartbeatReq) 
 		return nil, err
 	}
 
-	return rsp.(*pb.CellHeartbeatRsp), nil
+	return rsp.(*pdpb.CellHeartbeatRsp), nil
 }
 
 func (h *RPCHandler) doHandle(name string, req pb.BaseReq, forwardFun func(*pd.Client) (interface{}, error), doFun func() (interface{}, error)) (interface{}, error) {

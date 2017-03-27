@@ -28,11 +28,11 @@ func newStoreRuntime(store meta.Store) *storeRuntime {
 }
 
 func (s *storeRuntime) getID() uint64 {
-	return s.store.Id
+	return s.store.ID
 }
 
 func (s *storeRuntime) isUp() bool {
-	return s.store.State == meta.StoreState_UP
+	return s.store.State == meta.UP
 }
 
 func (s *storeRuntime) storageRatio() int {

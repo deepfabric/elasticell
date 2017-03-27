@@ -16,12 +16,12 @@ package pdserver
 import (
 	"sync"
 
-	pb "github.com/deepfabric/elasticell/pkg/pb/pdpb"
+	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
 	"golang.org/x/net/context"
 )
 
 var (
-	emptyRsp = &pb.CellHeartbeatRsp{}
+	emptyRsp = &pdpb.CellHeartbeatRsp{}
 )
 
 type coordinator struct {
@@ -46,7 +46,7 @@ func newCoordinator(cfg *Cfg, cache *cache) *coordinator {
 
 // dispatch is used for coordinator cell,
 // it will coordinator when the heartbeat arrives
-func (c *coordinator) dispatch(target *cellRuntime) *pb.CellHeartbeatRsp {
+func (c *coordinator) dispatch(target *cellRuntime) *pdpb.CellHeartbeatRsp {
 	// Check existed operator.
 	// if op := c.getOperator(region.GetId()); op != nil {
 	// 	res, finished := op.Do(region)

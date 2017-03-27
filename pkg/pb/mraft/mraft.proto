@@ -1,0 +1,26 @@
+syntax = "proto2";
+package mraft;
+
+
+import "metapb/metapb.proto";
+import "gogoproto/gogo.proto";
+import "github.com/coreos/etcd/raft/raftpb/raft.proto";
+
+
+option (gogoproto.marshaler_all) = true;
+option (gogoproto.sizer_all) = true;
+option (gogoproto.unmarshaler_all) = true;
+option (gogoproto.goproto_enum_prefix_all) = false;
+
+message RaftMessage  {
+    optional uint64 cellID                = 1;
+    optional metapb.Peer fromPeer         = 2 [(gogoproto.nullable) = false];
+    optional metapb.Peer toPeer           = 3 [(gogoproto.nullable) = false];
+    optional raftpb.Message message       = 4 [(gogoproto.nullable) = false];
+    optional metapb.CellEpoch cellEpoch   = 5 [(gogoproto.nullable) = false];
+    // true means to_peer is a tombstone peer and it should remove itself.
+    optional bool isTombstone             = 6;
+    // Region key range [start_key, end_key).
+    optional bytes start                  = 7;
+    optional bytes end                    = 8;
+}

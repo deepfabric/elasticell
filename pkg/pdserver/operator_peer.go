@@ -16,13 +16,13 @@ package pdserver
 import (
 	"fmt"
 
-	pb "github.com/deepfabric/elasticell/pkg/pb/pdpb"
+	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
 )
 
 // changePeerOperator is sub operator of cellOperator
 type changePeerOperator struct {
-	CellID     uint64        `json:"cellID"`
-	ChangePeer pb.ChangePeer `json:"changePeer"`
+	CellID     uint64          `json:"cellID"`
+	ChangePeer pdpb.ChangePeer `json:"changePeer"`
 }
 
 func (op *changePeerOperator) String() string {
@@ -33,28 +33,28 @@ func (op *changePeerOperator) GetCellID() uint64 {
 	return op.CellID
 }
 
-func (op *changePeerOperator) Do(cell *cellRuntime) (*pb.CellHeartbeatRsp, bool) {
+func (op *changePeerOperator) Do(cell *cellRuntime) (*pdpb.CellHeartbeatRsp, bool) {
 	// Check if operator is finished.
 	peer := op.ChangePeer.Peer
 
 	switch op.ChangePeer.Type {
-	case pb.ConfChangeType_AddNode:
-		if cell.getPendingPeer(peer.Id) != nil {
+	case pdpb.AddNode:
+		if cell.getPendingPeer(peer.ID) != nil {
 			// Peer is added but not finished.
 			return nil, false
 		}
-		if cell.getPeer(peer.Id) != nil {
+		if cell.getPeer(peer.ID) != nil {
 			// Peer is added and finished.
 			return nil, true
 		}
-	case pb.ConfChangeType_RemoveNode:
-		if cell.getPeer(peer.Id) == nil {
+	case pdpb.RemoveNode:
+		if cell.getPeer(peer.ID) == nil {
 			// Peer is removed.
 			return nil, true
 		}
 	}
 
-	res := &pb.CellHeartbeatRsp{
+	res := &pdpb.CellHeartbeatRsp{
 		ChangePeer: op.ChangePeer,
 	}
 	return res, false

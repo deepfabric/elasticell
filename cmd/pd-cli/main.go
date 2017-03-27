@@ -7,7 +7,7 @@ import (
 	"os"
 	"time"
 
-	pb "github.com/deepfabric/elasticell/pkg/pb/pdpb"
+	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
 	"github.com/deepfabric/elasticell/pkg/pd"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/grpclog"
@@ -30,7 +30,7 @@ func main() {
 
 	for {
 		fmt.Println("start.........")
-		resp, err := c.IsClusterBootstrapped(context.TODO(), new(pb.IsClusterBootstrapReq))
+		resp, err := c.IsClusterBootstrapped(context.TODO(), new(pdpb.IsClusterBootstrapReq))
 		if err != nil {
 			fmt.Println(err)
 			fmt.Println("end-error.........")

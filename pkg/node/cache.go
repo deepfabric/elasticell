@@ -31,10 +31,10 @@ func (n *Node) deleteCell(id uint64) error {
 
 func (n *Node) newStore(id uint64) meta.Store {
 	return meta.Store{
-		Id:      id,
+		ID:      id,
 		Address: n.cfg.StoreAddr,
 		Lables:  n.cfg.StoreLables,
-		State:   meta.StoreState_UP,
+		State:   meta.UP,
 		Metric:  n.getCurrentStoreMetrics(),
 	}
 }

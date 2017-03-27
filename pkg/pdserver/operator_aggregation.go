@@ -18,7 +18,7 @@ import (
 	"time"
 
 	"github.com/deepfabric/elasticell/pkg/log"
-	pb "github.com/deepfabric/elasticell/pkg/pb/pdpb"
+	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
 )
 
 const (
@@ -42,7 +42,7 @@ func (op *aggregationOperator) GetCellID() uint64 {
 	return op.CellID
 }
 
-func (op *aggregationOperator) Do(target *cellRuntime) (*pb.CellHeartbeatRsp, bool) {
+func (op *aggregationOperator) Do(target *cellRuntime) (*pdpb.CellHeartbeatRsp, bool) {
 	if time.Since(op.StartAt) > maxOperatorWaitTime {
 		log.Errorf("scheduler: operator timeout, operator=<%s>", op)
 		return nil, true

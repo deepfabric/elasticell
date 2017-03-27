@@ -20,13 +20,13 @@ import (
 	"github.com/coreos/etcd/clientv3"
 	"github.com/coreos/etcd/mvcc/mvccpb"
 	"github.com/deepfabric/elasticell/pkg/log"
-	pb "github.com/deepfabric/elasticell/pkg/pb/pdpb"
+	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
 	proto "github.com/gogo/protobuf/proto"
 	"github.com/pkg/errors"
 )
 
 // GetCurrentLeader return current leader
-func (s *Store) GetCurrentLeader() (*pb.Leader, error) {
+func (s *Store) GetCurrentLeader() (*pdpb.Leader, error) {
 	resp, err := s.getValue(pdLeaderPath)
 	if err != nil {
 		return nil, errors.Wrap(err, "")
@@ -36,7 +36,7 @@ func (s *Store) GetCurrentLeader() (*pb.Leader, error) {
 		return nil, nil
 	}
 
-	v := &pb.Leader{}
+	v := &pdpb.Leader{}
 	err = proto.Unmarshal(resp, v)
 	if err != nil {
 		return nil, err

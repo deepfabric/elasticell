@@ -15,11 +15,11 @@ package pdserver
 
 import (
 	"github.com/deepfabric/elasticell/pkg/log"
+	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
 	"github.com/deepfabric/elasticell/pkg/pd"
-	pb "github.com/deepfabric/elasticell/pkg/pb/pdpb"
 )
 
-func (s *Server) resetLeaderRPCProxy(leader *pb.Leader) {
+func (s *Server) resetLeaderRPCProxy(leader *pdpb.Leader) {
 	s.leaderMux.Lock()
 	defer s.leaderMux.Unlock()
 

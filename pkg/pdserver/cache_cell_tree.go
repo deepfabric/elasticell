@@ -94,7 +94,7 @@ func (t *cellTree) update(cell meta.Cell) {
 // is not the same with the cell.
 func (t *cellTree) remove(cell meta.Cell) {
 	result := t.find(cell)
-	if result == nil || result.cell.Id != cell.Id {
+	if result == nil || result.cell.ID != cell.ID {
 		return
 	}
 

@@ -21,7 +21,8 @@ import (
 	"sync"
 
 	"github.com/deepfabric/elasticell/pkg/log"
-	pb "github.com/deepfabric/elasticell/pkg/pb/pdpb"
+	"github.com/deepfabric/elasticell/pkg/pb"
+	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -40,7 +41,7 @@ type Client struct {
 
 	continuousFailureCount int64
 	conn                   *grpc.ClientConn
-	pd                     pb.PDServiceClient
+	pd                     pdpb.PDServiceClient
 	lastAddr               string
 
 	seq uint64
@@ -126,7 +127,7 @@ func (c *Client) resetConn() error {
 	}
 
 	c.conn = conn
-	c.pd = pb.NewPDServiceClient(conn)
+	c.pd = pdpb.NewPDServiceClient(conn)
 
 	log.Infof("pd-client: connect to pd server succ, addr=<%s>", c.lastAddr)
 
@@ -141,7 +142,7 @@ func createConn(addr string) (*grpc.ClientConn, error) {
 }
 
 // GetLeader returns current leader
-func (c *Client) GetLeader(ctx context.Context, req *pb.LeaderReq) (*pb.LeaderRsp, error) {
+func (c *Client) GetLeader(ctx context.Context, req *pdpb.LeaderReq) (*pdpb.LeaderRsp, error) {
 	rsp, err := c.proxyRPC(ctx,
 		req,
 		func() {
@@ -155,11 +156,11 @@ func (c *Client) GetLeader(ctx context.Context, req *pb.LeaderReq) (*pb.LeaderRs
 		return nil, err
 	}
 
-	return rsp.(*pb.LeaderRsp), nil
+	return rsp.(*pdpb.LeaderRsp), nil
 }
 
 // AllocID returns a uniq id
-func (c *Client) AllocID(ctx context.Context, req *pb.AllocIDReq) (*pb.AllocIDRsp, error) {
+func (c *Client) AllocID(ctx context.Context, req *pdpb.AllocIDReq) (*pdpb.AllocIDRsp, error) {
 	rsp, err := c.proxyRPC(ctx,
 		req,
 		func() {
@@ -173,11 +174,11 @@ func (c *Client) AllocID(ctx context.Context, req *pb.AllocIDReq) (*pb.AllocIDRs
 		return nil, err
 	}
 
-	return rsp.(*pb.AllocIDRsp), nil
+	return rsp.(*pdpb.AllocIDRsp), nil
 }
 
 // GetClusterID returns cluster id
-func (c *Client) GetClusterID(ctx context.Context, req *pb.GetClusterIDReq) (*pb.GetClusterIDRsp, error) {
+func (c *Client) GetClusterID(ctx context.Context, req *pdpb.GetClusterIDReq) (*pdpb.GetClusterIDRsp, error) {
 	rsp, err := c.proxyRPC(ctx,
 		req,
 		func() {
@@ -191,11 +192,11 @@ func (c *Client) GetClusterID(ctx context.Context, req *pb.GetClusterIDReq) (*pb
 		return nil, err
 	}
 
-	return rsp.(*pb.GetClusterIDRsp), nil
+	return rsp.(*pdpb.GetClusterIDRsp), nil
 }
 
 // IsClusterBootstrapped returns cluster is bootstrapped response
-func (c *Client) IsClusterBootstrapped(ctx context.Context, req *pb.IsClusterBootstrapReq) (*pb.IsClusterBootstrapRsp, error) {
+func (c *Client) IsClusterBootstrapped(ctx context.Context, req *pdpb.IsClusterBootstrapReq) (*pdpb.IsClusterBootstrapRsp, error) {
 	rsp, err := c.proxyRPC(ctx,
 		req,
 		func() {
@@ -209,11 +210,11 @@ func (c *Client) IsClusterBootstrapped(ctx context.Context, req *pb.IsClusterBoo
 		return nil, err
 	}
 
-	return rsp.(*pb.IsClusterBootstrapRsp), nil
+	return rsp.(*pdpb.IsClusterBootstrapRsp), nil
 }
 
 // BootstrapCluster returns bootstrap cluster response
-func (c *Client) BootstrapCluster(ctx context.Context, req *pb.BootstrapClusterReq) (*pb.BootstrapClusterRsp, error) {
+func (c *Client) BootstrapCluster(ctx context.Context, req *pdpb.BootstrapClusterReq) (*pdpb.BootstrapClusterRsp, error) {
 	rsp, err := c.proxyRPC(ctx,
 		req,
 		func() {
@@ -227,11 +228,11 @@ func (c *Client) BootstrapCluster(ctx context.Context, req *pb.BootstrapClusterR
 		return nil, err
 	}
 
-	return rsp.(*pb.BootstrapClusterRsp), nil
+	return rsp.(*pdpb.BootstrapClusterRsp), nil
 }
 
 // CellHeartbeat returns cell heartbeat response
-func (c *Client) CellHeartbeat(ctx context.Context, req *pb.CellHeartbeatReq) (*pb.CellHeartbeatRsp, error) {
+func (c *Client) CellHeartbeat(ctx context.Context, req *pdpb.CellHeartbeatReq) (*pdpb.CellHeartbeatRsp, error) {
 	rsp, err := c.proxyRPC(ctx,
 		req,
 		func() {
@@ -245,7 +246,7 @@ func (c *Client) CellHeartbeat(ctx context.Context, req *pb.CellHeartbeatReq) (*
 		return nil, err
 	}
 
-	return rsp.(*pb.CellHeartbeatRsp), nil
+	return rsp.(*pdpb.CellHeartbeatRsp), nil
 }
 
 func (c *Client) proxyRPC(ctx context.Context, req pb.BaseReq, setFromFun func(), doRPC func() (interface{}, error)) (interface{}, error) {

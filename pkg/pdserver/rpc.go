@@ -17,7 +17,7 @@ import (
 	"net"
 
 	"github.com/deepfabric/elasticell/pkg/log"
-	pb "github.com/deepfabric/elasticell/pkg/pb/pdpb"
+	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 )
@@ -38,7 +38,7 @@ func (s *Server) startRPC() {
 	}
 
 	s.rpcServer = grpc.NewServer()
-	pb.RegisterPDServiceServer(s.rpcServer, NewRPCHandler(s))
+	pdpb.RegisterPDServiceServer(s.rpcServer, NewRPCHandler(s))
 	reflection.Register(s.rpcServer)
 
 	if err := s.rpcServer.Serve(lis); err != nil {

@@ -17,7 +17,7 @@ import (
 	"fmt"
 
 	"github.com/deepfabric/elasticell/pkg/log"
-	pb "github.com/deepfabric/elasticell/pkg/pb/pdpb"
+	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
 	"golang.org/x/net/context"
 )
 
@@ -37,11 +37,11 @@ func (n *Node) startHeartbeat() {
 }
 
 func (n *Node) initHeartbeatLoop() {
-	if n.store.Id > 0 {
-		n.storeHeartbeat = newLoop(fmt.Sprintf("store-%d", n.store.Id),
+	if n.store.ID > 0 {
+		n.storeHeartbeat = newLoop(fmt.Sprintf("store-%d", n.store.ID),
 			n.cfg.getStoreHeartbeatDuration(),
 			n.doStoreHeartbeat,
-			n.store.Id)
+			n.store.ID)
 	}
 
 	if nil != n.cells {
@@ -71,7 +71,7 @@ func (n *Node) doStoreHeartbeat(storeID uint64) {
 }
 
 func (n *Node) doCellHeartbeat(cellID uint64) {
-	req := &pb.CellHeartbeatReq{
+	req := &pdpb.CellHeartbeatReq{
 		Cell: n.getCell(cellID),
 	}
 

@@ -18,7 +18,7 @@ import (
 	"time"
 
 	"github.com/deepfabric/elasticell/pkg/log"
-	pb "github.com/deepfabric/elasticell/pkg/pb/pdpb"
+	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
 )
 
 var (
@@ -93,7 +93,7 @@ func (s *Server) disableLeader() {
 	atomic.StoreInt64(&s.isLeaderValue, 0)
 }
 
-func (s *Server) isMatchLeader(leader *pb.Leader) bool {
+func (s *Server) isMatchLeader(leader *pdpb.Leader) bool {
 	return leader != nil &&
 		s.cfg.RPCAddr == leader.GetAddr() &&
 		s.id == leader.GetId()
@@ -105,7 +105,7 @@ func (s *Server) IsLeader() bool {
 }
 
 func (s *Server) marshalLeader() string {
-	leader := &pb.Leader{
+	leader := &pdpb.Leader{
 		Addr: s.cfg.RPCAddr,
 		Id:   s.id,
 		Name: s.cfg.Name,
@@ -114,7 +114,7 @@ func (s *Server) marshalLeader() string {
 	return marshal(leader)
 }
 
-func marshal(leader *pb.Leader) string {
+func marshal(leader *pdpb.Leader) string {
 	data, err := leader.Marshal()
 	if err != nil {
 		// can't fail, so panic here.
