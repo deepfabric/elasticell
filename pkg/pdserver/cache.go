@@ -19,6 +19,7 @@ import (
 	"github.com/deepfabric/elasticell/pkg/log"
 	meta "github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/pdserver/storage"
+	"github.com/deepfabric/elasticell/pkg/util"
 	"github.com/pkg/errors"
 )
 
@@ -51,7 +52,7 @@ type storeCache struct {
 }
 
 type cellCache struct {
-	tree      *cellTree
+	tree      *util.CellTree
 	cells     map[uint64]*cellRuntime            // cellID -> cellRuntime
 	leaders   map[uint64]map[uint64]*cellRuntime // storeID -> cellID -> cellRuntime
 	followers map[uint64]map[uint64]*cellRuntime // storeID -> cellID -> cellRuntime
@@ -77,7 +78,7 @@ func newStoreCache() *storeCache {
 
 func newCellCache() *cellCache {
 	cc := new(cellCache)
-	cc.tree = newCellTree()
+	cc.tree = util.NewCellTree()
 	cc.cells = make(map[uint64]*cellRuntime)
 	cc.leaders = make(map[uint64]map[uint64]*cellRuntime)
 	cc.followers = make(map[uint64]map[uint64]*cellRuntime)
@@ -211,7 +212,7 @@ func (cc *cellCache) addCell(origin *cellRuntime) {
 	}
 
 	// Add to tree and regions.
-	cc.tree.update(origin.cell)
+	cc.tree.Update(origin.cell)
 	cc.cells[origin.getID()] = origin
 
 	if origin.leader.ID <= 0 {
@@ -243,7 +244,7 @@ func (cc *cellCache) addCell(origin *cellRuntime) {
 
 func (cc *cellCache) removeCell(origin *cellRuntime) {
 	// Remove from tree and cells.
-	cc.tree.remove(origin.cell)
+	cc.tree.Remove(origin.cell)
 	delete(cc.cells, origin.getID())
 
 	// Remove from leaders and followers.

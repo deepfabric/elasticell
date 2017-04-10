@@ -23,4 +23,8 @@ type KVPair struct {
 type Driver interface {
 	Set(key []byte, value []byte) error
 	Get(key []byte) ([]byte, error)
+	Delete(key []byte) error
+	// Scan scans the range and execute the handler fun.
+	// returns true means end the scan.
+	Scan(startKey []byte, endKey []byte, handler func([]byte) (bool, error)) error
 }

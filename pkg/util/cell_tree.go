@@ -11,12 +11,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package pdserver
+package util
 
 import (
 	"bytes"
 
-	meta "github.com/deepfabric/elasticell/pkg/pb/metapb"
+	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/google/btree"
 )
 
@@ -24,55 +24,59 @@ const (
 	defaultBTreeDegree = 64
 )
 
-type cellItem struct {
-	cell meta.Cell
+// CellItem is the cell btree item
+type CellItem struct {
+	cell metapb.Cell
 }
 
-type cellTree struct {
+// CellTree is the btree for cell
+type CellTree struct {
 	tree *btree.BTree
 }
 
-func newCellTree() *cellTree {
-	return &cellTree{
+// NewCellTree returns a default cell btree
+func NewCellTree() *CellTree {
+	return &CellTree{
 		tree: btree.New(defaultBTreeDegree),
 	}
 }
 
 // Less returns true if the cell start key is greater than the other.
 // So we will sort the cell with start key reversely.
-func (r *cellItem) Less(other btree.Item) bool {
+func (r *CellItem) Less(other btree.Item) bool {
 	left := r.cell.Start
-	right := other.(*cellItem).cell.Start
+	right := other.(*CellItem).cell.Start
 	return bytes.Compare(left, right) > 0
 }
 
-func (r *cellItem) Contains(key []byte) bool {
+// Contains returns the item contains the key
+func (r *CellItem) Contains(key []byte) bool {
 	start, end := r.cell.Start, r.cell.End
 	// len(end) == 0: max field is positive infinity
 	return bytes.Compare(key, start) >= 0 && (len(end) == 0 || bytes.Compare(key, end) < 0)
 }
 
-func (t *cellTree) length() int {
+func (t *CellTree) length() int {
 	return t.tree.Len()
 }
 
-// update updates the tree with the cell.
+// Update updates the tree with the cell.
 // It finds and deletes all the overlapped cells first, and then
 // insert the cell.
-func (t *cellTree) update(cell meta.Cell) {
-	item := &cellItem{cell: cell}
+func (t *CellTree) Update(cell metapb.Cell) {
+	item := &CellItem{cell: cell}
 
 	result := t.find(cell)
 	if result == nil {
 		result = item
 	}
 
-	var overlaps []*cellItem
+	var overlaps []*CellItem
 
 	// between [cell, first], so is iterator all.min >= cell.min' cell
 	// until all.min > cell.max
 	t.tree.DescendLessOrEqual(result, func(i btree.Item) bool {
-		over := i.(*cellItem)
+		over := i.(*CellItem)
 		// cell.max <= i.start, so cell and i has no overlaps,
 		// otherwise cell and i has overlaps
 		if len(cell.End) > 0 && bytes.Compare(cell.End, over.cell.Start) <= 0 {
@@ -89,10 +93,10 @@ func (t *cellTree) update(cell meta.Cell) {
 	t.tree.ReplaceOrInsert(item)
 }
 
-// remove removes a cell if the cell is in the tree.
+// Remove removes a cell if the cell is in the tree.
 // It will do nothing if it cannot find the cell or the found cell
 // is not the same with the cell.
-func (t *cellTree) remove(cell meta.Cell) {
+func (t *CellTree) Remove(cell metapb.Cell) {
 	result := t.find(cell)
 	if result == nil || result.cell.ID != cell.ID {
 		return
@@ -101,22 +105,22 @@ func (t *cellTree) remove(cell meta.Cell) {
 	t.tree.Delete(result)
 }
 
-// search returns a cell that contains the key.
-func (t *cellTree) search(key []byte) meta.Cell {
-	cell := meta.Cell{Start: key}
+// Search returns a cell that contains the key.
+func (t *CellTree) Search(key []byte) metapb.Cell {
+	cell := metapb.Cell{Start: key}
 	result := t.find(cell)
 	if result == nil {
-		return meta.Cell{}
+		return metapb.Cell{}
 	}
 	return result.cell
 }
 
-func (t *cellTree) find(cell meta.Cell) *cellItem {
-	item := &cellItem{cell: cell}
+func (t *CellTree) find(cell metapb.Cell) *CellItem {
+	item := &CellItem{cell: cell}
 
-	var result *cellItem
+	var result *CellItem
 	t.tree.AscendGreaterOrEqual(item, func(i btree.Item) bool {
-		result = i.(*cellItem)
+		result = i.(*CellItem)
 		return false
 	})
 

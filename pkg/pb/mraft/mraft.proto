@@ -13,14 +13,63 @@ option (gogoproto.unmarshaler_all) = true;
 option (gogoproto.goproto_enum_prefix_all) = false;
 
 message RaftMessage  {
-    optional uint64 cellID                = 1;
-    optional metapb.Peer fromPeer         = 2 [(gogoproto.nullable) = false];
-    optional metapb.Peer toPeer           = 3 [(gogoproto.nullable) = false];
-    optional raftpb.Message message       = 4 [(gogoproto.nullable) = false];
+    optional uint64           cellID      = 1 [(gogoproto.nullable) = false];
+    optional metapb.Peer      fromPeer    = 2 [(gogoproto.nullable) = false];
+    optional metapb.Peer      toPeer      = 3 [(gogoproto.nullable) = false];
+    optional raftpb.Message   message     = 4 [(gogoproto.nullable) = false];
     optional metapb.CellEpoch cellEpoch   = 5 [(gogoproto.nullable) = false];
     // true means to_peer is a tombstone peer and it should remove itself.
-    optional bool isTombstone             = 6;
+    optional bool             isTombstone = 6 [(gogoproto.nullable) = false];
     // Region key range [start_key, end_key).
-    optional bytes start                  = 7;
-    optional bytes end                    = 8;
+    optional bytes            start       = 7;
+    optional bytes            end         = 8;
+}
+
+message KeyValue {
+    optional bytes key      = 1;
+    optional bytes value    = 2;
+}
+
+message SnapshotCFFile {
+    optional string cf       = 1 [(gogoproto.nullable) = false];
+    optional uint64 size     = 2 [(gogoproto.nullable) = false];
+    optional uint32 checkSum = 3 [(gogoproto.nullable) = false];
+}
+
+message SnapshotMeta {
+    repeated SnapshotCFFile files = 1 [(gogoproto.nullable) = false];
+}
+
+message RaftSnapshotData {
+    optional metapb.Cell  cell     = 1 [(gogoproto.nullable) = false];
+    optional uint64       fileSize = 2 [(gogoproto.nullable) = false];
+    repeated KeyValue     data     = 3 [(gogoproto.nullable) = false];
+    optional uint64       version  = 4 [(gogoproto.nullable) = false];
+    optional SnapshotMeta meta     = 5 [(gogoproto.nullable) = false];
+}
+
+enum PeerState {
+    Normal       = 0;
+    Applying     = 1;
+    Tombstone    = 2;
+}
+
+message CellLocalState {
+    optional PeerState   state  = 1 [(gogoproto.nullable) = false];
+    optional metapb.Cell cell   = 2 [(gogoproto.nullable) = false];
+}
+
+message RaftLocalState {
+    optional raftpb.HardState hardState = 1 [(gogoproto.nullable) = false];
+    optional uint64           lastIndex = 2 [(gogoproto.nullable) = false];
+}
+
+message RaftTruncatedState {
+    optional uint64 index = 1 [(gogoproto.nullable) = false];
+    optional uint64 term  = 2 [(gogoproto.nullable) = false];
+}
+
+message RaftApplyState {
+    optional uint64             applied_index   = 1 [(gogoproto.nullable) = false];
+    optional RaftTruncatedState truncated_state = 2 [(gogoproto.nullable) = false];
 }

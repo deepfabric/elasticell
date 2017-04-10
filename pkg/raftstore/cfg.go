@@ -11,7 +11,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package raft
+package raftstore
 
+// Cfg for raftstore
 type Cfg struct {
+	Raft *RaftCfg
+}
+
+// RaftCfg is the cfg for raft
+type RaftCfg struct {
+	ElectionTick    int
+	HeartbeatTick   int
+	MaxSizePerMsg   uint64
+	MaxInflightMsgs int
+	SnapDir         string
+	BaseTick        int
 }
