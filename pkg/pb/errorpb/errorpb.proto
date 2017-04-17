@@ -1,0 +1,56 @@
+syntax = "proto2";
+package errorpb;
+
+import "metapb/metapb.proto";
+import "gogoproto/gogo.proto";
+
+option (gogoproto.marshaler_all) = true;
+option (gogoproto.sizer_all) = true;
+option (gogoproto.unmarshaler_all) = true;
+option (gogoproto.goproto_enum_prefix_all) = false;
+
+message NotLeader {
+    optional uint64      cellID = 1 [(gogoproto.nullable) = false];
+    optional metapb.Peer leader = 2 [(gogoproto.nullable) = false];
+}
+
+message StoreNotMatch {
+}
+
+message CellNotFound {
+    optional uint64 cellID = 1 [(gogoproto.nullable) = false];
+}
+
+message KeyNotInCell {
+    optional bytes  key      = 1;
+    optional uint64 cellID   = 2 [(gogoproto.nullable) = false];
+    optional bytes  startKey = 3;
+    optional bytes  endKey   = 4;
+}
+
+message StaleEpoch {
+    repeated metapb.Cell newCells = 1 [(gogoproto.nullable) = false];
+}
+
+message ServerIsBusy {
+}
+
+message StaleCommand {
+}
+
+message RaftEntryTooLarge {
+    optional uint64 cellID    = 1 [(gogoproto.nullable) = false];
+    optional uint64 entrySize = 2 [(gogoproto.nullable) = false];
+}
+
+message Error {
+    optional string            message           = 1 [(gogoproto.nullable) = false];
+    optional NotLeader         notLeader         = 2 [(gogoproto.nullable) = true ];
+    optional CellNotFound      cellNotFound      = 3 [(gogoproto.nullable) = true ];
+    optional KeyNotInCell      KeyNotInCell      = 4 [(gogoproto.nullable) = true ];
+    optional StaleEpoch        staleEpoch        = 5 [(gogoproto.nullable) = true ];
+    optional ServerIsBusy      serverIsBusy      = 6 [(gogoproto.nullable) = true ];
+    optional StaleCommand      staleCommand      = 7 [(gogoproto.nullable) = true ];
+    optional StoreNotMatch     storeNotMatch     = 8 [(gogoproto.nullable) = true ];
+    optional RaftEntryTooLarge raftEntryTooLarge = 9 [(gogoproto.nullable) = true ];
+}

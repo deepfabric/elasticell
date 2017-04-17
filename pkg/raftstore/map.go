@@ -80,3 +80,37 @@ func (m *peerCacheMap) delete(key uint64) {
 	delete(m.m, key)
 	m.Unlock()
 }
+
+type applyDelegateMap struct {
+	sync.RWMutex
+	m map[uint64]*applyDelegate
+}
+
+func newApplyDelegateMap() *applyDelegateMap {
+	return &applyDelegateMap{
+		m: make(map[uint64]*applyDelegate),
+	}
+}
+
+func (m *applyDelegateMap) put(key uint64, value *applyDelegate) *applyDelegate {
+	m.Lock()
+	old := m.m[key]
+	m.m[key] = value
+	m.Unlock()
+
+	return old
+}
+
+func (m *applyDelegateMap) get(key uint64) *applyDelegate {
+	m.RLock()
+	v := m.m[key]
+	m.RUnlock()
+
+	return v
+}
+
+func (m *applyDelegateMap) delete(key uint64) {
+	m.Lock()
+	delete(m.m, key)
+	m.Unlock()
+}

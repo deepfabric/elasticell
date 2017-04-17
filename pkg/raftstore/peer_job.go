@@ -14,6 +14,8 @@
 package raftstore
 
 import (
+	"fmt"
+
 	"github.com/coreos/etcd/raft/raftpb"
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
@@ -40,6 +42,34 @@ func (ps *peerStorage) startDestroyDataJob(cellID uint64, start, end []byte) err
 	return err
 }
 
+func (pr *PeerReplicate) startRegistrationJob() {
+	delegate := &applyDelegate{
+		store:            pr.store,
+		peerID:           pr.peer.ID,
+		cell:             pr.ps.cell,
+		term:             pr.getCurrentTerm(),
+		applyState:       *pr.ps.getApplyState(),
+		appliedIndexTerm: pr.ps.getAppliedIndexTerm(),
+	}
+	_, err := pr.store.addJob(func() error {
+		return pr.doRegistrationJob(delegate)
+	})
+
+	if err != nil {
+		log.Fatalf("raftstore[cell-%d]: add registration job failed, errors:\n %+v",
+			pr.ps.cell.ID,
+			err)
+	}
+}
+
+func (pr *PeerReplicate) startApplyCommittedEntriesJob(cellID uint64, term uint64, commitedEntries []raftpb.Entry) error {
+	_, err := pr.store.addJob(func() error {
+		return pr.doApplyCommittedEntries(cellID, term, commitedEntries)
+	})
+
+	return err
+}
+
 func (ps *peerStorage) cancelApplyingSnapJob() bool {
 	ps.applySnapJobLock.RLock()
 	if ps.applySnapJob == nil {
@@ -61,18 +91,12 @@ func (ps *peerStorage) cancelApplyingSnapJob() bool {
 
 func (ps *peerStorage) resetApplyingSnapJob() {
 	ps.applySnapJobLock.Lock()
-	if nil != ps.applySnapJob {
-		ps.applySnapJob.Close()
-		ps.applySnapJob = nil
-	}
+	ps.applySnapJob = nil
 	ps.applySnapJobLock.Unlock()
 }
 
 func (ps *peerStorage) resetGenSnapJob() {
-	if nil != ps.genSnapJob {
-		ps.genSnapJob.Close()
-		ps.genSnapJob = nil
-	}
+	ps.genSnapJob = nil
 	ps.snapTriedCnt = 0
 }
 
@@ -197,6 +221,45 @@ func (ps *peerStorage) doGenerateSnapshotJob() error {
 		ps.genSnapJob.SetResult(snapshot)
 	}
 
+	return nil
+}
+
+func (pr *PeerReplicate) doRegistrationJob(delegate *applyDelegate) error {
+	old := pr.store.delegates.put(delegate.cell.ID, delegate)
+	if old != nil {
+		if old.peerID != delegate.peerID {
+			log.Fatalf("raftstore[cell-%d]: delegate peer id not match, old=<%d> curr=<%d>",
+				pr.cellID,
+				old.peerID,
+				delegate.peerID)
+		}
+
+		old.term = delegate.term
+		old.clearAllCommandsAsStale()
+	}
+
+	return nil
+}
+
+func (pr *PeerReplicate) doApplyCommittedEntries(cellID uint64, term uint64, commitedEntries []raftpb.Entry) error {
+	delegate := pr.store.delegates.get(cellID)
+	if nil == delegate {
+		return fmt.Errorf("raftstore[cell-%d]: missing delegate", pr.cellID)
+	}
+
+	delegate.term = term
+
+	delegate.applyCommittedEntries(commitedEntries)
+
+	if delegate.isPendingRemove() {
+		delegate.destroy()
+	}
+
+	// TODO: impl handle result
+
+	if delegate.isPendingRemove() {
+		pr.store.delegates.delete(delegate.cell.ID)
+	}
 	return nil
 }
 

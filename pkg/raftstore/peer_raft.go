@@ -23,44 +23,44 @@ import (
 	"golang.org/x/net/context"
 )
 
-func (p *PeerReplicate) serveRaft() error {
+func (pr *PeerReplicate) serveRaft() error {
 	for {
 		select {
-		case <-p.raftTicker.C:
-			p.rn.Tick()
+		case <-pr.raftTicker.C:
+			pr.rn.Tick()
 
-		case rd := <-p.rn.Ready():
+		case rd := <-pr.rn.Ready():
 			ctx := &tempRaftContext{
 				raftState:  mraft.RaftLocalState{},
 				applyState: mraft.RaftApplyState{},
 				lastTerm:   0,
 			}
 
-			p.handleRaftReadyAppend(ctx, rd)
-			p.postHandleRaftReadyAppend(ctx, rd)
-			// r.maybeTriggerSnapshot()
-			// r.rn.Advance()
+			pr.handleRaftReadyAppend(ctx, &rd)
+			pr.handleRaftReadyApply(ctx, &rd)
+			// TODO: think about advice raft
 		}
 	}
 }
 
-func (p *PeerReplicate) handleRaftReadyAppend(ctx *tempRaftContext, rd raft.Ready) {
+func (pr *PeerReplicate) handleRaftReadyAppend(ctx *tempRaftContext, rd *raft.Ready) {
 	// If we continue to handle all the messages, it may cause too many messages because
 	// leader will send all the remaining messages to this follower, which can lead
 	// to full message queue under high load.
-	if p.ps.isApplyingSnap() {
-		log.Debugf("raftstore[cell-%d]: still applying snapshot, skip further handling", p.ps.cell.ID)
+	if pr.ps.isApplyingSnap() {
+		log.Debugf("raftstore[cell-%d]: still applying snapshot, skip further handling", pr.ps.cell.ID)
 		return
 	}
 
-	p.ps.resetApplyingSnapJob()
+	pr.ps.resetApplyingSnapJob()
 
+	// wait apply committed entries complete
 	if !raft.IsEmptySnap(rd.Snapshot) &&
-		p.ps.raftState.HardState.Commit != p.ps.applyState.AppliedIndex {
-		log.Debugf("raftstore[cell-%d]: apply index and commit index not match, skip applying snapshot, apply=<%d> commit=<%d>",
-			p.ps.cell.ID,
-			p.ps.applyState.AppliedIndex,
-			p.ps.raftState.HardState.Commit)
+		!pr.ps.isApplyComplete() {
+		log.Debugf("raftstore[cell-%d]: apply index and committed index not match, skip applying snapshot, apply=<%d> commit=<%d>",
+			pr.ps.cell.ID,
+			pr.ps.getAppliedIndex(),
+			pr.ps.raftState.HardState.Commit)
 		return
 	}
 
@@ -68,147 +68,151 @@ func (p *PeerReplicate) handleRaftReadyAppend(ctx *tempRaftContext, rd raft.Read
 
 	// The leader can write to disk and replicate to the followers concurrently
 	// For more details, check raft thesis 10.2.1.
-	if p.isLeader() {
-		p.send(rd.Messages)
+	if pr.isLeader() {
+		pr.send(rd.Messages)
 	}
 
-	p.handleApplySnapshot(ctx, rd)
-	p.handleAppendEntries(ctx, rd)
+	pr.handleAppendSnapshot(ctx, rd)
+	pr.handleAppendEntries(ctx, rd)
 
-	if ctx.raftState.LastIndex > 0 &&
-		(rd.HardState.Commit != 0 ||
-			rd.HardState.Term != 0 ||
-			rd.HardState.Vote != 0) {
+	if ctx.raftState.LastIndex > 0 && !raft.IsEmptyHardState(rd.HardState) {
 		ctx.raftState.HardState = rd.HardState
 	}
 
-	p.handleSaveRaftState(ctx)
-	p.handleSaveApplyState(ctx)
+	pr.handleSaveRaftState(ctx)
+	pr.handleSaveApplyState(ctx)
 
 	// TODO: batch write to rocksdb
 }
 
-func (p *PeerReplicate) postHandleRaftReadyAppend(ctx *tempRaftContext, rd raft.Ready) *applySnapResult {
-	// TODO: impl
-	// if invoke_ctx.has_snapshot() {
-	//         // When apply snapshot, there is no log applied and not compacted yet.
-	//         self.raft_log_size_hint = 0;
-	//     }
+func (pr *PeerReplicate) handleRaftReadyApply(ctx *tempRaftContext, rd *raft.Ready) {
+	result := pr.ps.doApplySnap(ctx)
 
-	result := p.ps.handleDoPostReady(ctx)
-
-	if !p.isLeader() {
-		p.send(rd.Messages)
+	if !pr.isLeader() {
+		pr.send(rd.Messages)
 	}
 
 	if result != nil {
-		// TODO: impl let reg = ApplyTask::register(self);
-		// self.apply_scheduler.schedule(reg).unwrap();
+		pr.startRegistrationJob()
 	}
 
-	return result
+	pr.applyCommittedEntries(rd)
+
+	// TODO: handle reads
+	// self.apply_reads(&ready);
+	//     self.raft_group.advance_append(ready);
+	//     if self.is_applying_snapshot() {
+	//         // Because we only handle raft ready when not applying snapshot, so following
+	//         // line won't be called twice for the same snapshot.
+	//         self.raft_group.advance_apply(self.last_ready_idx);
+	//     }
+
+	if result != nil {
+		pr.doWhenApplySnapReady(result)
+	}
 }
 
-func (p *PeerReplicate) handleApplySnapshot(ctx *tempRaftContext, rd raft.Ready) {
+func (pr *PeerReplicate) handleAppendSnapshot(ctx *tempRaftContext, rd *raft.Ready) {
 	if !raft.IsEmptySnap(rd.Snapshot) {
-		err := p.getStore().handleDoApplySnapshot(ctx, rd.Snapshot)
+		err := pr.getStore().doAppendSnapshot(ctx, rd.Snapshot)
 		if err != nil {
 			log.Fatalf("raftstore[cell-%d]: handle raft ready failure, errors:\n %+v",
-				p.ps.cell.ID,
+				pr.ps.cell.ID,
 				err)
 		}
 	}
 }
 
-func (p *PeerReplicate) handleAppendEntries(ctx *tempRaftContext, rd raft.Ready) {
+func (pr *PeerReplicate) handleAppendEntries(ctx *tempRaftContext, rd *raft.Ready) {
 	if len(rd.Entries) > 0 {
-		err := p.getStore().handleDoAppendEntries(ctx, rd.Entries)
+		err := pr.getStore().doAppendEntries(ctx, rd.Entries)
 		if err != nil {
 			log.Fatalf("raftstore[cell-%d]: handle raft ready failure, errors:\n %+v",
-				p.ps.cell.ID,
+				pr.ps.cell.ID,
 				err)
 		}
 	}
 }
 
-func (p *PeerReplicate) handleSaveRaftState(ctx *tempRaftContext) {
+func (pr *PeerReplicate) handleSaveRaftState(ctx *tempRaftContext) {
 	tmp := ctx.raftState
-	origin := p.ps.raftState
+	origin := pr.ps.raftState
 
 	if tmp.LastIndex != origin.LastIndex ||
 		tmp.HardState.Commit != origin.HardState.Commit ||
 		tmp.HardState.Term != origin.HardState.Term ||
 		tmp.HardState.Vote != origin.HardState.Vote {
-		err := p.ps.handleDoSaveRaftState(ctx)
+		err := pr.doSaveRaftState(ctx)
 		if err != nil {
 			log.Fatalf("raftstore[cell-%d]: handle raft ready failure, errors:\n %+v",
-				p.ps.cell.ID,
+				pr.ps.cell.ID,
 				err)
 		}
 	}
 }
 
-func (p *PeerReplicate) handleSaveApplyState(ctx *tempRaftContext) {
+func (pr *PeerReplicate) handleSaveApplyState(ctx *tempRaftContext) {
 	tmp := ctx.applyState
-	origin := p.ps.applyState
+	origin := *pr.ps.getApplyState()
 
 	if tmp.AppliedIndex != origin.AppliedIndex ||
 		tmp.TruncatedState.Index != origin.TruncatedState.Index ||
 		tmp.TruncatedState.Term != origin.TruncatedState.Term {
-		err := p.ps.handleDoSaveApplyState(ctx)
+		err := pr.doSaveApplyState(ctx)
 		if err != nil {
 			log.Fatalf("raftstore[cell-%d]: handle raft ready failure, errors:\n %+v",
-				p.ps.cell.ID,
+				pr.ps.cell.ID,
 				err)
 		}
 	}
 }
 
-func (p *PeerReplicate) isLeader() bool {
-	return p.rn.Status().RaftState == raft.StateLeader
+func (pr *PeerReplicate) isLeader() bool {
+	return pr.rn.Status().RaftState == raft.StateLeader
 }
 
-func (p *PeerReplicate) send(msgs []raftpb.Message) {
+func (pr *PeerReplicate) send(msgs []raftpb.Message) {
+	// TODO: impl use queue instead of chan
 	for _, msg := range msgs {
-		p.msgC <- msg
+		pr.msgC <- msg
 	}
 }
 
-func (p *PeerReplicate) doSendFromChan(ctx context.Context) {
+func (pr *PeerReplicate) doSendFromChan(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
 			log.Infof("raftstore[cell-%d]: server stopped",
-				p.ps.cell.ID)
-			close(p.msgC)
+				pr.ps.cell.ID)
+			close(pr.msgC)
 			return
 		// TODO: use queue instead of chan
-		case msg := <-p.msgC:
-			err := p.sendRaftMsg(msg)
+		case msg := <-pr.msgC:
+			err := pr.sendRaftMsg(msg)
 			if err != nil {
 				// We don't care that the message is sent failed, so here just log this error
 				log.Warnf("raftstore[cell-%d]: send msg failure, error:\n %+v",
-					p.ps.cell.ID,
+					pr.ps.cell.ID,
 					err)
 			}
 		}
 	}
 }
 
-func (p *PeerReplicate) sendRaftMsg(msg raftpb.Message) error {
+func (pr *PeerReplicate) sendRaftMsg(msg raftpb.Message) error {
 	sendMsg := mraft.RaftMessage{}
-	sendMsg.CellID = p.ps.cell.ID
-	sendMsg.CellEpoch = p.ps.cell.Epoch
+	sendMsg.CellID = pr.ps.cell.ID
+	sendMsg.CellEpoch = pr.ps.cell.Epoch
 
-	sendMsg.FromPeer = p.peer
-	sendMsg.ToPeer = p.store.peerCache.get(msg.To)
+	sendMsg.FromPeer = pr.peer
+	sendMsg.ToPeer = pr.store.peerCache.get(msg.To)
 	if sendMsg.ToPeer.ID == 0 {
 		return fmt.Errorf("can not found peer<%d>", msg.To)
 	}
 
 	if log.DebugEnabled() {
 		log.Debugf("raftstore[cell-%d]: send raft msg, from=<%d> to=<%d> msg=<%s>",
-			p.ps.cell.ID,
+			pr.ps.cell.ID,
 			sendMsg.FromPeer.ID,
 			sendMsg.ToPeer.ID,
 			msg.String())
@@ -222,34 +226,38 @@ func (p *PeerReplicate) sendRaftMsg(msg raftpb.Message) error {
 	// Heartbeat message for the store of that peer to check whether to create a new peer
 	// when receiving these messages, or just to wait for a pending region split to perform
 	// later.
-	if p.ps.isInitialized() &&
+	if pr.ps.isInitialized() &&
 		(msg.Type == raftpb.MsgVote ||
 			// the peer has not been known to this leader, it may exist or not.
 			(msg.Type == raftpb.MsgHeartbeat && msg.Commit == 0)) {
-		sendMsg.Start = p.ps.cell.Start
-		sendMsg.End = p.ps.cell.End
+		sendMsg.Start = pr.ps.cell.Start
+		sendMsg.End = pr.ps.cell.End
 	}
 
 	sendMsg.Message = msg
 	// TODO: get to peer addr
-	err := p.store.trans.send("", &sendMsg)
+	err := pr.store.trans.send("", &sendMsg)
 	if err != nil {
 		log.Warnf("raftstore[cell-%d]: failed to send msg, from=<%d> to=<%d>",
 			sendMsg.FromPeer.ID,
 			sendMsg.ToPeer.ID)
 
-		p.rn.ReportUnreachable(sendMsg.ToPeer.ID)
+		pr.rn.ReportUnreachable(sendMsg.ToPeer.ID)
 
 		if msg.Type == raftpb.MsgSnap {
-			p.rn.ReportSnapshot(sendMsg.ToPeer.ID, raft.SnapshotFailure)
+			pr.rn.ReportSnapshot(sendMsg.ToPeer.ID, raft.SnapshotFailure)
 		}
 	}
 
 	return nil
 }
 
-func (p *PeerReplicate) step(msg raftpb.Message) error {
-	return p.rn.Step(context.TODO(), msg)
+func (pr *PeerReplicate) getCurrentTerm() uint64 {
+	return pr.rn.Status().Term
+}
+
+func (pr *PeerReplicate) step(msg raftpb.Message) error {
+	return pr.rn.Step(context.TODO(), msg)
 }
 
 func getRaftConfig(id, appliedIndex uint64, store raft.Storage, cfg *RaftCfg) *raft.Config {

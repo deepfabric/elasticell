@@ -16,8 +16,8 @@ package raftstore
 import (
 	"bytes"
 	"fmt"
-
 	"sync"
+	"sync/atomic"
 
 	"github.com/coreos/etcd/raft"
 	"github.com/coreos/etcd/raft/raftpb"
@@ -47,10 +47,6 @@ var (
 	applyAborted = snapshotState(4)
 )
 
-func (s snapshotState) update(state snapshotState) {
-
-}
-
 const (
 	pending = iota
 	running
@@ -61,24 +57,27 @@ const (
 )
 
 type peerStorage struct {
-	store    *Store
-	cell     metapb.Cell
-	lastTerm uint64
-
-	applySnapJob     *util.Job
-	genSnapJob       *util.Job
-	applySnapJobLock sync.RWMutex
-	snapTriedCnt     int
+	store            *Store
+	cell             metapb.Cell
+	lastTerm         uint64
+	appliedIndexTerm uint64
 	snapshortter     *snap.Snapshotter
+	raftState        mraft.RaftLocalState
+	applyState       mraft.RaftApplyState
 
-	raftState  mraft.RaftLocalState
-	applyState mraft.RaftApplyState
+	snapTriedCnt     int
+	genSnapJob       *util.Job
+	applySnapJob     *util.Job
+	applySnapJobLock sync.RWMutex
+
+	pendingReads *readIndexQueue
 }
 
 func newPeerStorage(store *Store, cell metapb.Cell) (*peerStorage, error) {
 	s := new(peerStorage)
 	s.store = store
 	s.cell = cell
+	s.appliedIndexTerm = raftInitLogTerm
 
 	err := s.initRaftState()
 	if err != nil {
@@ -94,6 +93,7 @@ func newPeerStorage(store *Store, cell metapb.Cell) (*peerStorage, error) {
 	}
 
 	s.snapshortter = snap.New(fmt.Sprintf("%s/%d", store.cfg.Raft.SnapDir, s.cell.ID))
+	s.pendingReads = new(readIndexQueue)
 
 	return s, nil
 }
@@ -181,20 +181,36 @@ func (ps *peerStorage) initLastTerm() error {
 	return nil
 }
 
+func (ps *peerStorage) isApplyComplete() bool {
+	return ps.raftState.HardState.Commit == ps.getAppliedIndex()
+}
+
+func (ps *peerStorage) setApplyState(applyState *mraft.RaftApplyState) {
+	ps.applyState = *applyState
+}
+
+func (ps *peerStorage) getApplyState() *mraft.RaftApplyState {
+	return &ps.applyState
+}
+
 func (ps *peerStorage) getAppliedIndex() uint64 {
-	return ps.applyState.AppliedIndex
+	return ps.getApplyState().AppliedIndex
 }
 
 func (ps *peerStorage) getTruncatedIndex() uint64 {
-	return ps.applyState.TruncatedState.Index
+	return ps.getApplyState().TruncatedState.Index
 }
 
 func (ps *peerStorage) getTruncatedTerm() uint64 {
-	return ps.applyState.TruncatedState.Term
+	return ps.getApplyState().TruncatedState.Term
 }
 
-func (ps *peerStorage) isApplyingSnapshot() bool {
-	return ps.applySnapJob != nil && ps.applySnapJob.IsNotComplete()
+func (ps *peerStorage) getAppliedIndexTerm() uint64 {
+	return atomic.LoadUint64(&ps.appliedIndexTerm)
+}
+
+func (ps *peerStorage) setAppliedIndexTerm(appliedIndexTerm uint64) {
+	atomic.StoreUint64(&ps.appliedIndexTerm, appliedIndexTerm)
 }
 
 func (ps *peerStorage) validateSnap(snap *raftpb.Snapshot) bool {
@@ -234,6 +250,10 @@ func (ps *peerStorage) validateSnap(snap *raftpb.Snapshot) bool {
 
 func (ps *peerStorage) isInitialized() bool {
 	return len(ps.cell.Peers) != 0
+}
+
+func (ps *peerStorage) isApplyingSnapshot() bool {
+	return ps.applySnapJob != nil && ps.applySnapJob.IsNotComplete()
 }
 
 func (ps *peerStorage) getCell() metapb.Cell {
@@ -451,10 +471,6 @@ func (ps *peerStorage) deleteAllInRange(start, end []byte, job *util.Job) error 
 		job.IsCancelling() {
 		return util.ErrJobCancelled
 	}
-
-	// log.Errorf("raftstore[cell-%d]: apply snap delete range data failed, errors:\n %+v",
-	// ps.cell.ID,
-	// err)
 
 	// TODO: impl
 	return nil

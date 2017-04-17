@@ -96,13 +96,14 @@ func (t *CellTree) Update(cell metapb.Cell) {
 // Remove removes a cell if the cell is in the tree.
 // It will do nothing if it cannot find the cell or the found cell
 // is not the same with the cell.
-func (t *CellTree) Remove(cell metapb.Cell) {
+func (t *CellTree) Remove(cell metapb.Cell) bool {
 	result := t.find(cell)
 	if result == nil || result.cell.ID != cell.ID {
-		return
+		return false
 	}
 
 	t.tree.Delete(result)
+	return true
 }
 
 // Search returns a cell that contains the key.

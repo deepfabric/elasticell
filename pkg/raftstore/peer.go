@@ -15,7 +15,6 @@ package raftstore
 
 import (
 	"fmt"
-
 	"time"
 
 	"github.com/coreos/etcd/raft"
@@ -25,7 +24,8 @@ import (
 )
 
 const (
-	msgChanBuf = 1024
+	msgChanBuf       = 1024
+	defaultQueueSize = 1024
 )
 
 // PeerReplicate is the cell's peer replicate. Every cell replicate has a PeerReplicate.
@@ -81,10 +81,10 @@ func newPeerReplicate(store *Store, cell *metapb.Cell, peerID uint64) (*PeerRepl
 	return pr, nil
 }
 
-func (p *PeerReplicate) getStore() *peerStorage {
-	return p.ps
+func (pr *PeerReplicate) getStore() *peerStorage {
+	return pr.ps
 }
 
-func (p *PeerReplicate) getCell() metapb.Cell {
-	return p.getStore().getCell()
+func (pr *PeerReplicate) getCell() metapb.Cell {
+	return pr.getStore().getCell()
 }

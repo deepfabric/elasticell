@@ -25,6 +25,10 @@ var (
 	errUnavailable = errors.New("Stopper is unavailable")
 )
 
+var (
+	defaultWaitStoppedTimeout = time.Minute
+)
+
 type state int
 
 const (
@@ -61,7 +65,6 @@ type Job struct {
 	sync.RWMutex
 	fun    func() error
 	state  JobState
-	C      chan struct{}
 	result interface{}
 }
 
@@ -69,23 +72,7 @@ func newJob(fun func() error) *Job {
 	return &Job{
 		fun:   fun,
 		state: Pending,
-		C:     make(chan struct{}),
 	}
-}
-
-// Close close job
-func (job *Job) Close() {
-	job.Lock()
-	switch job.state {
-	case Cancelled:
-	case Finished:
-	case Failed:
-	default:
-		panic("invild job state to close")
-	}
-	close(job.C)
-	job.result = nil
-	job.Unlock()
 }
 
 // IsComplete return true means the job is complete.
@@ -177,64 +164,6 @@ func (job *Job) getState() JobState {
 	return s
 }
 
-type queue struct {
-	sync.RWMutex
-	cap  int
-	cond *sync.Cond
-	jobs []*Job
-}
-
-func newQueue(cap int) *queue {
-	q := new(queue)
-	q.cap = cap
-	q.cond = sync.NewCond(q)
-
-	return q
-}
-
-func (q *queue) put(job *Job) {
-	q.cond.L.Lock()
-	for q.isFull() {
-		q.cond.Wait()
-	}
-
-	q.jobs = append(q.jobs, job)
-	q.cond.Broadcast()
-	q.cond.L.Unlock()
-}
-
-func (q *queue) take() *Job {
-	q.cond.L.Lock()
-	for q.isEmpty() {
-		q.cond.Wait()
-	}
-
-	job := q.doTake()
-
-	q.cond.Broadcast()
-	q.cond.L.Unlock()
-
-	return job
-}
-
-func (q *queue) doTake() *Job {
-	t := q.jobs[0]
-	q.jobs = q.jobs[1:]
-	return t
-}
-
-func (q *queue) size() int {
-	return len(q.jobs)
-}
-
-func (q *queue) isEmpty() bool {
-	return q.size() == 0
-}
-
-func (q *queue) isFull() bool {
-	return q.size() == q.cap
-}
-
 // TaskRunner TODO
 type TaskRunner struct {
 	sync.RWMutex
@@ -243,15 +172,15 @@ type TaskRunner struct {
 	stopC   chan struct{}
 	cancels []context.CancelFunc
 	state   state
-	queue   *queue
+	queue   chan *Job
 }
 
 // NewTaskRunner returns a task runner
-func NewTaskRunner(workerCnt, jobQueueCap int) *TaskRunner {
+func NewTaskRunner(workerCnt int, jobQueueCap uint64) *TaskRunner {
 	t := &TaskRunner{
 		stopC: make(chan struct{}),
 		state: running,
-		queue: newQueue(jobQueueCap),
+		queue: make(chan *Job, jobQueueCap),
 	}
 
 	for index := 0; index < workerCnt; index++ {
@@ -268,8 +197,7 @@ func (s *TaskRunner) AddJobWorker() {
 			select {
 			case <-ctx.Done():
 				return
-			default:
-				job := s.queue.take()
+			case job := <-s.queue:
 				job.Lock()
 
 				switch job.state {
@@ -293,8 +221,6 @@ func (s *TaskRunner) AddJobWorker() {
 				case Cancelling:
 					job.setState(Cancelled)
 				}
-
-				job.C <- struct{}{}
 			}
 		}
 	})
@@ -310,7 +236,7 @@ func (s *TaskRunner) RunJob(task func() error) (*Job, error) {
 	}
 
 	job := newJob(task)
-	s.queue.put(job)
+	s.queue <- job
 	return job, nil
 }
 
@@ -392,7 +318,7 @@ func (s *TaskRunner) Stop() error {
 	}()
 
 	select {
-	case <-time.After(time.Minute):
+	case <-time.After(defaultWaitStoppedTimeout):
 		return errors.New("waitting for task complete timeout")
 	case <-s.stopC:
 	}

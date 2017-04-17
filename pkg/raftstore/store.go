@@ -15,6 +15,7 @@ package raftstore
 
 import (
 	"bytes"
+	"runtime"
 
 	"github.com/coreos/etcd/raft/raftpb"
 	"github.com/deepfabric/elasticell/pkg/log"
@@ -24,9 +25,9 @@ import (
 	"github.com/deepfabric/elasticell/pkg/util"
 )
 
-const (
-	defaultJobWorkerCnt = 1
-	defaultJobQueueCap  = 10000
+var (
+	defaultJobWorkerCnt        = runtime.NumCPU()
+	defaultJobQueueCap  uint64 = 10000
 )
 
 // Store is the store for raft
@@ -40,6 +41,7 @@ type Store struct {
 	peerCache     *peerCacheMap
 	pendingCells  []metapb.Cell
 	taskRunner    *util.TaskRunner
+	delegates     *applyDelegateMap
 }
 
 // NewStore returns store
@@ -53,7 +55,9 @@ func NewStore(id uint64, engine storage.Driver, cfg *Cfg) *Store {
 	s.keyRanges = util.NewCellTree()
 	s.peerCache = newPeerCacheMap()
 	s.taskRunner = util.NewTaskRunner(defaultJobWorkerCnt, defaultJobQueueCap)
+	s.delegates = newApplyDelegateMap()
 
+	// TODO: impl init, load from local rocksdb
 	return s
 }
 
@@ -156,6 +160,7 @@ func (s *Store) tryToCreatePeerReplicate(cellID uint64, msg *mraft.RaftMessage) 
 
 	// If we found stale peer, we will destory it
 	if stalePeer.ID > 0 {
+		// TODO: destroy async
 		if asyncRemove {
 			s.destroyPeer(cellID, stalePeer, asyncRemove)
 			return false
@@ -214,6 +219,8 @@ func (s *Store) destroyPeer(cellID uint64, target metapb.Peer, async bool) {
 		cellID,
 		target,
 		async)
+
+	// TODO: impl
 }
 
 func (s *Store) getPeerReplicate(cellID uint64) *PeerReplicate {

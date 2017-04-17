@@ -1,0 +1,79 @@
+syntax = "proto2";
+package raftcmdpb;
+
+import "metapb/metapb.proto";
+import "errorpb/errorpb.proto";
+import "gogoproto/gogo.proto";
+
+option (gogoproto.marshaler_all) = true;
+option (gogoproto.sizer_all) = true;
+option (gogoproto.unmarshaler_all) = true;
+option (gogoproto.goproto_enum_prefix_all) = false;
+
+enum CMDType {
+    Invalid = 0;
+    Get     = 1;
+    Put     = 3;
+    Delete  = 4;
+    Snap    = 5;
+}
+
+enum AdminCmdType {
+    InvalidAdmin   = 0;
+    ChangePeer     = 1;
+    Split          = 2;
+    CompactLog     = 3;
+    TransferLeader = 4;
+    ComputeHash    = 5;
+    VerifyHash     = 6;
+}
+
+message RaftRequestHeader {
+    optional uint64           cellId     = 1 [(gogoproto.nullable) = false];
+    optional metapb.Peer      peer       = 2 [(gogoproto.nullable) = false];
+    // true for read linearizati
+    optional bool             readQuorum = 3 [(gogoproto.nullable) = false];
+    // 16 bytes, to distinguish request.
+    optional bytes            uuid       = 4 [(gogoproto.customname) = "UUID"];
+    optional metapb.CellEpoch cellEpoch  = 5 [(gogoproto.nullable) = false];
+    optional uint64           term       = 6 [(gogoproto.nullable) = false];
+}
+
+message RaftResponseHeader {
+    optional errorpb.Error error       = 1 [(gogoproto.nullable) = false];
+    optional bytes         uuid        = 2 [(gogoproto.customname) = "UUID"];
+    optional uint64        currentTerm = 3 [(gogoproto.nullable) = false];
+}
+
+// RaftCMDRequest we can't include both normal requests and administrator request 
+// at same time. 
+message RaftCMDRequest {
+    optional RaftRequestHeader header       = 1 [(gogoproto.nullable) = true];
+    repeated Request           requests     = 2 [(gogoproto.nullable) = true];
+    optional AdminRequest      adminRequest = 3 [(gogoproto.nullable) = true];
+}
+
+message RaftCMDResponse {
+    optional RaftResponseHeader header    = 1 [(gogoproto.nullable) = true];
+    repeated Response           responses = 2 [(gogoproto.nullable) = true];
+}
+
+message AdminRequest {
+    optional AdminCmdType type = 1 [(gogoproto.nullable) = false];
+    optional bytes        body = 2;
+}
+
+
+message Request {
+    optional CMDType type = 1;
+    optional bytes   body = 2;
+}
+
+message Response {
+    optional CMDType type = 1;
+    optional bytes   body = 2;
+}
+
+message GetRequest {
+
+}
