@@ -7,11 +7,6 @@
 	],
 	"Deps": [
 		{
-			"ImportPath": "github.com/CodisLabs/codis/pkg/utils/atomic2",
-			"Comment": "2.0.14",
-			"Rev": "3a771a8ccc896140856e248338bbb4388f8467d9"
-		},
-		{
 			"ImportPath": "github.com/StackExchange/wmi",
 			"Rev": "9f32b5905fd6ce7384093f9d048437e79f7b4d85"
 		},
@@ -320,7 +315,7 @@
 		},
 		{
 			"ImportPath": "github.com/fagongzi/goetty",
-			"Rev": "6e18b03d1fd628ed43b4cf2dfdee570c0196abb2"
+			"Rev": "eb6004f6a74309e611c2b611c2487e3a3b91a9ad"
 		},
 		{
 			"ImportPath": "github.com/ghodss/yaml",
@@ -431,11 +426,6 @@
 		{
 			"ImportPath": "github.com/prometheus/procfs/xfs",
 			"Rev": "a1dba9ce8baed984a2495b658c82687f8157b98f"
-		},
-		{
-			"ImportPath": "github.com/satori/go.uuid",
-			"Comment": "v1.0.0",
-			"Rev": "f9ab0dce87d815821e221626b772e3475a0d2749"
 		},
 		{
 			"ImportPath": "github.com/shirou/gopsutil/disk",
