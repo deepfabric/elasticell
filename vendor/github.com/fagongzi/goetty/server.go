@@ -99,6 +99,11 @@ func NewServerSize(addr string, decoder Decoder, encoder Encoder, readBufSize, w
 	return s
 }
 
+// Started returns a chan that used for server started
+func (s *Server) Started() chan struct{} {
+	return s.startCh
+}
+
 // Stop stop server
 func (s *Server) Stop() {
 	s.stopOnce.Do(func() {

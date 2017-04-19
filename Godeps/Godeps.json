@@ -315,7 +315,7 @@
 		},
 		{
 			"ImportPath": "github.com/fagongzi/goetty",
-			"Rev": "eb6004f6a74309e611c2b611c2487e3a3b91a9ad"
+			"Rev": "96fd77b4ae8b14ddb3f10ec0096b27d81f8afc35"
 		},
 		{
 			"ImportPath": "github.com/ghodss/yaml",

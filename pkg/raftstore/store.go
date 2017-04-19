@@ -159,6 +159,8 @@ func (s *Store) cleanup() {
 func (s *Store) Start() {
 	// TODO: impl
 	go s.startTransfer()
+	<-s.trans.server.Started()
+
 	s.startStoreHeartbeatTask()
 	s.startGCTask()
 	s.startSplitCheckTask()
