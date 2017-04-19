@@ -16,9 +16,11 @@ package raftstore
 import (
 	"bytes"
 	"fmt"
+	"os"
 	"sync"
 	"sync/atomic"
 
+	"github.com/coreos/etcd/pkg/fileutil"
 	"github.com/coreos/etcd/raft"
 	"github.com/coreos/etcd/raft/raftpb"
 	"github.com/coreos/etcd/snap"
@@ -79,6 +81,8 @@ func newPeerStorage(store *Store, cell metapb.Cell) (*peerStorage, error) {
 	s.cell = cell
 	s.appliedIndexTerm = raftInitLogTerm
 
+	s.initSnap()
+
 	err := s.initRaftState()
 	if err != nil {
 		return nil, err
@@ -92,10 +96,26 @@ func newPeerStorage(store *Store, cell metapb.Cell) (*peerStorage, error) {
 		return nil, err
 	}
 
-	s.snapshortter = snap.New(fmt.Sprintf("%s/%d", store.cfg.Raft.SnapDir, s.cell.ID))
 	s.pendingReads = new(readIndexQueue)
 
 	return s, nil
+}
+
+func (ps *peerStorage) initSnap() {
+	dir := ps.getSnapDir()
+	if !fileutil.Exist(dir) {
+		if err := os.Mkdir(dir, 0750); err != nil {
+			log.Fatalf("raftstore[cell-%d]: cannot create dir for snapshot, errors:\n %+v",
+				ps.cell.ID,
+				err)
+		}
+	}
+
+	ps.snapshortter = snap.New(dir)
+}
+
+func (ps *peerStorage) getSnapDir() string {
+	return fmt.Sprintf("%s/%d", ps.store.cfg.Raft.SnapDir, ps.cell.ID)
 }
 
 func (ps *peerStorage) initRaftState() error {
@@ -391,7 +411,7 @@ func (ps *peerStorage) clearMeta() error {
 	metaStart := getCellMetaPrefix(ps.cell.ID)
 	metaEnd := getCellMetaPrefix(ps.cell.ID + 1)
 
-	err := ps.store.engine.Scan(metaStart, metaEnd, func(key []byte) (bool, error) {
+	err := ps.store.engine.Scan(metaStart, metaEnd, func(key, value []byte) (bool, error) {
 		err := ps.store.engine.Delete(key)
 		if err != nil {
 			return false, errors.Wrapf(err, "")
@@ -408,7 +428,7 @@ func (ps *peerStorage) clearMeta() error {
 	raftStart := getCellRaftPrefix(ps.cell.ID)
 	raftEnd := getCellRaftPrefix(ps.cell.ID + 1)
 
-	err = ps.store.engine.Scan(raftStart, raftEnd, func(key []byte) (bool, error) {
+	err = ps.store.engine.Scan(raftStart, raftEnd, func(key, value []byte) (bool, error) {
 		err := ps.store.engine.Delete(key)
 		if err != nil {
 			return false, errors.Wrapf(err, "")
@@ -432,11 +452,11 @@ func (ps *peerStorage) clearMeta() error {
 
 // Delete all data that is not covered by `newCell`.
 func (ps *peerStorage) clearExtraData(newCell metapb.Cell) error {
-	oldStartKey := encStartKey(ps.cell)
-	oldEndKey := encEndKey(ps.cell)
+	oldStartKey := encStartKey(&ps.cell)
+	oldEndKey := encEndKey(&ps.cell)
 
-	newStartKey := encStartKey(newCell)
-	newEndKey := encEndKey(newCell)
+	newStartKey := encStartKey(&newCell)
+	newEndKey := encEndKey(&newCell)
 
 	if bytes.Compare(oldStartKey, newStartKey) < 0 {
 		err := ps.startDestroyDataJob(newCell.ID, oldStartKey, newStartKey)

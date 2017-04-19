@@ -17,10 +17,13 @@ import (
 	"sync"
 
 	"github.com/deepfabric/elasticell/pkg/log"
-	meta "github.com/deepfabric/elasticell/pkg/pb/metapb"
+	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
 	"github.com/deepfabric/elasticell/pkg/pd"
+	"github.com/deepfabric/elasticell/pkg/raftstore"
 	"github.com/deepfabric/elasticell/pkg/storage"
+	"github.com/deepfabric/elasticell/pkg/util"
+
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 )
@@ -29,34 +32,26 @@ import (
 type Node struct {
 	sync.RWMutex
 
-	cfg *Cfg
-
+	cfg       *Cfg
 	clusterID uint64
+	pdClient  *pd.Client
+	driver    storage.Driver
+	storeMeta metapb.Store
+	store     *raftstore.Store
 
-	pdClient *pd.Client
-	metaDB   *storage.MetaDB
-
-	// meta cache
-	store meta.Store
-	cells map[uint64]*meta.Cell
-
-	storeHeartbeat *loop
-	cellHeartbeats []*loop
+	runner *util.Runner
 }
 
 // NewNode create a node instance, then init store, pd connection and init the cluster ID
-func NewNode(cfg *Cfg, metaDB *storage.MetaDB) (*Node, error) {
+func NewNode(cfg *Cfg, driver storage.Driver) (*Node, error) {
 	n := new(Node)
 	n.cfg = cfg
-	n.cells = make(map[uint64]*meta.Cell, 64)
-	n.metaDB = metaDB
+	n.driver = driver
+	n.clusterID = cfg.ClusterID
+	n.storeMeta = newStore(cfg)
+	n.runner = util.NewRunner()
 
 	err := n.initPDClient()
-	if err != nil {
-		return nil, err
-	}
-
-	err = n.loadMetaFromLocal()
 	if err != nil {
 		return nil, err
 	}
@@ -67,15 +62,42 @@ func NewNode(cfg *Cfg, metaDB *storage.MetaDB) (*Node, error) {
 // Start start the node.
 // if cluster is not bootstrapped, bootstrap cluster and create the first cell.
 func (n *Node) Start() {
-	n.bootstrapCluster()
+	bootstrapped := n.checkClusterBootstrapped()
+	storeID := n.checkStore()
+
+	if storeID == 0 {
+		storeID = n.bootstrapStore()
+	} else if !bootstrapped {
+		log.Fatalf(`bootstrap: store is not empty, but the cluster is not bootstrapped,
+					maybe you connected a wrong PD or need to remove the data and start again. 
+					storeID=<%d> clusterID=<%d>`,
+			storeID,
+			n.clusterID)
+	}
+
+	n.storeMeta.ID = storeID
+
+	if !bootstrapped {
+		cell := n.bootstrapFirstCell()
+		n.bootstrapCluster(cell)
+	}
+
+	n.startStore()
+
+	req := new(pdpb.PutStoreReq)
+	req.Header.ClusterID = n.clusterID
+	_, err := n.pdClient.PutStore(context.TODO(), req)
+	if err != nil {
+		log.Fatalf("bootstrap: put store to pd failed, errors:\n %+v", err)
+	}
 }
 
 // Stop the node
 func (n *Node) Stop() error {
-	n.stopHeartbeat()
+	err := n.runner.Stop()
 	n.closePDClient()
 
-	return nil
+	return err
 }
 
 func (n *Node) closePDClient() {
@@ -105,7 +127,7 @@ func (n *Node) initPDClient() error {
 		return errors.Wrap(err, "")
 	}
 
-	n.clusterID = rsp.GetId()
+	n.clusterID = rsp.GetID()
 	log.Infof("bootstrap: clusterID=<%d>", n.clusterID)
 
 	return nil
@@ -117,16 +139,19 @@ func (n *Node) getAllocID() (uint64, error) {
 		return pd.ZeroID, err
 	}
 
-	return rsp.GetId(), nil
+	return rsp.GetID(), nil
 }
 
-func (n *Node) getCell(id uint64) meta.Cell {
-	n.RLock()
-	defer n.RUnlock()
+func newStore(cfg *Cfg) metapb.Store {
+	addr := cfg.StoreAddr
+	if cfg.StoreAdvertiseAddr != "" {
+		addr = cfg.StoreAdvertiseAddr
+	}
 
-	return *n.cells[id]
-}
-
-func (n *Node) loadMetaFromLocal() error {
-	return nil
+	return metapb.Store{
+		Address: addr,
+		Lables:  cfg.StoreLables,
+		State:   metapb.UP,
+		// Metric:  n.getCurrentStoreMetrics(),
+	}
 }

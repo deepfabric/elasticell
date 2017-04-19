@@ -15,7 +15,8 @@ package raftstore
 
 import (
 	"bytes"
-	"runtime"
+
+	"time"
 
 	"github.com/coreos/etcd/raft/raftpb"
 	"github.com/deepfabric/elasticell/pkg/log"
@@ -23,47 +24,191 @@ import (
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
 	"github.com/deepfabric/elasticell/pkg/storage"
 	"github.com/deepfabric/elasticell/pkg/util"
+	"golang.org/x/net/context"
 )
 
 var (
-	defaultJobWorkerCnt        = runtime.NumCPU()
-	defaultJobQueueCap  uint64 = 10000
+	defaultJobQueueCap uint64 = 10000
 )
 
 // Store is the store for raft
 type Store struct {
-	id            uint64
-	trans         *transport
-	engine        storage.Driver
-	cfg           *Cfg
+	cfg *Cfg
+
+	id   uint64
+	meta metapb.Store
+
 	replicatesMap *cellPeersMap // cellid -> peer replicate
 	keyRanges     *util.CellTree
 	peerCache     *peerCacheMap
-	pendingCells  []metapb.Cell
-	taskRunner    *util.TaskRunner
 	delegates     *applyDelegateMap
+	pendingCells  []metapb.Cell
+
+	trans  *transport
+	engine storage.Driver
+	runner *util.Runner
 }
 
 // NewStore returns store
-func NewStore(id uint64, engine storage.Driver, cfg *Cfg) *Store {
+func NewStore(meta metapb.Store, engine storage.Driver, cfg *Cfg) *Store {
 	s := new(Store)
-	s.id = id
+	s.id = meta.ID
+	s.meta = meta
 	s.engine = engine
 	s.cfg = cfg
+
 	s.trans = newTransport(s.onRaftMessage)
-	s.replicatesMap = newCellPeersMap()
+
 	s.keyRanges = util.NewCellTree()
+	s.replicatesMap = newCellPeersMap()
 	s.peerCache = newPeerCacheMap()
-	s.taskRunner = util.NewTaskRunner(defaultJobWorkerCnt, defaultJobQueueCap)
 	s.delegates = newApplyDelegateMap()
 
-	// TODO: impl init, load from local rocksdb
+	s.runner = util.NewRunner()
+
+	s.init()
+
 	return s
 }
 
+func (s *Store) init() {
+	totalCount := 0
+	tomebstoneCount := 0
+	applyingCount := 0
+
+	err := s.engine.Scan(cellMetaMinKey, cellMetaMaxKey, func(key, value []byte) (bool, error) {
+		cellID, suffix, err := decodeCellMetaKey(key)
+		if err != nil {
+			return false, err
+		}
+
+		if suffix != cellStateSuffix {
+			return true, nil
+		}
+
+		totalCount++
+
+		localState := new(mraft.CellLocalState)
+		util.MustUnmarshal(localState, value)
+
+		if localState.State == mraft.Tombstone {
+			tomebstoneCount++
+			log.Infof("bootstrap: cell is tombstone in store, cellID=<%d>", cellID)
+			return true, nil
+		}
+
+		pr, err := createPeerReplicate(s, &localState.Cell)
+		if err != nil {
+			return false, err
+		}
+
+		if localState.State == mraft.Applying {
+			applyingCount++
+			log.Infof("bootstrap: cell is applying in store, cellID=<%d>", cellID)
+			pr.startApplyingSnapJob()
+		}
+
+		s.keyRanges.Update(localState.Cell)
+		s.replicatesMap.put(cellID, pr)
+
+		return true, nil
+	})
+
+	if err != nil {
+		log.Fatalf("bootstrap: init store failed, errors:\n %+v", err)
+	}
+
+	log.Infof("bootstrap: starts with %d cells, including %d tombstones and %d applying	cells",
+		totalCount,
+		tomebstoneCount,
+		applyingCount)
+
+	s.cleanup()
+}
+
+func (s *Store) cleanup() {
+	// clean up all possible garbage data
+	lastStartKey := getDataKey([]byte(""))
+
+	s.keyRanges.Ascend(func(cell *metapb.Cell) bool {
+		start := encStartKey(cell)
+		err := s.engine.RangeDelete(lastStartKey, start)
+		if err != nil {
+			log.Fatalf("bootstrap: cleanup possible garbage data failed, start=<%v> end=<%v> errors:\n %+v",
+				lastStartKey,
+				start,
+				err)
+		}
+
+		lastStartKey = encEndKey(cell)
+		return true
+	})
+
+	err := s.engine.RangeDelete(lastStartKey, dataMaxKey)
+	if err != nil {
+		log.Fatalf("bootstrap: cleanup possible garbage data failed, start=<%v> end=<%v> errors:\n %+v",
+			lastStartKey,
+			dataMaxKey,
+			err)
+	}
+
+	log.Infof("bootstrap: cleanup possible garbage data complete")
+}
+
 // Start returns the error when start store
-func (s *Store) Start() error {
-	return s.trans.start()
+func (s *Store) Start() {
+	// TODO: impl
+	go s.startTransfer()
+	s.startStoreHeartbeatTask()
+	s.startGCTask()
+	s.startSplitCheckTask()
+}
+
+func (s *Store) startTransfer() {
+	err := s.trans.start()
+	if err != nil {
+		log.Fatalf("bootstrap: start transfer failed, errors:\n %+v", err)
+	}
+}
+
+func (s *Store) startStoreHeartbeatTask() {
+	s.runner.RunCancelableTask(func(ctx context.Context) {
+		ticker := time.NewTicker(s.cfg.getStoreHeartbeatDuration())
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				s.handleStoreHeartbeat()
+			}
+		}
+	})
+}
+
+func (s *Store) startGCTask() {
+	// TODO: impl
+}
+
+func (s *Store) startSplitCheckTask() {
+	// TODO: impl
+}
+
+// Stop returns the error when stop store
+func (s *Store) Stop() error {
+	err := s.runner.Stop()
+	s.trans.stop()
+	return err
+}
+
+// GetID returns store id
+func (s *Store) GetID() uint64 {
+	return s.id
+}
+
+// GetMeta returns store meta
+func (s *Store) GetMeta() metapb.Store {
+	return s.meta
 }
 
 func (s *Store) onRaftMessage(msg *mraft.RaftMessage) {
@@ -188,7 +333,7 @@ func (s *Store) tryToCreatePeerReplicate(cellID uint64, msg *mraft.RaftMessage) 
 	// check range overlapped
 	item := s.keyRanges.Search(msg.Start)
 	if item.ID > 0 {
-		if bytes.Compare(encStartKey(item), getDataEndKey(msg.End)) < 0 {
+		if bytes.Compare(encStartKey(&item), getDataEndKey(msg.End)) < 0 {
 			if log.DebugEnabled() {
 				log.Debugf("raftstore[cell-%d]: msg is overlapped with cell, cell=<%s> msg=<%s>",
 					cellID,
@@ -232,5 +377,9 @@ func (s *Store) addPeerToCache(peer metapb.Peer) {
 }
 
 func (s *Store) addJob(task func() error) (*util.Job, error) {
-	return s.taskRunner.RunJob(task)
+	return s.runner.RunJob(task)
+}
+
+func (s *Store) handleStoreHeartbeat() {
+
 }

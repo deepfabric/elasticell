@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Workiva/go-datastructures/queue"
 	"github.com/coreos/etcd/raft"
 	"github.com/coreos/etcd/raft/raftpb"
 	"github.com/deepfabric/elasticell/pkg/log"
@@ -37,6 +38,19 @@ type PeerReplicate struct {
 	store      *Store
 	ps         *peerStorage
 	msgC       chan raftpb.Message
+
+	pendingReads *readIndexQueue
+}
+
+func createPeerReplicate(store *Store, cell *metapb.Cell) (*PeerReplicate, error) {
+	peer := findPeer(*cell, store.GetID())
+	if peer == nil {
+		return nil, fmt.Errorf("bootstrap: find no peer for store in cell. storeID=<%d> cell=<%+v>",
+			store.GetID(),
+			cell)
+	}
+
+	return newPeerReplicate(store, cell, peer.ID)
 }
 
 // The peer can be created from another node with raft membership changes, and we only
@@ -76,8 +90,12 @@ func newPeerReplicate(store *Store, cell *metapb.Cell, peerID uint64) (*PeerRepl
 	pr.raftTicker = time.NewTicker(time.Millisecond * time.Duration(store.cfg.Raft.BaseTick))
 	pr.msgC = make(chan raftpb.Message, msgChanBuf)
 	pr.store = store
+	pr.pendingReads = &readIndexQueue{
+		reads:    queue.NewRingBuffer(defaultQueueSize),
+		readyCnt: 0,
+	}
 
-	store.taskRunner.RunCancelableTask(pr.doSendFromChan)
+	store.runner.RunCancelableTask(pr.doSendFromChan)
 	return pr, nil
 }
 

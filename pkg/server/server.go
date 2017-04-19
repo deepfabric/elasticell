@@ -131,27 +131,18 @@ func (s *Server) initRedis() {
 }
 
 func (s *Server) initNode() {
-	metadb, err := s.initDB()
+	driver, err := s.initDriver()
 	if err != nil {
 		log.Fatalf("bootstrap: init meta db failure, errors:\n %+v", err)
 		return
 	}
 
-	n, err := node.NewNode(s.cfg.Node, metadb)
+	n, err := node.NewNode(s.cfg.Node, driver)
 	if err != nil {
 		log.Fatalf("bootstrap: create node failure, errors:\n %+v", err)
 		return
 	}
 	s.nodeServer = n
-}
-
-func (s *Server) initDB() (*storage.MetaDB, error) {
-	d, err := s.initDriver()
-	if err != nil {
-		return nil, err
-	}
-
-	return storage.NewMetaDB(s.cfg.Storage, d), nil
 }
 
 func (s *Server) initDriver() (storage.Driver, error) {

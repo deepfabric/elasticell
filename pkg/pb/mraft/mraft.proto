@@ -25,6 +25,11 @@ message RaftMessage  {
     optional bytes            end         = 8;
 }
 
+message StoreIdent {
+    optional uint64 clusterID = 1 [(gogoproto.nullable) = false];
+    optional uint64 storeID   = 2 [(gogoproto.nullable) = false];
+}
+
 message KeyValue {
     optional bytes key      = 1;
     optional bytes value    = 2;

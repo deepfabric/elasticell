@@ -14,25 +14,17 @@
 package node
 
 import (
-	"time"
-
-	meta "github.com/deepfabric/elasticell/pkg/pb/metapb"
+	"github.com/deepfabric/elasticell/pkg/pb/metapb"
+	"github.com/deepfabric/elasticell/pkg/raftstore"
 )
 
 // Cfg node cfg
 type Cfg struct {
-	StoreAddr   string       `json:"storeAddr"`
-	StoreLables []meta.Label `json:"labels, omitempty"`
+	ClusterID          uint64         `json:"clusterID"`
+	StoreAddr          string         `json:"storeAddr"`
+	StoreAdvertiseAddr string         `json:"storeAdvertiseAddr"`
+	StoreLables        []metapb.Label `json:"labels, omitempty"`
 
-	PDEndpoints              []string `json:"pdRPCAddr"`
-	StoreHeartbeatIntervalMs int      `json:"storeHeartbeatIntervalMs"`
-	CellHeartbeatIntervalMs  int      `json:"cellHeartbeatIntervalMs"`
-}
-
-func (c *Cfg) getStoreHeartbeatDuration() time.Duration {
-	return time.Duration(c.StoreHeartbeatIntervalMs) * time.Millisecond
-}
-
-func (c *Cfg) getCellHeartbeatDuration() time.Duration {
-	return time.Duration(c.CellHeartbeatIntervalMs) * time.Millisecond
+	PDEndpoints []string       `json:"pdRPCAddr"`
+	RaftStore   *raftstore.Cfg `json:"raftStore"`
 }

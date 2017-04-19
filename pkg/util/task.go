@@ -26,7 +26,9 @@ var (
 )
 
 var (
-	defaultWaitStoppedTimeout = time.Minute
+	defaultWaitStoppedTimeout        = time.Minute
+	defaultQueueName                 = "__default__"
+	defaultQueueCap           uint64 = 64
 )
 
 type state int
@@ -164,40 +166,58 @@ func (job *Job) getState() JobState {
 	return s
 }
 
-// TaskRunner TODO
-type TaskRunner struct {
+// Runner TODO
+type Runner struct {
 	sync.RWMutex
 
-	stop    sync.WaitGroup
-	stopC   chan struct{}
-	cancels []context.CancelFunc
-	state   state
-	queue   chan *Job
+	stop       sync.WaitGroup
+	stopC      chan struct{}
+	cancels    []context.CancelFunc
+	state      state
+	namedQueue map[string]chan *Job
 }
 
-// NewTaskRunner returns a task runner
-func NewTaskRunner(workerCnt int, jobQueueCap uint64) *TaskRunner {
-	t := &TaskRunner{
-		stopC: make(chan struct{}),
-		state: running,
-		queue: make(chan *Job, jobQueueCap),
+// NewRunnerSize returns a task runner use default queue cap
+func NewRunnerSize(cap uint64) *Runner {
+	t := &Runner{
+		stopC:      make(chan struct{}),
+		state:      running,
+		namedQueue: make(map[string]chan *Job, 2),
 	}
 
-	for index := 0; index < workerCnt; index++ {
-		t.AddJobWorker()
-	}
-
+	t.AddNamedWorker(defaultQueueName, cap)
 	return t
 }
 
-// AddJobWorker add a job worker using a goroutine
-func (s *TaskRunner) AddJobWorker() {
-	s.RunCancelableTask(func(ctx context.Context) {
+// NewRunner returns a task runner
+func NewRunner() *Runner {
+	return NewRunnerSize(defaultQueueCap)
+}
+
+// AddNamedWorker add a named worker, the named worker has uniq queue, so jobs are linear execution
+func (s *Runner) AddNamedWorker(name string, cap uint64) error {
+	s.Lock()
+	q, ok := s.namedQueue[name]
+	if !ok {
+		q = make(chan *Job, cap)
+		s.namedQueue[name] = q
+	}
+	s.Unlock()
+
+	return s.startWorker(q)
+}
+
+func (s *Runner) startWorker(q chan *Job) error {
+	return s.RunCancelableTask(func(ctx context.Context) {
 		for {
 			select {
 			case <-ctx.Done():
 				return
-			case job := <-s.queue:
+			case job := <-q:
+				if job == nil {
+					return
+				}
+
 				job.Lock()
 
 				switch job.state {
@@ -227,7 +247,7 @@ func (s *TaskRunner) AddJobWorker() {
 }
 
 // RunJob run a job
-func (s *TaskRunner) RunJob(task func() error) (*Job, error) {
+func (s *Runner) RunJob(task func() error) (*Job, error) {
 	s.RLock()
 	defer s.RUnlock()
 
@@ -236,7 +256,21 @@ func (s *TaskRunner) RunJob(task func() error) (*Job, error) {
 	}
 
 	job := newJob(task)
-	s.queue <- job
+	s.getDefaultQueue() <- job
+	return job, nil
+}
+
+// RunJobWithNamedWorker run a job in a named worker
+func (s *Runner) RunJobWithNamedWorker(worker string, task func() error) (*Job, error) {
+	s.RLock()
+	defer s.RUnlock()
+
+	if s.state != running {
+		return nil, errUnavailable
+	}
+
+	job := newJob(task)
+	s.getDefaultQueue() <- job
 	return job, nil
 }
 
@@ -254,7 +288,7 @@ func (s *TaskRunner) RunJob(task func() error) (*Job, error) {
 // 	// hanle error
 // 	return
 // }
-func (s *TaskRunner) RunCancelableTask(task func(context.Context)) error {
+func (s *Runner) RunCancelableTask(task func(context.Context)) error {
 	s.RLock()
 	defer s.RUnlock()
 
@@ -276,7 +310,7 @@ func (s *TaskRunner) RunCancelableTask(task func(context.Context)) error {
 }
 
 // RunTask runs a task in new goroutine
-func (s *TaskRunner) RunTask(task func()) error {
+func (s *Runner) RunTask(task func()) error {
 	s.RLock()
 	defer s.RUnlock()
 
@@ -298,7 +332,7 @@ func (s *TaskRunner) RunTask(task func()) error {
 // RunTask will failure with an error
 // Wait complete for the tasks that already in execute
 // Cancel the tasks that is not start
-func (s *TaskRunner) Stop() error {
+func (s *Runner) Stop() error {
 	s.Lock()
 	defer s.Unlock()
 
@@ -323,11 +357,23 @@ func (s *TaskRunner) Stop() error {
 	case <-s.stopC:
 	}
 
+	for _, ch := range s.namedQueue {
+		close(ch)
+	}
+
 	s.state = stopped
 	return nil
 }
 
-func (s *TaskRunner) recover() {
+func (s *Runner) getDefaultQueue() chan *Job {
+	return s.getNamedQueue(defaultQueueName)
+}
+
+func (s *Runner) getNamedQueue(name string) chan *Job {
+	return s.namedQueue[name]
+}
+
+func (s *Runner) recover() {
 	if r := recover(); r != nil {
 		panic(r)
 	}

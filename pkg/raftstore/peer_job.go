@@ -21,17 +21,17 @@ import (
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
 )
 
-func (ps *peerStorage) startApplyingSnapJob() {
-	ps.applySnapJobLock.Lock()
-	job, err := ps.store.addJob(ps.doApplyingSnapshotJob)
+func (pr *PeerReplicate) startApplyingSnapJob() {
+	pr.ps.applySnapJobLock.Lock()
+	job, err := pr.store.addJob(pr.doApplyingSnapshotJob)
 	if err != nil {
 		log.Fatalf("raftstore[cell-%d]: add apply snapshot task fail, errors:\n %+v",
-			ps.cell.ID,
+			pr.cellID,
 			err)
 	}
 
-	ps.applySnapJob = job
-	ps.applySnapJobLock.Unlock()
+	pr.ps.applySnapJob = job
+	pr.ps.applySnapJobLock.Unlock()
 }
 
 func (ps *peerStorage) startDestroyDataJob(cellID uint64, start, end []byte) error {
@@ -110,40 +110,41 @@ func (ps *peerStorage) doDestroyDataJob(cellID uint64, startKey, endKey []byte) 
 	return nil
 }
 
-func (ps *peerStorage) doApplyingSnapshotJob() error {
-	log.Infof("raftstore[cell-%d]: begin apply snap data", ps.cell.ID)
+func (pr *PeerReplicate) doApplyingSnapshotJob() error {
+	log.Infof("raftstore[cell-%d]: begin apply snap data", pr.cellID)
+	defer pr.rn.Advance()
 
-	localState, err := ps.loadCellLocalState(ps.applySnapJob)
+	localState, err := pr.ps.loadCellLocalState(pr.ps.applySnapJob)
 	if err != nil {
 		return err
 	}
 
-	err = ps.deleteAllInRange(encStartKey(localState.Cell), encEndKey(localState.Cell), ps.applySnapJob)
+	err = pr.ps.deleteAllInRange(encStartKey(&localState.Cell), encEndKey(&localState.Cell), pr.ps.applySnapJob)
 	if err != nil {
 		log.Errorf("raftstore[cell-%d]: apply snap delete range data failed, errors:\n %+v",
-			ps.cell.ID,
+			pr.cellID,
 			err)
 		return err
 	}
 
-	_, err = ps.loadSnapshot(ps.applySnapJob)
+	_, err = pr.ps.loadSnapshot(pr.ps.applySnapJob)
 	if err != nil {
 		log.Errorf("raftstore[cell-%d]: apply snap load snapshot failed, errors:\n %+v",
-			ps.cell.ID,
+			pr.cellID,
 			err)
 		return err
 	}
 
 	// TODO: decode snapshot and set to local rocksdb.
-	err = ps.updatePeerState(ps.cell, mraft.Normal)
+	err = pr.ps.updatePeerState(pr.ps.cell, mraft.Normal)
 	if err != nil {
 		log.Errorf("raftstore[cell-%d]: apply snap update peer state failed, errors:\n %+v",
-			ps.cell.ID,
+			pr.cellID,
 			err)
 		return err
 	}
 
-	log.Infof("raftstore[cell-%d]: apply snap complete", ps.cell.ID)
+	log.Infof("raftstore[cell-%d]: apply snap complete", pr.cellID)
 	return nil
 }
 
@@ -242,6 +243,8 @@ func (pr *PeerReplicate) doRegistrationJob(delegate *applyDelegate) error {
 }
 
 func (pr *PeerReplicate) doApplyCommittedEntries(cellID uint64, term uint64, commitedEntries []raftpb.Entry) error {
+	defer pr.rn.Advance()
+
 	delegate := pr.store.delegates.get(cellID)
 	if nil == delegate {
 		return fmt.Errorf("raftstore[cell-%d]: missing delegate", pr.cellID)

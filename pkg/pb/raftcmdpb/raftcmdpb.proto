@@ -2,6 +2,7 @@ syntax = "proto2";
 package raftcmdpb;
 
 import "metapb/metapb.proto";
+import "pdpb/pdpb.proto";
 import "errorpb/errorpb.proto";
 import "gogoproto/gogo.proto";
 
@@ -58,11 +59,19 @@ message RaftCMDResponse {
     repeated Response           responses = 2 [(gogoproto.nullable) = true];
 }
 
+// admin request
+
 message AdminRequest {
     optional AdminCmdType type = 1 [(gogoproto.nullable) = false];
     optional bytes        body = 2;
 }
 
+message ChangePeerRequest {
+    optional pdpb.ConfChangeType changeType = 1 [(gogoproto.nullable) = false];
+    optional metapb.Peer         peer       = 2 [(gogoproto.nullable) = false];
+}
+
+// admin request
 
 message Request {
     optional CMDType type = 1;

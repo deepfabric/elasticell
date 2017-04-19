@@ -163,3 +163,13 @@ func (d *applyDelegate) execWriteRequest(ctx *execContext) *raftcmdpb.RaftCMDRes
 
 	return nil
 }
+
+func (pr *PeerReplicate) execReadRequest(req *readIndexRequest) {
+	for _, cmd := range req.cmds {
+		pr.doExecReadCmd(cmd)
+	}
+}
+
+func (pr *PeerReplicate) doExecReadCmd(cmd *cmd) {
+	// TODO: imple read cmd
+}

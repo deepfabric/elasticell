@@ -9,14 +9,14 @@ option (gogoproto.sizer_all) = true;
 option (gogoproto.unmarshaler_all) = true;
 option (gogoproto.goproto_enum_prefix_all) = false;
 
-
 service PDService {
-  rpc GetLeader (LeaderReq) returns (LeaderRsp) {}
-  rpc AllocID (AllocIDReq) returns (AllocIDRsp) {}
-  rpc GetClusterID(GetClusterIDReq) returns (GetClusterIDRsp) {}
-  rpc IsClusterBootstrap (IsClusterBootstrapReq) returns (IsClusterBootstrapRsp) {}
-  rpc BootstrapCluster (BootstrapClusterReq) returns (BootstrapClusterRsp) {}
-  rpc CellHeartbeat (CellHeartbeatReq) returns (CellHeartbeatRsp) {}
+    rpc GetLeader (LeaderReq) returns (LeaderRsp) {}
+    rpc AllocID (AllocIDReq) returns (AllocIDRsp) {}
+    rpc GetClusterID(GetClusterIDReq) returns (GetClusterIDRsp) {}
+    rpc IsClusterBootstrap (IsClusterBootstrapReq) returns (IsClusterBootstrapRsp) {}
+    rpc BootstrapCluster (BootstrapClusterReq) returns (BootstrapClusterRsp) {}
+    rpc CellHeartbeat (CellHeartbeatReq) returns (CellHeartbeatRsp) {}
+    rpc PutStore(PutStoreReq) returns (PutStoreRsp) {}
 }
 
 enum ConfChangeType {
@@ -29,42 +29,62 @@ message ChangePeer {
     optional metapb.Peer    peer = 2 [(gogoproto.nullable) = true];
 }
 
+message RequestHeader {
+    // cluster_id is the ID of the cluster which be sent to.
+    optional uint64 clusterID = 1 [(gogoproto.nullable) = false];
+}
+
+message ResponseHeader {
+    optional uint64 clusterID = 1 [(gogoproto.nullable) = false];
+}
+
 message Leader {
-    optional uint64 id   = 1 [(gogoproto.nullable) = false];
+    optional uint64 id   = 1 [(gogoproto.nullable) = false, (gogoproto.customname) = "ID"];
     optional string name = 2 [(gogoproto.nullable) = false];
     optional string addr = 3 [(gogoproto.nullable) = false];
 }
 
 message LeaderReq {
     optional string from = 1 [(gogoproto.nullable) = false];
-    optional uint64 id   = 2 [(gogoproto.nullable) = false];
+    optional uint64 id   = 2 [(gogoproto.nullable) = false, (gogoproto.customname) = "ID"];
 }
 
 message LeaderRsp {
     optional Leader leader = 1 [(gogoproto.nullable) = false];
 }
 
+message PutStoreReq {
+    optional string        from   = 1 [(gogoproto.nullable) = false];
+    optional uint64        id     = 2 [(gogoproto.nullable) = false, (gogoproto.customname) = "ID"];
+    optional RequestHeader header = 3 [(gogoproto.nullable) = false];
+    optional metapb.Store  store  = 4 [(gogoproto.nullable) = false];
+}
+
+message PutStoreRsp {
+    optional ResponseHeader header = 1 [(gogoproto.nullable) = false];
+}
+
 message GetClusterIDReq {
     optional string from = 1 [(gogoproto.nullable) = false];
-    optional uint64 id   = 2 [(gogoproto.nullable) = false];
+    optional uint64 id   = 2 [(gogoproto.nullable) = false, (gogoproto.customname) = "ID"];
 }
 
 message GetClusterIDRsp {
-    optional uint64 id = 1 [(gogoproto.nullable) = false];
+    optional uint64 id = 1 [(gogoproto.nullable) = false, (gogoproto.customname) = "ID"];
 }
 
 message AllocIDReq {
     optional string from = 1 [(gogoproto.nullable) = false];
-    optional uint64 id   = 2 [(gogoproto.nullable) = false];
+    optional uint64 id   = 2 [(gogoproto.nullable) = false, (gogoproto.customname) = "ID"];
 }
 
 message AllocIDRsp {
-    optional uint64 id = 1 [(gogoproto.nullable) = false];
+    optional uint64 id = 1 [(gogoproto.nullable) = false, (gogoproto.customname) = "ID"];
 }
 
 message IsClusterBootstrapReq {
     optional string from = 1 [(gogoproto.nullable) = false];
-    optional uint64 id   = 2 [(gogoproto.nullable) = false];
+    optional uint64 id   = 2 [(gogoproto.nullable) = false, (gogoproto.customname) = "ID"];
 }
 
 message IsClusterBootstrapRsp {
@@ -73,7 +93,7 @@ message IsClusterBootstrapRsp {
 
 message BootstrapClusterReq {
     optional string from         = 1 [(gogoproto.nullable) = false];
-    optional uint64 id           = 2 [(gogoproto.nullable) = false];
+    optional uint64 id           = 2 [(gogoproto.nullable) = false, (gogoproto.customname) = "ID"];
     optional metapb.Store store  = 3 [(gogoproto.nullable) = false];
     optional metapb.Cell  cell   = 4 [(gogoproto.nullable) = false];
 }
@@ -84,11 +104,11 @@ message BootstrapClusterRsp {
 
 message CellHeartbeatReq {
     optional string from        = 1 [(gogoproto.nullable) = false];
-    optional uint64 id          = 2 [(gogoproto.nullable) = false];
+    optional uint64 id          = 2 [(gogoproto.nullable) = false, (gogoproto.customname) = "ID"];
     optional metapb.Cell cell   = 3 [(gogoproto.nullable) = false];
     optional metapb.Peer leader = 4 [(gogoproto.nullable) = true];
 }
 
 message CellHeartbeatRsp {
-    optional ChangePeer changePeer = 1 [(gogoproto.nullable) = false];
+    optional ChangePeer changePeer = 1 [(gogoproto.nullable) = true];
 }

@@ -86,7 +86,7 @@ func (pr *PeerReplicate) handleRaftReadyAppend(ctx *tempRaftContext, rd *raft.Re
 }
 
 func (pr *PeerReplicate) handleRaftReadyApply(ctx *tempRaftContext, rd *raft.Ready) {
-	result := pr.ps.doApplySnap(ctx)
+	result := pr.doApplySnap(ctx)
 
 	if !pr.isLeader() {
 		pr.send(rd.Messages)
@@ -96,19 +96,18 @@ func (pr *PeerReplicate) handleRaftReadyApply(ctx *tempRaftContext, rd *raft.Rea
 		pr.startRegistrationJob()
 	}
 
-	pr.applyCommittedEntries(rd)
+	asyncApplyCommitted := pr.applyCommittedEntries(rd)
 
-	// TODO: handle reads
-	// self.apply_reads(&ready);
-	//     self.raft_group.advance_append(ready);
-	//     if self.is_applying_snapshot() {
-	//         // Because we only handle raft ready when not applying snapshot, so following
-	//         // line won't be called twice for the same snapshot.
-	//         self.raft_group.advance_apply(self.last_ready_idx);
-	//     }
+	pr.doApplyReads(rd)
 
 	if result != nil {
-		pr.doWhenApplySnapReady(result)
+		pr.updateKeyRange(result)
+	}
+
+	// if has none async job, so we can direct advance raft,
+	// otherwise we need advance raft when our async job has finished
+	if !asyncApplyCommitted && result == nil {
+		pr.rn.Advance()
 	}
 }
 

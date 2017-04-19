@@ -150,7 +150,7 @@ func (s *Store) checkSnapshot(msg *mraft.RaftMessage) (bool, error) {
 	item := s.keyRanges.Search(snapCell.Start)
 	if item.ID > 0 {
 		exist := s.getPeerReplicate(item.ID).getCell()
-		if bytes.Compare(encStartKey(exist), encEndKey(snapCell)) < 0 {
+		if bytes.Compare(encStartKey(&exist), encEndKey(&snapCell)) < 0 {
 			log.Infof("cell overlapped, exist=<%v> target=<%v>",
 				exist,
 				snapCell)
@@ -159,8 +159,8 @@ func (s *Store) checkSnapshot(msg *mraft.RaftMessage) (bool, error) {
 	}
 
 	for _, c := range s.pendingCells {
-		if bytes.Compare(encStartKey(c), encEndKey(snapCell)) < 0 &&
-			bytes.Compare(encEndKey(c), encStartKey(snapCell)) > 0 &&
+		if bytes.Compare(encStartKey(&c), encEndKey(&snapCell)) < 0 &&
+			bytes.Compare(encEndKey(&c), encStartKey(&snapCell)) > 0 &&
 			// Same cell can overlap, we will apply the latest version of snapshot.
 			c.ID != snapCell.ID {
 			log.Infof("pending cell overlapped, c=<%s> snap=<%s>",

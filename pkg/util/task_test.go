@@ -14,6 +14,7 @@
 package util
 
 import (
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -21,7 +22,7 @@ import (
 )
 
 func TestTask(t *testing.T) {
-	runner := NewTaskRunner(5, 2)
+	runner := NewRunner()
 	c := make(chan struct{})
 	defer close(c)
 
@@ -38,6 +39,28 @@ func TestTask(t *testing.T) {
 	case <-c:
 	case <-time.After(time.Millisecond * 50):
 		t.Error("run task failed, task not run after 50ms")
+	}
+
+	runner.AddNamedWorker("name-0", 2)
+	yes := false
+	var ok int32
+	complete := make(chan struct{}, 1)
+	runner.RunJobWithNamedWorker("name-0", func() error {
+		atomic.StoreInt32(&ok, 1)
+		return nil
+	})
+
+	runner.RunJobWithNamedWorker("name-0", func() error {
+		if atomic.LoadInt32(&ok) > 0 {
+			yes = true
+		}
+		complete <- struct{}{}
+		return nil
+	})
+
+	<-complete
+	if !yes {
+		t.Error("run named task failed, task not liner excution")
 	}
 
 	start := make(chan struct{}, 1)

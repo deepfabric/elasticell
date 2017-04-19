@@ -55,7 +55,7 @@ func (op *changePeerOperator) Do(cell *cellRuntime) (*pdpb.CellHeartbeatRsp, boo
 	}
 
 	res := &pdpb.CellHeartbeatRsp{
-		ChangePeer: op.ChangePeer,
+		ChangePeer: &op.ChangePeer,
 	}
 	return res, false
 }

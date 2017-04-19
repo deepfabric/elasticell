@@ -123,12 +123,37 @@ func (c *cache) getCellStores(cell *cellRuntime) []*storeRuntime {
 	return stores
 }
 
+func (c *cache) iteratorStore(fn func(*storeRuntime) (bool, error)) error {
+	c.RLock()
+	defer c.RUnlock()
+
+	for _, s := range c.sc.stores {
+		next, err := fn(s)
+		if err != nil {
+			return err
+		}
+
+		if !next {
+			break
+		}
+	}
+
+	return nil
+}
+
 func (c *cache) doGetStore(storeID uint64) *storeRuntime {
 	store, ok := c.sc.stores[storeID]
 	if !ok {
 		return nil
 	}
 	return store
+}
+
+func (c *cache) getStore(storeID uint64) *storeRuntime {
+	c.RLock()
+	defer c.RUnlock()
+
+	return c.doGetStore(storeID)
 }
 
 func (c *cache) addStore(store meta.Store) {
@@ -140,6 +165,12 @@ func (c *cache) addStore(store meta.Store) {
 	}
 
 	c.sc.stores[store.ID] = newStoreRuntime(store)
+}
+
+func (c *cache) setStore(store *storeRuntime) {
+	c.Lock()
+	defer c.Unlock()
+	c.sc.stores[store.store.ID] = store
 }
 
 func (c *cache) addCell(cell meta.Cell) {

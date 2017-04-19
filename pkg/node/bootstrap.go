@@ -14,59 +14,124 @@
 package node
 
 import (
+	"time"
+
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb"
-	meta "github.com/deepfabric/elasticell/pkg/pb/metapb"
+	"github.com/deepfabric/elasticell/pkg/pb/metapb"
+	"github.com/deepfabric/elasticell/pkg/pb/mraft"
 	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
 	"github.com/deepfabric/elasticell/pkg/pd"
-
+	"github.com/deepfabric/elasticell/pkg/raftstore"
+	"github.com/deepfabric/elasticell/pkg/util"
 	"golang.org/x/net/context"
 )
 
-func (n *Node) bootstrapCluster() {
-	rsp, err := n.pdClient.IsClusterBootstrapped(context.TODO(), new(pdpb.IsClusterBootstrapReq))
-	if err != nil {
-		log.Fatalf("bootstrap: check cluster bootstrap status failure,  errors:\n %+v", err)
-		return
-	}
-
-	// If cluster is not bootstrapped, we will bootstrap the cluster, and create the first cell
-	if !rsp.GetValue() {
-		// The cluster is not bootstrap, but current node has a normal store id.
-		// So there has some error.
-		if n.store.ID > pd.ZeroID {
-			log.Fatalf(`bootstrap: the cluster is not bootstrapped, 
-			            but local store has a normal id<%d>, 
-			            please check your configuration, 
-			            maybe you are connect to a wrong pd server.`,
-				n.store.ID)
-			return
+func (n *Node) checkClusterBootstrapped() bool {
+	for index := 0; index < 60; index++ {
+		rsp, err := n.pdClient.IsClusterBootstrapped(context.TODO(), new(pdpb.IsClusterBootstrapReq))
+		if err != nil {
+			log.Warnf("bootstrap: check cluster bootstrap status failure,  errors:\n %+v", err)
+			time.Sleep(time.Second * 3)
+		} else {
+			return rsp.GetValue()
 		}
-
-		n.doBootstrapCluster()
 	}
 
-	// start heartbeat loop to driver anything
-	n.startHeartbeat()
+	log.Fatal("bootstrap: check cluster bootstrap failed")
+	return false
 }
 
-func (n *Node) doBootstrapCluster() {
-	err := n.initStore()
+func (n *Node) checkStore() uint64 {
+	data, err := n.driver.Get(raftstore.GetStoreIdentKey())
 	if err != nil {
-		log.Fatalf("bootstrap: create store failure, errors:\n %+v", err)
-		return
+		log.Fatalf("bootstrap: check store failed, errors:\n %+v", err)
 	}
-	log.Infof("bootstrap: store created, store=<%v>", n.metaDB)
 
-	cell, err := n.initFirstCell()
+	if data == nil {
+		return pd.ZeroID
+	}
+
+	st := new(mraft.StoreIdent)
+	util.MustUnmarshal(st, data)
+
+	if st.ClusterID != n.clusterID {
+		log.Fatalf("bootstrap: check store failed, cluster id mismatch, local=<%d> remote=<%d>",
+			st.ClusterID,
+			n.clusterID)
+	}
+
+	if st.StoreID == pd.ZeroID {
+		log.Fatal("bootstrap: check store failed, zero store id")
+	}
+
+	return st.StoreID
+}
+
+func (n *Node) bootstrapStore() uint64 {
+	storeID, err := n.getAllocID()
 	if err != nil {
-		log.Fatalf("bootstrap: create first cell failure, errors:\n %+v", err)
-		return
+		log.Fatalf("bootstrap: bootstrap store failed, errors:\n %+v", err)
+		return pd.ZeroID
 	}
-	log.Infof("bootstrap: first cell created, cell=<%v>", cell)
 
+	log.Infof("bootstrap: alloc store id succ, id=<%d>", storeID)
+
+	count := 0
+	err = n.driver.Scan(raftstore.GetMinKey(), raftstore.GetMaxKey(), func([]byte, []byte) (bool, error) {
+		count++
+		return false, nil
+	})
+
+	if err != nil {
+		log.Fatalf("bootstrap: bootstrap store failed, errors:\n %+v", err)
+	}
+
+	if count > 0 {
+		log.Fatal("bootstrap: store is not empty and has already had data")
+	}
+
+	st := new(mraft.StoreIdent)
+	st.ClusterID = n.clusterID
+	st.StoreID = storeID
+
+	err = n.driver.Set(raftstore.GetStoreIdentKey(), util.MustMarshal(st))
+	if err != nil {
+		log.Fatalf("bootstrap: bootstrap store failed, errors:\n %v", err)
+	}
+
+	return storeID
+}
+
+func (n *Node) bootstrapFirstCell() metapb.Cell {
+	cellID, err := n.getAllocID()
+	if err != nil {
+		log.Fatalf("bootstrap: bootstrap first cell failed, errors:\n %+v", err)
+	}
+
+	log.Infof("bootstrap: alloc id for first cell succ, id=<%d>", cellID)
+
+	peerID, err := n.getAllocID()
+	if err != nil {
+		log.Fatalf("bootstrap: bootstrap first cell failed, errors:\n %+v", err)
+	}
+
+	log.Infof("bootstrap: alloc peer id for first cell succ, peerID=<%d> cellID=<%d>",
+		peerID,
+		cellID)
+
+	cell := pb.NewCell(cellID, peerID, n.storeMeta.ID)
+	err = raftstore.SaveFirstCell(n.driver, cell)
+	if err != nil {
+		log.Fatalf("bootstrap: bootstrap first cell failed, errors:\n %+v", err)
+	}
+
+	return cell
+}
+
+func (n *Node) bootstrapCluster(cell metapb.Cell) {
 	req := &pdpb.BootstrapClusterReq{
-		Store: n.store,
+		Store: n.store.GetMeta(),
 		Cell:  cell,
 	}
 
@@ -75,7 +140,6 @@ func (n *Node) doBootstrapCluster() {
 	// If we get any error, we will delete local cell
 	rsp, err := n.pdClient.BootstrapCluster(context.TODO(), req)
 	if err != nil {
-		err := n.deleteCell(cell.ID)
 		if err != nil {
 			log.Errorf("bootstrap: cell delete failure, cell=<%d>, errors:\n %+v",
 				cell.ID,
@@ -85,52 +149,18 @@ func (n *Node) doBootstrapCluster() {
 		log.Fatalf("bootstrap: bootstrap cluster failure, req=<%v> errors:\n %+v",
 			req,
 			err)
-		return
 	} else if err == nil && rsp.GetAlreadyBootstrapped() {
 		log.Info("bootstrap: the cluster is already bootstrapped")
-
-		err := n.deleteCell(cell.ID)
-		if err != nil {
-			log.Fatalf("bootstrap: cell delete failure, cell=<%d>, errors:\n %+v",
-				cell.ID,
-				err)
-		}
 	}
 }
 
-func (n *Node) initStore() error {
-	id, err := n.getAllocID()
-	if err != nil {
-		return err
-	}
+func (n *Node) startStore() {
+	log.Infof("bootstrap: begin to start store, storeID=<%d>", n.storeMeta.ID)
+	store := raftstore.NewStore(n.storeMeta, n.driver, n.cfg.RaftStore)
 
-	m := n.newStore(id)
-	err = n.metaDB.SaveStore(m)
-	if err != nil {
-		return err
-	}
-
-	n.store = m
-	return nil
-}
-
-func (n *Node) initFirstCell() (meta.Cell, error) {
-	cellID, err := n.getAllocID()
-	if err != nil {
-		return meta.Cell{}, err
-	}
-
-	peerID, err := n.getAllocID()
-	if err != nil {
-		return meta.Cell{}, err
-	}
-
-	m := pb.NewCell(cellID, peerID, n.store.ID)
-	err = n.metaDB.SaveCell(m)
-	if err != nil {
-		return meta.Cell{}, err
-	}
-
-	n.cells[m.ID] = &m
-	return m, nil
+	n.runner.RunCancelableTask(func(c context.Context) {
+		store.Start()
+		<-c.Done()
+		store.Stop()
+	})
 }

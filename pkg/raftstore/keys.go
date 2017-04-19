@@ -14,6 +14,12 @@
 package raftstore
 
 import (
+	"fmt"
+
+	"bytes"
+
+	"encoding/binary"
+
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/fagongzi/goetty"
@@ -37,7 +43,12 @@ var (
 	localPrefix byte = 0x01
 	localMinKey      = []byte{localPrefix}
 	localMaxKey      = []byte{localPrefix + 1}
+
+	maxKey = []byte{}
+	minKey = []byte{0xff}
 )
+
+var storeIdentKey = []byte{localPrefix, 0x01}
 
 // data is in (z, z+1)
 var (
@@ -59,6 +70,33 @@ var (
 	cellMetaMinKey         = []byte{localPrefix, cellMetaPrefix}
 	cellMetaMaxKey         = []byte{localPrefix, cellMetaPrefix + 1}
 )
+
+// GetStoreIdentKey return key of StoreIdent
+func GetStoreIdentKey() []byte {
+	return storeIdentKey
+}
+
+// GetMaxKey return max key
+func GetMaxKey() []byte {
+	return maxKey
+}
+
+// GetMinKey return min key
+func GetMinKey() []byte {
+	return minKey
+}
+
+func decodeCellMetaKey(key []byte) (uint64, byte, error) {
+	if len(cellMetaPrefixKey)+9 != len(key) {
+		return 0, 0, fmt.Errorf("invalid cell meta key length for key %v", key)
+	}
+
+	if !bytes.HasPrefix(key, cellMetaPrefixKey) {
+		return 0, 0, fmt.Errorf("invalid region meta prefix for key %v", key)
+	}
+
+	return binary.BigEndian.Uint64(key[len(cellMetaPrefixKey)+1:]), key[len(cellMetaPrefixKey)], nil
+}
 
 func getCellStateKey(cellID uint64) []byte {
 	return getCellMetaKey(cellID, cellStateSuffix)
@@ -97,7 +135,7 @@ func getDataEndKey(endKey []byte) []byte {
 }
 
 // Get the `startKey` of current cell in encoded form.
-func encStartKey(cell metapb.Cell) []byte {
+func encStartKey(cell *metapb.Cell) []byte {
 	// only initialized cell's startKey can be encoded, otherwise there must be bugs
 	// somewhere.
 	// cell
@@ -109,7 +147,7 @@ func encStartKey(cell metapb.Cell) []byte {
 }
 
 /// Get the `endKey` of current region in encoded form.
-func encEndKey(cell metapb.Cell) []byte {
+func encEndKey(cell *metapb.Cell) []byte {
 	// only initialized region's end_key can be encoded, otherwise there must be bugs
 	// somewhere.
 	if len(cell.Peers) == 0 {

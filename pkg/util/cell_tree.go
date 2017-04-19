@@ -106,6 +106,13 @@ func (t *CellTree) Remove(cell metapb.Cell) bool {
 	return true
 }
 
+// Ascend asc iterator the tree until fn returns false
+func (t *CellTree) Ascend(fn func(cell *metapb.Cell) bool) {
+	t.tree.Descend(func(item btree.Item) bool {
+		return fn(&item.(*CellItem).cell)
+	})
+}
+
 // Search returns a cell that contains the key.
 func (t *CellTree) Search(key []byte) metapb.Cell {
 	cell := metapb.Cell{Start: key}

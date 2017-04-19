@@ -43,7 +43,7 @@ func NewRPCHandler(server *Server) pdpb.PDServiceServer {
 func (h *RPCHandler) GetClusterID(c context.Context, req *pdpb.GetClusterIDReq) (*pdpb.GetClusterIDRsp, error) {
 	doFun := func() (interface{}, error) {
 		return &pdpb.GetClusterIDRsp{
-			Id: h.server.GetClusterID(),
+			ID: h.server.GetClusterID(),
 		}, nil
 	}
 
@@ -68,7 +68,7 @@ func (h *RPCHandler) AllocID(c context.Context, req *pdpb.AllocIDReq) (*pdpb.All
 		}
 
 		return &pdpb.AllocIDRsp{
-			Id: id,
+			ID: id,
 		}, nil
 	}
 
@@ -147,6 +147,24 @@ func (h *RPCHandler) BootstrapCluster(c context.Context, req *pdpb.BootstrapClus
 	return rsp.(*pdpb.BootstrapClusterRsp), nil
 }
 
+// PutStore puts store
+func (h *RPCHandler) PutStore(c context.Context, req *pdpb.PutStoreReq) (*pdpb.PutStoreRsp, error) {
+	doFun := func() (interface{}, error) {
+		return h.server.putStore(req)
+	}
+
+	forwardFun := func(proxy *pd.Client) (interface{}, error) {
+		return proxy.PutStore(c, req)
+	}
+
+	rsp, err := h.doHandle("PutStore", req, forwardFun, doFun)
+	if err != nil {
+		return nil, err
+	}
+
+	return rsp.(*pdpb.PutStoreRsp), nil
+}
+
 // CellHeartbeat returns cell heartbeat response
 func (h *RPCHandler) CellHeartbeat(c context.Context, req *pdpb.CellHeartbeatReq) (*pdpb.CellHeartbeatRsp, error) {
 	doFun := func() (interface{}, error) {
@@ -168,7 +186,7 @@ func (h *RPCHandler) CellHeartbeat(c context.Context, req *pdpb.CellHeartbeatReq
 func (h *RPCHandler) doHandle(name string, req pb.BaseReq, forwardFun func(*pd.Client) (interface{}, error), doFun func() (interface{}, error)) (interface{}, error) {
 	log.Debugf("rpc: req<%s-%d>, type=<%s> req=<%v>",
 		req.GetFrom(),
-		req.GetId(),
+		req.GetID(),
 		name,
 		req)
 
@@ -181,7 +199,7 @@ func (h *RPCHandler) doHandle(name string, req pb.BaseReq, forwardFun func(*pd.C
 
 		log.Debugf("rpc: forward a req<%s-%d>, target=<%s>",
 			req.GetFrom(),
-			req.GetId(),
+			req.GetID(),
 			proxy.GetLastPD())
 		return forwardFun(proxy)
 	}
@@ -190,7 +208,7 @@ func (h *RPCHandler) doHandle(name string, req pb.BaseReq, forwardFun func(*pd.C
 	if err == nil {
 		log.Debugf("rpc: rsp<%s-%d>, rsp=<%v>",
 			req.GetFrom(),
-			req.GetId(),
+			req.GetID(),
 			rsp,
 		)
 	}

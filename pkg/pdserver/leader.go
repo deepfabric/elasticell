@@ -96,7 +96,7 @@ func (s *Server) disableLeader() {
 func (s *Server) isMatchLeader(leader *pdpb.Leader) bool {
 	return leader != nil &&
 		s.cfg.RPCAddr == leader.GetAddr() &&
-		s.id == leader.GetId()
+		s.id == leader.GetID()
 }
 
 // IsLeader returns whether server is leader or not.
@@ -107,7 +107,7 @@ func (s *Server) IsLeader() bool {
 func (s *Server) marshalLeader() string {
 	leader := &pdpb.Leader{
 		Addr: s.cfg.RPCAddr,
-		Id:   s.id,
+		ID:   s.id,
 		Name: s.cfg.Name,
 	}
 

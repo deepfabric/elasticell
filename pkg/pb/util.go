@@ -14,23 +14,23 @@
 package pb
 
 import (
-	meta "github.com/deepfabric/elasticell/pkg/pb/metapb"
+	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 )
 
 // BaseReq is for abstract
 type BaseReq interface {
 	GetFrom() string
-	GetId() uint64
+	GetID() uint64
 }
 
 // NewCell returns a cell meta
-func NewCell(cellID, peerID, storeID uint64) meta.Cell {
-	c := meta.Cell{
+func NewCell(cellID, peerID, storeID uint64) metapb.Cell {
+	c := metapb.Cell{
 		ID:    cellID,
 		Epoch: newCellEpoch(),
 	}
 
-	c.Peers = append(c.Peers, &meta.Peer{
+	c.Peers = append(c.Peers, &metapb.Peer{
 		ID:      peerID,
 		StoreID: storeID,
 	})
@@ -38,8 +38,8 @@ func NewCell(cellID, peerID, storeID uint64) meta.Cell {
 	return c
 }
 
-func newCellEpoch() meta.CellEpoch {
-	return meta.CellEpoch{
+func newCellEpoch() metapb.CellEpoch {
+	return metapb.CellEpoch{
 		ConfVer: 1,
 		CellVer: 1,
 	}

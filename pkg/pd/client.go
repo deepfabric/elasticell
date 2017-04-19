@@ -147,7 +147,7 @@ func (c *Client) GetLeader(ctx context.Context, req *pdpb.LeaderReq) (*pdpb.Lead
 		req,
 		func() {
 			req.From = c.name
-			req.Id = c.seq
+			req.ID = c.seq
 		},
 		func() (interface{}, error) {
 			return c.pd.GetLeader(ctx, req, grpc.FailFast(true))
@@ -165,7 +165,7 @@ func (c *Client) AllocID(ctx context.Context, req *pdpb.AllocIDReq) (*pdpb.Alloc
 		req,
 		func() {
 			req.From = c.name
-			req.Id = c.seq
+			req.ID = c.seq
 		},
 		func() (interface{}, error) {
 			return c.pd.AllocID(ctx, req, grpc.FailFast(true))
@@ -183,7 +183,7 @@ func (c *Client) GetClusterID(ctx context.Context, req *pdpb.GetClusterIDReq) (*
 		req,
 		func() {
 			req.From = c.name
-			req.Id = c.seq
+			req.ID = c.seq
 		},
 		func() (interface{}, error) {
 			return c.pd.GetClusterID(ctx, req, grpc.FailFast(true))
@@ -201,7 +201,7 @@ func (c *Client) IsClusterBootstrapped(ctx context.Context, req *pdpb.IsClusterB
 		req,
 		func() {
 			req.From = c.name
-			req.Id = c.seq
+			req.ID = c.seq
 		},
 		func() (interface{}, error) {
 			return c.pd.IsClusterBootstrap(ctx, req, grpc.FailFast(true))
@@ -219,7 +219,7 @@ func (c *Client) BootstrapCluster(ctx context.Context, req *pdpb.BootstrapCluste
 		req,
 		func() {
 			req.From = c.name
-			req.Id = c.seq
+			req.ID = c.seq
 		},
 		func() (interface{}, error) {
 			return c.pd.BootstrapCluster(ctx, req, grpc.FailFast(true))
@@ -231,13 +231,31 @@ func (c *Client) BootstrapCluster(ctx context.Context, req *pdpb.BootstrapCluste
 	return rsp.(*pdpb.BootstrapClusterRsp), nil
 }
 
+// PutStore returns put store response
+func (c *Client) PutStore(ctx context.Context, req *pdpb.PutStoreReq) (*pdpb.PutStoreRsp, error) {
+	rsp, err := c.proxyRPC(ctx,
+		req,
+		func() {
+			req.From = c.name
+			req.ID = c.seq
+		},
+		func() (interface{}, error) {
+			return c.pd.PutStore(ctx, req, grpc.FailFast(true))
+		})
+	if err != nil {
+		return nil, err
+	}
+
+	return rsp.(*pdpb.PutStoreRsp), nil
+}
+
 // CellHeartbeat returns cell heartbeat response
 func (c *Client) CellHeartbeat(ctx context.Context, req *pdpb.CellHeartbeatReq) (*pdpb.CellHeartbeatRsp, error) {
 	rsp, err := c.proxyRPC(ctx,
 		req,
 		func() {
 			req.From = c.name
-			req.Id = c.seq
+			req.ID = c.seq
 		},
 		func() (interface{}, error) {
 			return c.pd.CellHeartbeat(ctx, req, grpc.FailFast(true))
@@ -252,14 +270,14 @@ func (c *Client) CellHeartbeat(ctx context.Context, req *pdpb.CellHeartbeatReq) 
 func (c *Client) proxyRPC(ctx context.Context, req pb.BaseReq, setFromFun func(), doRPC func() (interface{}, error)) (interface{}, error) {
 	c.mut.RLock()
 
-	if req.GetFrom() == "" && req.GetId() == 0 {
+	if req.GetFrom() == "" && req.GetID() == 0 {
 		setFromFun()
 		c.seq++
 	}
 
 	log.Debugf("pd-client: req<%s-%d>, req=<%v>",
 		req.GetFrom(),
-		req.GetId(),
+		req.GetID(),
 		req)
 
 	rsp, err := doRPC()
@@ -281,7 +299,7 @@ func (c *Client) proxyRPC(ctx context.Context, req pb.BaseReq, setFromFun func()
 	if err == nil {
 		log.Debugf("pd-client: rsp<%s-%d>, rsp=<%v>",
 			req.GetFrom(),
-			req.GetId(),
+			req.GetID(),
 			rsp)
 	}
 

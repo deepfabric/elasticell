@@ -14,7 +14,11 @@
 package raftstore
 
 import (
+	"github.com/coreos/etcd/raft/raftpb"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
+	"github.com/deepfabric/elasticell/pkg/pb/mraft"
+	"github.com/deepfabric/elasticell/pkg/storage"
+	"github.com/deepfabric/elasticell/pkg/util"
 )
 
 const (
@@ -42,4 +46,39 @@ func newPeer(peerID, storeID uint64) metapb.Peer {
 		ID:      peerID,
 		StoreID: storeID,
 	}
+}
+
+// SaveFirstCell save first cell with state, raft state and apply state.
+func SaveFirstCell(driver storage.Driver, cell metapb.Cell) error {
+	// TODO: batch write
+
+	// save state
+	err := driver.Set(getCellStateKey(cell.ID), util.MustMarshal(&mraft.CellLocalState{Cell: cell}))
+	if err != nil {
+		return err
+	}
+
+	raftState := new(mraft.RaftLocalState)
+	raftState.LastIndex = raftInitLogIndex
+	raftState.HardState = raftpb.HardState{
+		Term:   raftInitLogTerm,
+		Commit: raftInitLogIndex,
+	}
+	err = driver.Set(getRaftStateKey(cell.ID), util.MustMarshal(raftState))
+	if err != nil {
+		return err
+	}
+
+	applyState := new(mraft.RaftApplyState)
+	applyState.AppliedIndex = raftInitLogIndex
+	applyState.TruncatedState = mraft.RaftTruncatedState{
+		Term:  raftInitLogTerm,
+		Index: raftInitLogIndex,
+	}
+	err = driver.Set(getApplyStateKey(cell.ID), util.MustMarshal(applyState))
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

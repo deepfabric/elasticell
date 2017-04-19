@@ -3,8 +3,10 @@ package pdserver
 import (
 	"sync"
 
+	"fmt"
+
 	"github.com/deepfabric/elasticell/pkg/log"
-	meta "github.com/deepfabric/elasticell/pkg/pb/metapb"
+	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
 	"github.com/pkg/errors"
 )
@@ -48,6 +50,43 @@ func (s *Server) bootstrapCluster(req *pdpb.BootstrapClusterReq) (*pdpb.Bootstra
 	return rsp, nil
 }
 
+func (s *Server) putStore(req *pdpb.PutStoreReq) (*pdpb.PutStoreRsp, error) {
+	c := s.GetCellCluster()
+	if c == nil {
+		return nil, errNotBootstrapped
+	}
+
+	err := s.checkStore(req.Store.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	err = c.doPutStore(req.Store)
+	if err != nil {
+		return nil, err
+	}
+
+	log.Info("cell-cluster: put store ok, store=<%+v>", req.Store)
+
+	rsp := &pdpb.PutStoreRsp{}
+	req.Header.ClusterID = s.GetClusterID()
+	return rsp, nil
+}
+
+// checkStore returns an error response if the store exists and is in tombstone state.
+// It returns nil if it can't get the store.
+func (s *Server) checkStore(storeID uint64) error {
+	c := s.GetCellCluster()
+
+	store := c.cache.getStore(storeID)
+
+	if store != nil && store.store.State == metapb.Tombstone {
+		return errTombstoneStore
+	}
+
+	return nil
+}
+
 func (s *Server) cellHeartbeat(req *pdpb.CellHeartbeatReq) (*pdpb.CellHeartbeatRsp, error) {
 	if req.GetLeader() == nil && len(req.Cell.Peers) != 1 {
 		return nil, errRPCReq
@@ -68,30 +107,30 @@ func (s *Server) GetClusterID() uint64 {
 	return s.clusterID
 }
 
-func (s *Server) checkForBootstrap(req *pdpb.BootstrapClusterReq) (meta.Store, meta.Cell, error) {
+func (s *Server) checkForBootstrap(req *pdpb.BootstrapClusterReq) (metapb.Store, metapb.Cell, error) {
 	clusterID := s.GetClusterID()
 
 	store := req.GetStore()
 	if store.ID == 0 {
-		return meta.Store{}, meta.Cell{}, errors.New("invalid zero store id for bootstrap cluster")
+		return metapb.Store{}, metapb.Cell{}, errors.New("invalid zero store id for bootstrap cluster")
 	}
 
 	cell := req.GetCell()
 	if cell.ID == 0 {
-		return meta.Store{}, meta.Cell{}, errors.New("invalid zero cell id for bootstrap cluster")
+		return metapb.Store{}, metapb.Cell{}, errors.New("invalid zero cell id for bootstrap cluster")
 	} else if len(cell.Peers) == 0 || len(cell.Peers) != 1 {
-		return meta.Store{}, meta.Cell{}, errors.Errorf("invalid first cell peer count must be 1, count=<%d> clusterID=<%d>",
+		return metapb.Store{}, metapb.Cell{}, errors.Errorf("invalid first cell peer count must be 1, count=<%d> clusterID=<%d>",
 			len(cell.Peers),
 			clusterID)
 	} else if cell.Peers[0].ID == 0 {
-		return meta.Store{}, meta.Cell{}, errors.New("invalid zero peer id for bootstrap cluster")
+		return metapb.Store{}, metapb.Cell{}, errors.New("invalid zero peer id for bootstrap cluster")
 	} else if cell.Peers[0].StoreID != store.ID {
-		return meta.Store{}, meta.Cell{}, errors.Errorf("invalid cell store id for bootstrap cluster, cell=<%d> expect=<%d> clusterID=<%d>",
+		return metapb.Store{}, metapb.Cell{}, errors.Errorf("invalid cell store id for bootstrap cluster, cell=<%d> expect=<%d> clusterID=<%d>",
 			cell.Peers[0].StoreID,
 			store.ID,
 			clusterID)
 	} else if cell.Peers[0].ID != cell.ID {
-		return meta.Store{}, meta.Cell{}, errors.Errorf("first cell peer must be self, self=<%d> peer=<%d>",
+		return metapb.Store{}, metapb.Cell{}, errors.Errorf("first cell peer must be self, self=<%d> peer=<%d>",
 			cell.ID,
 			cell.Peers[0].ID)
 	}
@@ -119,8 +158,8 @@ func newCellCluster(s *Server) *CellCluster {
 	return c
 }
 
-func (c *CellCluster) doBootstrap(store meta.Store, cell meta.Cell) (*pdpb.BootstrapClusterRsp, error) {
-	cluster := meta.Cluster{
+func (c *CellCluster) doBootstrap(store metapb.Store, cell metapb.Cell) (*pdpb.BootstrapClusterRsp, error) {
+	cluster := metapb.Cluster{
 		ID:          c.s.GetClusterID(),
 		MaxReplicas: c.s.cfg.getMaxReplicas(),
 	}
@@ -135,7 +174,7 @@ func (c *CellCluster) doBootstrap(store meta.Store, cell meta.Cell) (*pdpb.Boots
 	}, nil
 }
 
-func (c *CellCluster) doCellHeartbeat(cell meta.Cell) (*pdpb.CellHeartbeatRsp, error) {
+func (c *CellCluster) doCellHeartbeat(cell metapb.Cell) (*pdpb.CellHeartbeatRsp, error) {
 	err := c.cache.doCellHeartbeat(cell)
 	if err != nil {
 		return nil, err
@@ -151,6 +190,55 @@ func (c *CellCluster) doCellHeartbeat(cell meta.Cell) (*pdpb.CellHeartbeatRsp, e
 	}
 
 	return rsp, nil
+}
+
+func (c *CellCluster) doPutStore(store metapb.Store) error {
+	c.mux.Lock()
+	defer c.mux.Unlock()
+
+	if store.ID == 0 {
+		return fmt.Errorf("invalid for put store: <%+v>", store)
+	}
+
+	err := c.cache.iteratorStore(func(s *storeRuntime) (bool, error) {
+		if s.isTombstone() {
+			return true, nil
+		}
+
+		if s.store.ID != store.ID && s.store.Address == store.Address {
+			return false, fmt.Errorf("duplicated store address: %+v, already registered by %+v",
+				store,
+				s.store)
+		}
+
+		return true, nil
+	})
+
+	if err != nil {
+		return err
+	}
+
+	old := c.cache.getStore(store.ID)
+	if old == nil {
+		old = newStoreRuntime(store)
+	} else {
+		old.store.Address = store.Address
+		old.store.Lables = store.Lables
+	}
+
+	for _, k := range c.s.cfg.Replication.LocationLabels {
+		if v := old.getLabelValue(k); len(v) == 0 {
+			return fmt.Errorf("missing location label %q in store %+v", k, old)
+		}
+	}
+
+	err = c.s.store.SetStoreMeta(c.s.GetClusterID(), old.store)
+	if err != nil {
+		return err
+	}
+
+	c.cache.setStore(old)
+	return nil
 }
 
 func (c *CellCluster) isRunning() bool {

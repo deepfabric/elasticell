@@ -35,6 +35,10 @@ func (s *storeRuntime) isUp() bool {
 	return s.store.State == meta.UP
 }
 
+func (s *storeRuntime) isTombstone() bool {
+	return s.store.State == meta.Tombstone
+}
+
 func (s *storeRuntime) storageRatio() int {
 	if s.store.Metric.Capacity == 0 {
 		return 0

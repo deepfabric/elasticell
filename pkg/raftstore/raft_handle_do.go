@@ -17,6 +17,8 @@ import (
 	"fmt"
 	"sync/atomic"
 
+	"bytes"
+
 	"github.com/Workiva/go-datastructures/queue"
 	"github.com/coreos/etcd/raft"
 	"github.com/coreos/etcd/raft/raftpb"
@@ -47,7 +49,34 @@ type readIndexRequest struct {
 
 type readIndexQueue struct {
 	reads    *queue.RingBuffer
-	readyCnt int
+	readyCnt int32
+}
+
+func (q *readIndexQueue) mustGet(cellID uint64) *readIndexRequest {
+	v, err := q.reads.Get()
+	if err != nil {
+		log.Fatalf("raftstore[cell-%d]: handle read index failed, errors:\n %+v",
+			cellID,
+			err)
+	}
+
+	return v.(*readIndexRequest)
+}
+
+func (q *readIndexQueue) incrReadyCnt() int32 {
+	return atomic.AddInt32(&q.readyCnt, 1)
+}
+
+func (q *readIndexQueue) decrReadyCnt() int32 {
+	return atomic.AddInt32(&q.readyCnt, -1)
+}
+
+func (q *readIndexQueue) resetReadyCnt() {
+	atomic.StoreInt32(&q.readyCnt, 0)
+}
+
+func (q *readIndexQueue) getReadyCnt() int32 {
+	return atomic.LoadInt32(&q.readyCnt)
 }
 
 type cmd struct {
@@ -180,10 +209,10 @@ func (pr *PeerReplicate) doSaveApplyState(ctx *tempRaftContext) error {
 	return err
 }
 
-func (ps *peerStorage) doApplySnap(ctx *tempRaftContext) *applySnapResult {
-	ps.raftState = ctx.raftState
-	ps.setApplyState(&ctx.applyState)
-	ps.lastTerm = ctx.lastTerm
+func (pr *PeerReplicate) doApplySnap(ctx *tempRaftContext) *applySnapResult {
+	pr.ps.raftState = ctx.raftState
+	pr.ps.setApplyState(&ctx.applyState)
+	pr.ps.lastTerm = ctx.lastTerm
 
 	// If we apply snapshot ok, we should update some infos like applied index too.
 	if ctx.snapCell == nil {
@@ -191,33 +220,33 @@ func (ps *peerStorage) doApplySnap(ctx *tempRaftContext) *applySnapResult {
 	}
 
 	// cleanup data before apply snap job
-	if ps.isInitialized() {
+	if pr.ps.isInitialized() {
 		// TODO: why??
-		err := ps.clearExtraData(ps.cell)
+		err := pr.ps.clearExtraData(pr.ps.cell)
 		if err != nil {
 			// No need panic here, when applying snapshot, the deletion will be tried
 			// again. But if the region range changes, like [a, c) -> [a, b) and [b, c),
 			// [b, c) will be kept in rocksdb until a covered snapshot is applied or
 			// store is restarted.
 			log.Errorf("raftstore[cell-%d]: cleanup data failed, may leave some dirty data, errors:\n %+v",
-				ps.cell.ID,
+				pr.cellID,
 				err)
 			return nil
 		}
 	}
 
-	ps.startApplyingSnapJob()
+	pr.startApplyingSnapJob()
 
-	prevCell := ps.cell
-	ps.cell = *ctx.snapCell
+	prevCell := pr.ps.cell
+	pr.ps.cell = *ctx.snapCell
 
 	return &applySnapResult{
 		prevCell: prevCell,
-		cell:     ps.cell,
+		cell:     pr.ps.cell,
 	}
 }
 
-func (pr *PeerReplicate) applyCommittedEntries(rd *raft.Ready) {
+func (pr *PeerReplicate) applyCommittedEntries(rd *raft.Ready) bool {
 	if !pr.ps.isApplyingSnap() {
 		// TODO: update lease??
 
@@ -228,8 +257,12 @@ func (pr *PeerReplicate) applyCommittedEntries(rd *raft.Ready) {
 					pr.ps.cell.ID,
 					err)
 			}
+
+			return true
 		}
 	}
+
+	return false
 }
 
 func (pr *PeerReplicate) doPostApply(result *asyncApplyResult) {
@@ -243,13 +276,55 @@ func (pr *PeerReplicate) doPostApply(result *asyncApplyResult) {
 	pr.ps.setApplyState(&result.applyState)
 	pr.ps.setAppliedIndexTerm(result.appliedIndexTerm)
 
-	pr.rn.Advance()
+	readyCnt := int(pr.pendingReads.getReadyCnt())
+	if readyCnt > 0 && pr.readyToHandleRead() {
+		for index := 0; index < readyCnt; index++ {
+			pr.execReadRequest(pr.pendingReads.mustGet(pr.cellID))
+		}
 
-	// TODO: impl handle read operation
-	// if pr.read && pr.readyToHandleRead()
+		pr.pendingReads.resetReadyCnt()
+	}
 }
 
-func (pr *PeerReplicate) doWhenApplySnapReady(result *applySnapResult) {
+func (pr *PeerReplicate) doApplyReads(rd *raft.Ready) {
+	if pr.readyToHandleRead() {
+		for _, state := range rd.ReadStates {
+			readReq := pr.pendingReads.mustGet(pr.cellID)
+
+			if bytes.Compare(state.RequestCtx, readReq.uuid) != 0 {
+				log.Fatalf("raftstore[cell-%d]: apply read failed, uuid not match",
+					pr.cellID)
+			}
+
+			pr.execReadRequest(readReq)
+		}
+	} else {
+		for _ = range rd.ReadStates {
+			pr.pendingReads.incrReadyCnt()
+		}
+	}
+
+	if rd.SoftState != nil {
+		if rd.SoftState.RaftState != raft.StateLeader {
+			n := int(pr.pendingReads.getReadyCnt())
+			if n > 0 {
+				for index := 0; index < n; index++ {
+					req := pr.pendingReads.mustGet(pr.cellID)
+					resp := errorStaleCMDResp(req.uuid, pr.getCurrentTerm())
+
+					for _, cmd := range req.cmds {
+						log.Infof("raftstore[cell-%d]: cmd is stale, skip. cmd=<%+v>",
+							pr.cellID,
+							cmd)
+						cmd.cb(resp)
+					}
+				}
+			}
+		}
+	}
+}
+
+func (pr *PeerReplicate) updateKeyRange(result *applySnapResult) {
 	log.Infof("raftstore[cell-%d]: snapshot is applied, cell=<%+v>",
 		pr.cellID,
 		result.cell)
@@ -339,7 +414,7 @@ func (ps *peerStorage) Entries(low, high, maxSize uint64) ([]raftpb.Entry, error
 	}
 
 	endKey := getRaftLogKey(ps.cell.ID, high)
-	err = ps.store.engine.Scan(startKey, endKey, func(data []byte) (bool, error) {
+	err = ps.store.engine.Scan(startKey, endKey, func(data, value []byte) (bool, error) {
 		e, err := ps.unmarshal(data, nextIndex)
 		if err != nil {
 			return false, err

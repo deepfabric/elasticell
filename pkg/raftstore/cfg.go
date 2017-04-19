@@ -13,9 +13,22 @@
 
 package raftstore
 
+import "time"
+
 // Cfg for raftstore
 type Cfg struct {
-	Raft *RaftCfg
+	StoreHeartbeatIntervalMs int `json:"storeHeartbeatIntervalMs"`
+	CellHeartbeatIntervalMs  int `json:"cellHeartbeatIntervalMs"`
+
+	Raft *RaftCfg `json:"raft"`
+}
+
+func (c *Cfg) getStoreHeartbeatDuration() time.Duration {
+	return time.Duration(c.StoreHeartbeatIntervalMs) * time.Millisecond
+}
+
+func (c *Cfg) getCellHeartbeatDuration() time.Duration {
+	return time.Duration(c.CellHeartbeatIntervalMs) * time.Millisecond
 }
 
 // RaftCfg is the cfg for raft
