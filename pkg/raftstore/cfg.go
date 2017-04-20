@@ -33,10 +33,12 @@ func (c *Cfg) getCellHeartbeatDuration() time.Duration {
 
 // RaftCfg is the cfg for raft
 type RaftCfg struct {
-	ElectionTick    int
-	HeartbeatTick   int
-	MaxSizePerMsg   uint64
-	MaxInflightMsgs int
-	SnapDir         string
-	BaseTick        int
+	PeerAddr          string
+	PeerAdvertiseAddr string
+	ElectionTick      int
+	HeartbeatTick     int
+	MaxSizePerMsg     uint64
+	MaxInflightMsgs   int
+	SnapDir           string
+	BaseTick          int
 }

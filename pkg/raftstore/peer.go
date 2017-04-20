@@ -106,3 +106,7 @@ func (pr *PeerReplicate) getStore() *peerStorage {
 func (pr *PeerReplicate) getCell() metapb.Cell {
 	return pr.getStore().getCell()
 }
+
+func (pr *PeerReplicate) sendHeartbeat() {
+	// TODO: impl
+}

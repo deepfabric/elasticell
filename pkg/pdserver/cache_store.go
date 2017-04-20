@@ -14,16 +14,32 @@
 package pdserver
 
 import (
+	"time"
+
 	meta "github.com/deepfabric/elasticell/pkg/pb/metapb"
+	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
 )
 
+// StoreStatus contains information about a store's status.
+type StoreStatus struct {
+	stats *pdpb.StoreStats
+	// Blocked means that the store is blocked from balance.
+	blocked         bool
+	LeaderCount     uint32    `json:"leader_count"`
+	LastHeartbeatTS time.Time `json:"last_heartbeat_ts"`
+}
+
 type storeRuntime struct {
-	store meta.Store
+	store  meta.Store
+	status *StoreStatus
 }
 
 func newStoreRuntime(store meta.Store) *storeRuntime {
 	return &storeRuntime{
 		store: store,
+		status: &StoreStatus{
+			stats: &pdpb.StoreStats{},
+		},
 	}
 }
 

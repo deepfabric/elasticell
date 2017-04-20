@@ -2,6 +2,7 @@ package pdserver
 
 import (
 	"sync"
+	"time"
 
 	"fmt"
 
@@ -73,21 +74,12 @@ func (s *Server) putStore(req *pdpb.PutStoreReq) (*pdpb.PutStoreRsp, error) {
 	return rsp, nil
 }
 
-// checkStore returns an error response if the store exists and is in tombstone state.
-// It returns nil if it can't get the store.
-func (s *Server) checkStore(storeID uint64) error {
-	c := s.GetCellCluster()
-
-	store := c.cache.getStore(storeID)
-
-	if store != nil && store.store.State == metapb.Tombstone {
-		return errTombstoneStore
+func (s *Server) cellHeartbeat(req *pdpb.CellHeartbeatReq) (*pdpb.CellHeartbeatRsp, error) {
+	cluster := s.GetCellCluster()
+	if nil == cluster {
+		return nil, errNotBootstrapped
 	}
 
-	return nil
-}
-
-func (s *Server) cellHeartbeat(req *pdpb.CellHeartbeatReq) (*pdpb.CellHeartbeatRsp, error) {
 	if req.GetLeader() == nil && len(req.Cell.Peers) != 1 {
 		return nil, errRPCReq
 	}
@@ -98,8 +90,26 @@ func (s *Server) cellHeartbeat(req *pdpb.CellHeartbeatReq) (*pdpb.CellHeartbeatR
 		return nil, errRPCReq
 	}
 
-	cluster := s.GetCellCluster()
 	return cluster.doCellHeartbeat(req.Cell)
+}
+
+func (s *Server) storeHeartbeat(req *pdpb.StoreHeartbeatReq) (*pdpb.StoreHeartbeatRsp, error) {
+	// TODO: impl
+	if req.Stats == nil {
+		return nil, fmt.Errorf("invalid store heartbeat command, but %+v", req)
+	}
+
+	c := s.GetCellCluster()
+	if c == nil {
+		return nil, errNotBootstrapped
+	}
+
+	err := s.checkStore(req.Stats.StoreID)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.doStoreHeartbeat(req)
 }
 
 // GetClusterID returns cluster id
@@ -136,6 +146,20 @@ func (s *Server) checkForBootstrap(req *pdpb.BootstrapClusterReq) (metapb.Store,
 	}
 
 	return store, cell, nil
+}
+
+// checkStore returns an error response if the store exists and is in tombstone state.
+// It returns nil if it can't get the store.
+func (s *Server) checkStore(storeID uint64) error {
+	c := s.GetCellCluster()
+
+	store := c.cache.getStore(storeID)
+
+	if store != nil && store.store.State == metapb.Tombstone {
+		return errTombstoneStore
+	}
+
+	return nil
 }
 
 // CellCluster is used for cluster config management.
@@ -192,6 +216,24 @@ func (c *CellCluster) doCellHeartbeat(cell metapb.Cell) (*pdpb.CellHeartbeatRsp,
 	return rsp, nil
 }
 
+func (c *CellCluster) doStoreHeartbeat(req *pdpb.StoreHeartbeatReq) (*pdpb.StoreHeartbeatRsp, error) {
+	c.mux.Lock()
+	defer c.mux.Unlock()
+
+	storeID := req.Stats.StoreID
+	store := c.cache.getStore(storeID)
+	if nil == store {
+		return nil, fmt.Errorf("store<%d> not found", storeID)
+	}
+
+	store.status.stats = req.Stats
+	store.status.LeaderCount = uint32(c.cache.cc.getStoreLeaderCount(storeID))
+	store.status.LastHeartbeatTS = time.Now()
+
+	c.cache.setStore(store)
+	return &pdpb.StoreHeartbeatRsp{}, nil
+}
+
 func (c *CellCluster) doPutStore(store metapb.Store) error {
 	c.mux.Lock()
 	defer c.mux.Unlock()
@@ -200,7 +242,7 @@ func (c *CellCluster) doPutStore(store metapb.Store) error {
 		return fmt.Errorf("invalid for put store: <%+v>", store)
 	}
 
-	err := c.cache.iteratorStore(func(s *storeRuntime) (bool, error) {
+	err := c.cache.foreachStore(func(s *storeRuntime) (bool, error) {
 		if s.isTombstone() {
 			return true, nil
 		}

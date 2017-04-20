@@ -21,6 +21,7 @@ import (
 	"github.com/coreos/etcd/raft/raftpb"
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
+	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
 	"github.com/deepfabric/elasticell/pkg/storage"
 	"github.com/deepfabric/elasticell/pkg/util"
@@ -57,7 +58,7 @@ func NewStore(meta metapb.Store, engine storage.Driver, cfg *Cfg) *Store {
 	s.engine = engine
 	s.cfg = cfg
 
-	s.trans = newTransport(s.onRaftMessage)
+	s.trans = newTransport(s.cfg.Raft, s.onRaftMessage)
 
 	s.keyRanges = util.NewCellTree()
 	s.replicatesMap = newCellPeersMap()
@@ -162,6 +163,7 @@ func (s *Store) Start() {
 	<-s.trans.server.Started()
 
 	s.startStoreHeartbeatTask()
+	s.startCellHeartbeatTask()
 	s.startGCTask()
 	s.startSplitCheckTask()
 }
@@ -183,6 +185,21 @@ func (s *Store) startStoreHeartbeatTask() {
 				return
 			case <-ticker.C:
 				s.handleStoreHeartbeat()
+			}
+		}
+	})
+}
+
+func (s *Store) startCellHeartbeatTask() {
+	s.runner.RunCancelableTask(func(ctx context.Context) {
+		ticker := time.NewTicker(s.cfg.getCellHeartbeatDuration())
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				s.handleCellHeartbeat()
 			}
 		}
 	})
@@ -383,5 +400,12 @@ func (s *Store) addJob(task func() error) (*util.Job, error) {
 }
 
 func (s *Store) handleStoreHeartbeat() {
+	// TODO: impl
+	// req := new(pdpb.Sto)
+}
 
+func (s *Store) handleCellHeartbeat() {
+	for _, p := range s.replicatesMap.values() {
+		p.sendHeartbeat()
+	}
 }

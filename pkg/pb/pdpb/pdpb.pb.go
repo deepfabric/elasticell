@@ -10,6 +10,7 @@
 
 	It has these top-level messages:
 		ChangePeer
+		StoreStats
 		RequestHeader
 		ResponseHeader
 		Leader
@@ -27,6 +28,8 @@
 		BootstrapClusterRsp
 		CellHeartbeatReq
 		CellHeartbeatRsp
+		StoreHeartbeatReq
+		StoreHeartbeatRsp
 */
 package pdpb
 
@@ -116,6 +119,113 @@ func (m *ChangePeer) GetPeer() *metapb.Peer {
 	return nil
 }
 
+type StoreStats struct {
+	StoreID uint64 `protobuf:"varint,1,opt,name=storeID" json:"storeID"`
+	// Capacity for the store.
+	Capacity uint64 `protobuf:"varint,2,opt,name=capacity" json:"capacity"`
+	// Available size for the store.
+	Available uint64 `protobuf:"varint,3,opt,name=available" json:"available"`
+	// Total region count in this store.
+	RegionCount uint32 `protobuf:"varint,4,opt,name=regionCount" json:"regionCount"`
+	// Current sending snapshot count.
+	SendingSnapCount uint32 `protobuf:"varint,5,opt,name=sendingSnapCount" json:"sendingSnapCount"`
+	// Current receiving snapshot count.
+	ReceivingSnapCount uint32 `protobuf:"varint,6,opt,name=receivingSnapCount" json:"receivingSnapCount"`
+	// When the store is started (unix timestamp in seconds).
+	StartTime uint32 `protobuf:"varint,7,opt,name=startTime" json:"startTime"`
+	// How many region is applying snapshot.
+	ApplyingSnapCount uint32 `protobuf:"varint,8,opt,name=applyingSnapCount" json:"applyingSnapCount"`
+	// If the store is busy
+	IsBusy bool `protobuf:"varint,9,opt,name=isBusy" json:"isBusy"`
+	// Actually used space by db
+	UsedSize uint64 `protobuf:"varint,10,opt,name=usedSize" json:"usedSize"`
+	// Bytes written for the store.
+	BytesWritten     uint64 `protobuf:"varint,11,opt,name=bytesWritten" json:"bytesWritten"`
+	XXX_unrecognized []byte `json:"-"`
+}
+
+func (m *StoreStats) Reset()                    { *m = StoreStats{} }
+func (m *StoreStats) String() string            { return proto.CompactTextString(m) }
+func (*StoreStats) ProtoMessage()               {}
+func (*StoreStats) Descriptor() ([]byte, []int) { return fileDescriptorPdpb, []int{1} }
+
+func (m *StoreStats) GetStoreID() uint64 {
+	if m != nil {
+		return m.StoreID
+	}
+	return 0
+}
+
+func (m *StoreStats) GetCapacity() uint64 {
+	if m != nil {
+		return m.Capacity
+	}
+	return 0
+}
+
+func (m *StoreStats) GetAvailable() uint64 {
+	if m != nil {
+		return m.Available
+	}
+	return 0
+}
+
+func (m *StoreStats) GetRegionCount() uint32 {
+	if m != nil {
+		return m.RegionCount
+	}
+	return 0
+}
+
+func (m *StoreStats) GetSendingSnapCount() uint32 {
+	if m != nil {
+		return m.SendingSnapCount
+	}
+	return 0
+}
+
+func (m *StoreStats) GetReceivingSnapCount() uint32 {
+	if m != nil {
+		return m.ReceivingSnapCount
+	}
+	return 0
+}
+
+func (m *StoreStats) GetStartTime() uint32 {
+	if m != nil {
+		return m.StartTime
+	}
+	return 0
+}
+
+func (m *StoreStats) GetApplyingSnapCount() uint32 {
+	if m != nil {
+		return m.ApplyingSnapCount
+	}
+	return 0
+}
+
+func (m *StoreStats) GetIsBusy() bool {
+	if m != nil {
+		return m.IsBusy
+	}
+	return false
+}
+
+func (m *StoreStats) GetUsedSize() uint64 {
+	if m != nil {
+		return m.UsedSize
+	}
+	return 0
+}
+
+func (m *StoreStats) GetBytesWritten() uint64 {
+	if m != nil {
+		return m.BytesWritten
+	}
+	return 0
+}
+
 type RequestHeader struct {
 	// cluster_id is the ID of the cluster which be sent to.
 	ClusterID        uint64 `protobuf:"varint,1,opt,name=clusterID" json:"clusterID"`
@@ -125,7 +235,7 @@ type RequestHeader struct {
 func (m *RequestHeader) Reset()                    { *m = RequestHeader{} }
 func (m *RequestHeader) String() string            { return proto.CompactTextString(m) }
 func (*RequestHeader) ProtoMessage()               {}
-func (*RequestHeader) Descriptor() ([]byte, []int) { return fileDescriptorPdpb, []int{1} }
+func (*RequestHeader) Descriptor() ([]byte, []int) { return fileDescriptorPdpb, []int{2} }
 
 func (m *RequestHeader) GetClusterID() uint64 {
 	if m != nil {
@@ -142,7 +252,7 @@ type ResponseHeader struct {
 func (m *ResponseHeader) Reset()                    { *m = ResponseHeader{} }
 func (m *ResponseHeader) String() string            { return proto.CompactTextString(m) }
 func (*ResponseHeader) ProtoMessage()               {}
-func (*ResponseHeader) Descriptor() ([]byte, []int) { return fileDescriptorPdpb, []int{2} }
+func (*ResponseHeader) Descriptor() ([]byte, []int) { return fileDescriptorPdpb, []int{3} }
 
 func (m *ResponseHeader) GetClusterID() uint64 {
 	if m != nil {
@@ -161,7 +271,7 @@ type Leader struct {
 func (m *Leader) Reset()                    { *m = Leader{} }
 func (m *Leader) String() string            { return proto.CompactTextString(m) }
 func (*Leader) ProtoMessage()               {}
-func (*Leader) Descriptor() ([]byte, []int) { return fileDescriptorPdpb, []int{3} }
+func (*Leader) Descriptor() ([]byte, []int) { return fileDescriptorPdpb, []int{4} }
 
 func (m *Leader) GetID() uint64 {
 	if m != nil {
@@ -193,7 +303,7 @@ type LeaderReq struct {
 func (m *LeaderReq) Reset()                    { *m = LeaderReq{} }
 func (m *LeaderReq) String() string            { return proto.CompactTextString(m) }
 func (*LeaderReq) ProtoMessage()               {}
-func (*LeaderReq) Descriptor() ([]byte, []int) { return fileDescriptorPdpb, []int{4} }
+func (*LeaderReq) Descriptor() ([]byte, []int) { return fileDescriptorPdpb, []int{5} }
 
 func (m *LeaderReq) GetFrom() string {
 	if m != nil {
@@ -217,7 +327,7 @@ type LeaderRsp struct {
 func (m *LeaderRsp) Reset()                    { *m = LeaderRsp{} }
 func (m *LeaderRsp) String() string            { return proto.CompactTextString(m) }
 func (*LeaderRsp) ProtoMessage()               {}
-func (*LeaderRsp) Descriptor() ([]byte, []int) { return fileDescriptorPdpb, []int{5} }
+func (*LeaderRsp) Descriptor() ([]byte, []int) { return fileDescriptorPdpb, []int{6} }
 
 func (m *LeaderRsp) GetLeader() Leader {
 	if m != nil {
@@ -237,7 +347,7 @@ type PutStoreReq struct {
 func (m *PutStoreReq) Reset()                    { *m = PutStoreReq{} }
 func (m *PutStoreReq) String() string            { return proto.CompactTextString(m) }
 func (*PutStoreReq) ProtoMessage()               {}
-func (*PutStoreReq) Descriptor() ([]byte, []int) { return fileDescriptorPdpb, []int{6} }
+func (*PutStoreReq) Descriptor() ([]byte, []int) { return fileDescriptorPdpb, []int{7} }
 
 func (m *PutStoreReq) GetFrom() string {
 	if m != nil {
@@ -275,7 +385,7 @@ type PutStoreRsp struct {
 func (m *PutStoreRsp) Reset()                    { *m = PutStoreRsp{} }
 func (m *PutStoreRsp) String() string            { return proto.CompactTextString(m) }
 func (*PutStoreRsp) ProtoMessage()               {}
-func (*PutStoreRsp) Descriptor() ([]byte, []int) { return fileDescriptorPdpb, []int{7} }
+func (*PutStoreRsp) Descriptor() ([]byte, []int) { return fileDescriptorPdpb, []int{8} }
 
 func (m *PutStoreRsp) GetHeader() ResponseHeader {
 	if m != nil {
@@ -293,7 +403,7 @@ type GetClusterIDReq struct {
 func (m *GetClusterIDReq) Reset()                    { *m = GetClusterIDReq{} }
 func (m *GetClusterIDReq) String() string            { return proto.CompactTextString(m) }
 func (*GetClusterIDReq) ProtoMessage()               {}
-func (*GetClusterIDReq) Descriptor() ([]byte, []int) { return fileDescriptorPdpb, []int{8} }
+func (*GetClusterIDReq) Descriptor() ([]byte, []int) { return fileDescriptorPdpb, []int{9} }
 
 func (m *GetClusterIDReq) GetFrom() string {
 	if m != nil {
@@ -317,7 +427,7 @@ type GetClusterIDRsp struct {
 func (m *GetClusterIDRsp) Reset()                    { *m = GetClusterIDRsp{} }
 func (m *GetClusterIDRsp) String() string            { return proto.CompactTextString(m) }
 func (*GetClusterIDRsp) ProtoMessage()               {}
-func (*GetClusterIDRsp) Descriptor() ([]byte, []int) { return fileDescriptorPdpb, []int{9} }
+func (*GetClusterIDRsp) Descriptor() ([]byte, []int) { return fileDescriptorPdpb, []int{10} }
 
 func (m *GetClusterIDRsp) GetID() uint64 {
 	if m != nil {
@@ -335,7 +445,7 @@ type AllocIDReq struct {
 func (m *AllocIDReq) Reset()                    { *m = AllocIDReq{} }
 func (m *AllocIDReq) String() string            { return proto.CompactTextString(m) }
 func (*AllocIDReq) ProtoMessage()               {}
-func (*AllocIDReq) Descriptor() ([]byte, []int) { return fileDescriptorPdpb, []int{10} }
+func (*AllocIDReq) Descriptor() ([]byte, []int) { return fileDescriptorPdpb, []int{11} }
 
 func (m *AllocIDReq) GetFrom() string {
 	if m != nil {
@@ -359,7 +469,7 @@ type AllocIDRsp struct {
 func (m *AllocIDRsp) Reset()                    { *m = AllocIDRsp{} }
 func (m *AllocIDRsp) String() string            { return proto.CompactTextString(m) }
 func (*AllocIDRsp) ProtoMessage()               {}
-func (*AllocIDRsp) Descriptor() ([]byte, []int) { return fileDescriptorPdpb, []int{11} }
+func (*AllocIDRsp) Descriptor() ([]byte, []int) { return fileDescriptorPdpb, []int{12} }
 
 func (m *AllocIDRsp) GetID() uint64 {
 	if m != nil {
@@ -377,7 +487,7 @@ type IsClusterBootstrapReq struct {
 func (m *IsClusterBootstrapReq) Reset()                    { *m = IsClusterBootstrapReq{} }
 func (m *IsClusterBootstrapReq) String() string            { return proto.CompactTextString(m) }
 func (*IsClusterBootstrapReq) ProtoMessage()               {}
-func (*IsClusterBootstrapReq) Descriptor() ([]byte, []int) { return fileDescriptorPdpb, []int{12} }
+func (*IsClusterBootstrapReq) Descriptor() ([]byte, []int) { return fileDescriptorPdpb, []int{13} }
 
 func (m *IsClusterBootstrapReq) GetFrom() string {
 	if m != nil {
@@ -401,7 +511,7 @@ type IsClusterBootstrapRsp struct {
 func (m *IsClusterBootstrapRsp) Reset()                    { *m = IsClusterBootstrapRsp{} }
 func (m *IsClusterBootstrapRsp) String() string            { return proto.CompactTextString(m) }
 func (*IsClusterBootstrapRsp) ProtoMessage()               {}
-func (*IsClusterBootstrapRsp) Descriptor() ([]byte, []int) { return fileDescriptorPdpb, []int{13} }
+func (*IsClusterBootstrapRsp) Descriptor() ([]byte, []int) { return fileDescriptorPdpb, []int{14} }
 
 func (m *IsClusterBootstrapRsp) GetValue() bool {
 	if m != nil {
@@ -421,7 +531,7 @@ type BootstrapClusterReq struct {
 func (m *BootstrapClusterReq) Reset()                    { *m = BootstrapClusterReq{} }
 func (m *BootstrapClusterReq) String() string            { return proto.CompactTextString(m) }
 func (*BootstrapClusterReq) ProtoMessage()               {}
-func (*BootstrapClusterReq) Descriptor() ([]byte, []int) { return fileDescriptorPdpb, []int{14} }
+func (*BootstrapClusterReq) Descriptor() ([]byte, []int) { return fileDescriptorPdpb, []int{15} }
 
 func (m *BootstrapClusterReq) GetFrom() string {
 	if m != nil {
@@ -459,7 +569,7 @@ type BootstrapClusterRsp struct {
 func (m *BootstrapClusterRsp) Reset()                    { *m = BootstrapClusterRsp{} }
 func (m *BootstrapClusterRsp) String() string            { return proto.CompactTextString(m) }
 func (*BootstrapClusterRsp) ProtoMessage()               {}
-func (*BootstrapClusterRsp) Descriptor() ([]byte, []int) { return fileDescriptorPdpb, []int{15} }
+func (*BootstrapClusterRsp) Descriptor() ([]byte, []int) { return fileDescriptorPdpb, []int{16} }
 
 func (m *BootstrapClusterRsp) GetAlreadyBootstrapped() bool {
 	if m != nil {
@@ -479,7 +589,7 @@ type CellHeartbeatReq struct {
 func (m *CellHeartbeatReq) Reset()                    { *m = CellHeartbeatReq{} }
 func (m *CellHeartbeatReq) String() string            { return proto.CompactTextString(m) }
 func (*CellHeartbeatReq) ProtoMessage()               {}
-func (*CellHeartbeatReq) Descriptor() ([]byte, []int) { return fileDescriptorPdpb, []int{16} }
+func (*CellHeartbeatReq) Descriptor() ([]byte, []int) { return fileDescriptorPdpb, []int{17} }
 
 func (m *CellHeartbeatReq) GetFrom() string {
 	if m != nil {
@@ -517,7 +627,7 @@ type CellHeartbeatRsp struct {
 func (m *CellHeartbeatRsp) Reset()                    { *m = CellHeartbeatRsp{} }
 func (m *CellHeartbeatRsp) String() string            { return proto.CompactTextString(m) }
 func (*CellHeartbeatRsp) ProtoMessage()               {}
-func (*CellHeartbeatRsp) Descriptor() ([]byte, []int) { return fileDescriptorPdpb, []int{17} }
+func (*CellHeartbeatRsp) Descriptor() ([]byte, []int) { return fileDescriptorPdpb, []int{18} }
 
 func (m *CellHeartbeatRsp) GetChangePeer() *ChangePeer {
 	if m != nil {
@@ -526,8 +636,67 @@ func (m *CellHeartbeatRsp) GetChangePeer() *ChangePeer {
 	return nil
 }
 
+type StoreHeartbeatReq struct {
+	From             string        `protobuf:"bytes,1,opt,name=from" json:"from"`
+	ID               uint64        `protobuf:"varint,2,opt,name=id" json:"id"`
+	Header           RequestHeader `protobuf:"bytes,3,opt,name=header" json:"header"`
+	Stats            *StoreStats   `protobuf:"bytes,4,opt,name=stats" json:"stats,omitempty"`
+	XXX_unrecognized []byte        `json:"-"`
+}
+
+func (m *StoreHeartbeatReq) Reset()                    { *m = StoreHeartbeatReq{} }
+func (m *StoreHeartbeatReq) String() string            { return proto.CompactTextString(m) }
+func (*StoreHeartbeatReq) ProtoMessage()               {}
+func (*StoreHeartbeatReq) Descriptor() ([]byte, []int) { return fileDescriptorPdpb, []int{19} }
+
+func (m *StoreHeartbeatReq) GetFrom() string {
+	if m != nil {
+		return m.From
+	}
+	return ""
+}
+
+func (m *StoreHeartbeatReq) GetID() uint64 {
+	if m != nil {
+		return m.ID
+	}
+	return 0
+}
+
+func (m *StoreHeartbeatReq) GetHeader() RequestHeader {
+	if m != nil {
+		return m.Header
+	}
+	return RequestHeader{}
+}
+
+func (m *StoreHeartbeatReq) GetStats() *StoreStats {
+	if m != nil {
+		return m.Stats
+	}
+	return nil
+}
+
+type StoreHeartbeatRsp struct {
+	Header           ResponseHeader `protobuf:"bytes,1,opt,name=header" json:"header"`
+	XXX_unrecognized []byte         `json:"-"`
+}
+
+func (m *StoreHeartbeatRsp) Reset()                    { *m = StoreHeartbeatRsp{} }
+func (m *StoreHeartbeatRsp) String() string            { return proto.CompactTextString(m) }
+func (*StoreHeartbeatRsp) ProtoMessage()               {}
+func (*StoreHeartbeatRsp) Descriptor() ([]byte, []int) { return fileDescriptorPdpb, []int{20} }
+
+func (m *StoreHeartbeatRsp) GetHeader() ResponseHeader {
+	if m != nil {
+		return m.Header
+	}
+	return ResponseHeader{}
+}
+
 func init() {
 	proto.RegisterType((*ChangePeer)(nil), "pdpb.ChangePeer")
+	proto.RegisterType((*StoreStats)(nil), "pdpb.StoreStats")
 	proto.RegisterType((*RequestHeader)(nil), "pdpb.RequestHeader")
 	proto.RegisterType((*ResponseHeader)(nil), "pdpb.ResponseHeader")
 	proto.RegisterType((*Leader)(nil), "pdpb.Leader")
@@ -545,6 +714,8 @@ func init() {
 	proto.RegisterType((*BootstrapClusterRsp)(nil), "pdpb.BootstrapClusterRsp")
 	proto.RegisterType((*CellHeartbeatReq)(nil), "pdpb.CellHeartbeatReq")
 	proto.RegisterType((*CellHeartbeatRsp)(nil), "pdpb.CellHeartbeatRsp")
+	proto.RegisterType((*StoreHeartbeatReq)(nil), "pdpb.StoreHeartbeatReq")
+	proto.RegisterType((*StoreHeartbeatRsp)(nil), "pdpb.StoreHeartbeatRsp")
 	proto.RegisterEnum("pdpb.ConfChangeType", ConfChangeType_name, ConfChangeType_value)
 }
 
@@ -564,8 +735,9 @@ type PDServiceClient interface {
 	GetClusterID(ctx context.Context, in *GetClusterIDReq, opts ...grpc.CallOption) (*GetClusterIDRsp, error)
 	IsClusterBootstrap(ctx context.Context, in *IsClusterBootstrapReq, opts ...grpc.CallOption) (*IsClusterBootstrapRsp, error)
 	BootstrapCluster(ctx context.Context, in *BootstrapClusterReq, opts ...grpc.CallOption) (*BootstrapClusterRsp, error)
-	CellHeartbeat(ctx context.Context, in *CellHeartbeatReq, opts ...grpc.CallOption) (*CellHeartbeatRsp, error)
 	PutStore(ctx context.Context, in *PutStoreReq, opts ...grpc.CallOption) (*PutStoreRsp, error)
+	CellHeartbeat(ctx context.Context, in *CellHeartbeatReq, opts ...grpc.CallOption) (*CellHeartbeatRsp, error)
+	StoreHeartbeat(ctx context.Context, in *StoreHeartbeatReq, opts ...grpc.CallOption) (*StoreHeartbeatRsp, error)
 }
 
 type pDServiceClient struct {
@@ -621,6 +793,15 @@ func (c *pDServiceClient) BootstrapCluster(ctx context.Context, in *BootstrapClu
 	return out, nil
 }
 
+func (c *pDServiceClient) PutStore(ctx context.Context, in *PutStoreReq, opts ...grpc.CallOption) (*PutStoreRsp, error) {
+	out := new(PutStoreRsp)
+	err := grpc.Invoke(ctx, "/pdpb.PDService/PutStore", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *pDServiceClient) CellHeartbeat(ctx context.Context, in *CellHeartbeatReq, opts ...grpc.CallOption) (*CellHeartbeatRsp, error) {
 	out := new(CellHeartbeatRsp)
 	err := grpc.Invoke(ctx, "/pdpb.PDService/CellHeartbeat", in, out, c.cc, opts...)
@@ -630,9 +811,9 @@ func (c *pDServiceClient) CellHeartbeat(ctx context.Context, in *CellHeartbeatRe
 	return out, nil
 }
 
-func (c *pDServiceClient) PutStore(ctx context.Context, in *PutStoreReq, opts ...grpc.CallOption) (*PutStoreRsp, error) {
-	out := new(PutStoreRsp)
-	err := grpc.Invoke(ctx, "/pdpb.PDService/PutStore", in, out, c.cc, opts...)
+func (c *pDServiceClient) StoreHeartbeat(ctx context.Context, in *StoreHeartbeatReq, opts ...grpc.CallOption) (*StoreHeartbeatRsp, error) {
+	out := new(StoreHeartbeatRsp)
+	err := grpc.Invoke(ctx, "/pdpb.PDService/StoreHeartbeat", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -647,8 +828,9 @@ type PDServiceServer interface {
 	GetClusterID(context.Context, *GetClusterIDReq) (*GetClusterIDRsp, error)
 	IsClusterBootstrap(context.Context, *IsClusterBootstrapReq) (*IsClusterBootstrapRsp, error)
 	BootstrapCluster(context.Context, *BootstrapClusterReq) (*BootstrapClusterRsp, error)
-	CellHeartbeat(context.Context, *CellHeartbeatReq) (*CellHeartbeatRsp, error)
 	PutStore(context.Context, *PutStoreReq) (*PutStoreRsp, error)
+	CellHeartbeat(context.Context, *CellHeartbeatReq) (*CellHeartbeatRsp, error)
+	StoreHeartbeat(context.Context, *StoreHeartbeatReq) (*StoreHeartbeatRsp, error)
 }
 
 func RegisterPDServiceServer(s *grpc.Server, srv PDServiceServer) {
@@ -745,6 +927,24 @@ func _PDService_BootstrapCluster_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PDService_PutStore_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PutStoreReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PDServiceServer).PutStore(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/pdpb.PDService/PutStore",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PDServiceServer).PutStore(ctx, req.(*PutStoreReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _PDService_CellHeartbeat_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CellHeartbeatReq)
 	if err := dec(in); err != nil {
@@ -763,20 +963,20 @@ func _PDService_CellHeartbeat_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
-func _PDService_PutStore_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(PutStoreReq)
+func _PDService_StoreHeartbeat_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StoreHeartbeatReq)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(PDServiceServer).PutStore(ctx, in)
+		return srv.(PDServiceServer).StoreHeartbeat(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/pdpb.PDService/PutStore",
+		FullMethod: "/pdpb.PDService/StoreHeartbeat",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(PDServiceServer).PutStore(ctx, req.(*PutStoreReq))
+		return srv.(PDServiceServer).StoreHeartbeat(ctx, req.(*StoreHeartbeatReq))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -806,12 +1006,16 @@ var _PDService_serviceDesc = grpc.ServiceDesc{
 			Handler:    _PDService_BootstrapCluster_Handler,
 		},
 		{
+			MethodName: "PutStore",
+			Handler:    _PDService_PutStore_Handler,
+		},
+		{
 			MethodName: "CellHeartbeat",
 			Handler:    _PDService_CellHeartbeat_Handler,
 		},
 		{
-			MethodName: "PutStore",
-			Handler:    _PDService_PutStore_Handler,
+			MethodName: "StoreHeartbeat",
+			Handler:    _PDService_StoreHeartbeat_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
@@ -846,6 +1050,65 @@ func (m *ChangePeer) MarshalTo(dAtA []byte) (int, error) {
 		}
 		i += n1
 	}
+	if m.XXX_unrecognized != nil {
+		i += copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	return i, nil
+}
+
+func (m *StoreStats) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalTo(dAtA)
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *StoreStats) MarshalTo(dAtA []byte) (int, error) {
+	var i int
+	_ = i
+	var l int
+	_ = l
+	dAtA[i] = 0x8
+	i++
+	i = encodeVarintPdpb(dAtA, i, uint64(m.StoreID))
+	dAtA[i] = 0x10
+	i++
+	i = encodeVarintPdpb(dAtA, i, uint64(m.Capacity))
+	dAtA[i] = 0x18
+	i++
+	i = encodeVarintPdpb(dAtA, i, uint64(m.Available))
+	dAtA[i] = 0x20
+	i++
+	i = encodeVarintPdpb(dAtA, i, uint64(m.RegionCount))
+	dAtA[i] = 0x28
+	i++
+	i = encodeVarintPdpb(dAtA, i, uint64(m.SendingSnapCount))
+	dAtA[i] = 0x30
+	i++
+	i = encodeVarintPdpb(dAtA, i, uint64(m.ReceivingSnapCount))
+	dAtA[i] = 0x38
+	i++
+	i = encodeVarintPdpb(dAtA, i, uint64(m.StartTime))
+	dAtA[i] = 0x40
+	i++
+	i = encodeVarintPdpb(dAtA, i, uint64(m.ApplyingSnapCount))
+	dAtA[i] = 0x48
+	i++
+	if m.IsBusy {
+		dAtA[i] = 1
+	} else {
+		dAtA[i] = 0
+	}
+	i++
+	dAtA[i] = 0x50
+	i++
+	i = encodeVarintPdpb(dAtA, i, uint64(m.UsedSize))
+	dAtA[i] = 0x58
+	i++
+	i = encodeVarintPdpb(dAtA, i, uint64(m.BytesWritten))
 	if m.XXX_unrecognized != nil {
 		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
@@ -1373,6 +1636,81 @@ func (m *CellHeartbeatRsp) MarshalTo(dAtA []byte) (int, error) {
 	return i, nil
 }
 
+func (m *StoreHeartbeatReq) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalTo(dAtA)
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *StoreHeartbeatReq) MarshalTo(dAtA []byte) (int, error) {
+	var i int
+	_ = i
+	var l int
+	_ = l
+	dAtA[i] = 0xa
+	i++
+	i = encodeVarintPdpb(dAtA, i, uint64(len(m.From)))
+	i += copy(dAtA[i:], m.From)
+	dAtA[i] = 0x10
+	i++
+	i = encodeVarintPdpb(dAtA, i, uint64(m.ID))
+	dAtA[i] = 0x1a
+	i++
+	i = encodeVarintPdpb(dAtA, i, uint64(m.Header.Size()))
+	n11, err := m.Header.MarshalTo(dAtA[i:])
+	if err != nil {
+		return 0, err
+	}
+	i += n11
+	if m.Stats != nil {
+		dAtA[i] = 0x22
+		i++
+		i = encodeVarintPdpb(dAtA, i, uint64(m.Stats.Size()))
+		n12, err := m.Stats.MarshalTo(dAtA[i:])
+		if err != nil {
+			return 0, err
+		}
+		i += n12
+	}
+	if m.XXX_unrecognized != nil {
+		i += copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	return i, nil
+}
+
+func (m *StoreHeartbeatRsp) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalTo(dAtA)
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *StoreHeartbeatRsp) MarshalTo(dAtA []byte) (int, error) {
+	var i int
+	_ = i
+	var l int
+	_ = l
+	dAtA[i] = 0xa
+	i++
+	i = encodeVarintPdpb(dAtA, i, uint64(m.Header.Size()))
+	n13, err := m.Header.MarshalTo(dAtA[i:])
+	if err != nil {
+		return 0, err
+	}
+	i += n13
+	if m.XXX_unrecognized != nil {
+		i += copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	return i, nil
+}
+
 func encodeFixed64Pdpb(dAtA []byte, offset int, v uint64) int {
 	dAtA[offset] = uint8(v)
 	dAtA[offset+1] = uint8(v >> 8)
@@ -1408,6 +1746,26 @@ func (m *ChangePeer) Size() (n int) {
 		l = m.Peer.Size()
 		n += 1 + l + sovPdpb(uint64(l))
 	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *StoreStats) Size() (n int) {
+	var l int
+	_ = l
+	n += 1 + sovPdpb(uint64(m.StoreID))
+	n += 1 + sovPdpb(uint64(m.Capacity))
+	n += 1 + sovPdpb(uint64(m.Available))
+	n += 1 + sovPdpb(uint64(m.RegionCount))
+	n += 1 + sovPdpb(uint64(m.SendingSnapCount))
+	n += 1 + sovPdpb(uint64(m.ReceivingSnapCount))
+	n += 1 + sovPdpb(uint64(m.StartTime))
+	n += 1 + sovPdpb(uint64(m.ApplyingSnapCount))
+	n += 2
+	n += 1 + sovPdpb(uint64(m.UsedSize))
+	n += 1 + sovPdpb(uint64(m.BytesWritten))
 	if m.XXX_unrecognized != nil {
 		n += len(m.XXX_unrecognized)
 	}
@@ -1621,6 +1979,35 @@ func (m *CellHeartbeatRsp) Size() (n int) {
 	return n
 }
 
+func (m *StoreHeartbeatReq) Size() (n int) {
+	var l int
+	_ = l
+	l = len(m.From)
+	n += 1 + l + sovPdpb(uint64(l))
+	n += 1 + sovPdpb(uint64(m.ID))
+	l = m.Header.Size()
+	n += 1 + l + sovPdpb(uint64(l))
+	if m.Stats != nil {
+		l = m.Stats.Size()
+		n += 1 + l + sovPdpb(uint64(l))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *StoreHeartbeatRsp) Size() (n int) {
+	var l int
+	_ = l
+	l = m.Header.Size()
+	n += 1 + l + sovPdpb(uint64(l))
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
 func sovPdpb(x uint64) (n int) {
 	for {
 		n++
@@ -1715,6 +2102,267 @@ func (m *ChangePeer) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipPdpb(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthPdpb
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *StoreStats) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowPdpb
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= (uint64(b) & 0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: StoreStats: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: StoreStats: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field StoreID", wireType)
+			}
+			m.StoreID = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowPdpb
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.StoreID |= (uint64(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Capacity", wireType)
+			}
+			m.Capacity = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowPdpb
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Capacity |= (uint64(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 3:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Available", wireType)
+			}
+			m.Available = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowPdpb
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Available |= (uint64(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 4:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field RegionCount", wireType)
+			}
+			m.RegionCount = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowPdpb
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.RegionCount |= (uint32(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 5:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field SendingSnapCount", wireType)
+			}
+			m.SendingSnapCount = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowPdpb
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.SendingSnapCount |= (uint32(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 6:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ReceivingSnapCount", wireType)
+			}
+			m.ReceivingSnapCount = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowPdpb
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.ReceivingSnapCount |= (uint32(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 7:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field StartTime", wireType)
+			}
+			m.StartTime = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowPdpb
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.StartTime |= (uint32(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 8:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ApplyingSnapCount", wireType)
+			}
+			m.ApplyingSnapCount = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowPdpb
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.ApplyingSnapCount |= (uint32(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 9:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field IsBusy", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowPdpb
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.IsBusy = bool(v != 0)
+		case 10:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field UsedSize", wireType)
+			}
+			m.UsedSize = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowPdpb
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.UsedSize |= (uint64(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 11:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field BytesWritten", wireType)
+			}
+			m.BytesWritten = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowPdpb
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.BytesWritten |= (uint64(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
 		default:
 			iNdEx = preIndex
 			skippy, err := skipPdpb(dAtA[iNdEx:])
@@ -3409,6 +4057,249 @@ func (m *CellHeartbeatRsp) Unmarshal(dAtA []byte) error {
 	}
 	return nil
 }
+func (m *StoreHeartbeatReq) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowPdpb
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= (uint64(b) & 0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: StoreHeartbeatReq: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: StoreHeartbeatReq: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field From", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowPdpb
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= (uint64(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthPdpb
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.From = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ID", wireType)
+			}
+			m.ID = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowPdpb
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.ID |= (uint64(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Header", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowPdpb
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthPdpb
+			}
+			postIndex := iNdEx + msglen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if err := m.Header.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 4:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Stats", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowPdpb
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthPdpb
+			}
+			postIndex := iNdEx + msglen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Stats == nil {
+				m.Stats = &StoreStats{}
+			}
+			if err := m.Stats.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipPdpb(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthPdpb
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *StoreHeartbeatRsp) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowPdpb
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= (uint64(b) & 0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: StoreHeartbeatRsp: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: StoreHeartbeatRsp: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Header", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowPdpb
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthPdpb
+			}
+			postIndex := iNdEx + msglen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if err := m.Header.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipPdpb(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthPdpb
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
 func skipPdpb(dAtA []byte) (n int, err error) {
 	l := len(dAtA)
 	iNdEx := 0
@@ -3517,50 +4408,65 @@ var (
 func init() { proto.RegisterFile("pdpb.proto", fileDescriptorPdpb) }
 
 var fileDescriptorPdpb = []byte{
-	// 711 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xa4, 0x54, 0xcb, 0x4e, 0xdb, 0x5c,
-	0x10, 0x8e, 0x13, 0x73, 0xc9, 0x00, 0x21, 0xff, 0x49, 0xf8, 0x95, 0xba, 0x52, 0x40, 0x67, 0x51,
-	0x51, 0x24, 0x12, 0x35, 0x54, 0xed, 0xae, 0x52, 0x12, 0x24, 0x2e, 0x2a, 0x55, 0x64, 0xba, 0xe8,
-	0xd6, 0xc4, 0xc3, 0x45, 0x72, 0x72, 0x0e, 0xf6, 0x09, 0x12, 0x6f, 0xd2, 0x45, 0x55, 0xa9, 0xaf,
-	0xd2, 0x15, 0x4b, 0x9e, 0x00, 0xb5, 0xe9, 0x8b, 0x54, 0xe7, 0x62, 0xe3, 0xa4, 0x06, 0xd4, 0x74,
-	0x95, 0x78, 0xe6, 0x9b, 0xef, 0x9b, 0x39, 0x73, 0x01, 0xe0, 0x3e, 0x3f, 0x69, 0xf0, 0x90, 0x09,
-	0x46, 0x6c, 0xf9, 0xdf, 0xa9, 0x9e, 0xb1, 0x33, 0xa6, 0x0c, 0x4d, 0xf9, 0x4f, 0xfb, 0x9c, 0xca,
-	0x00, 0x85, 0xc7, 0x4f, 0x9a, 0xfa, 0x47, 0x1b, 0xa9, 0x0f, 0xd0, 0x3d, 0xf7, 0x86, 0x67, 0xd8,
-	0x43, 0x0c, 0x49, 0x03, 0x6c, 0x71, 0xcd, 0xb1, 0x66, 0x6d, 0x58, 0x9b, 0xa5, 0x56, 0xb5, 0xa1,
-	0x98, 0xbb, 0x6c, 0x78, 0xaa, 0x31, 0x1f, 0xaf, 0x39, 0x76, 0xec, 0x9b, 0xbb, 0xf5, 0x9c, 0xab,
-	0x70, 0xe4, 0x05, 0xd8, 0x1c, 0x31, 0xac, 0xe5, 0x37, 0xac, 0xcd, 0xa5, 0xd6, 0x72, 0xc3, 0x50,
-	0x4b, 0x2e, 0x85, 0xb3, 0x5c, 0xe5, 0xa7, 0x3b, 0xb0, 0xe2, 0xe2, 0xe5, 0x08, 0x23, 0xb1, 0x8f,
-	0x9e, 0x8f, 0x21, 0xa1, 0x50, 0xec, 0x07, 0xa3, 0x48, 0x60, 0x78, 0xb0, 0xab, 0xd4, 0x6c, 0xc3,
-	0x7b, 0x6f, 0xa6, 0xaf, 0xa1, 0xe4, 0x62, 0xc4, 0xd9, 0x30, 0xc2, 0xbf, 0x88, 0xfa, 0x04, 0xf3,
-	0xef, 0x35, 0xda, 0x81, 0xfc, 0x85, 0x6f, 0x60, 0x20, 0x61, 0xe3, 0xbb, 0xf5, 0xfc, 0xc1, 0xae,
-	0x9b, 0xbf, 0xf0, 0x49, 0x0d, 0xec, 0xa1, 0x37, 0x40, 0x95, 0x78, 0x31, 0x2e, 0x49, 0x5a, 0xa4,
-	0xc7, 0xf3, 0xfd, 0xb0, 0x56, 0x48, 0x7b, 0xa4, 0x85, 0xb6, 0xa1, 0xa8, 0x99, 0x5d, 0xbc, 0x94,
-	0xb0, 0xd3, 0x90, 0x0d, 0x14, 0x7d, 0x02, 0x93, 0x16, 0x23, 0x9b, 0xcf, 0x92, 0xa5, 0x6f, 0x13,
-	0x8a, 0x88, 0x93, 0x2d, 0x98, 0x0f, 0xd4, 0x87, 0x22, 0x91, 0xcf, 0xa7, 0x9e, 0x5b, 0x03, 0x0c,
-	0xa5, 0x41, 0xd0, 0x6f, 0x16, 0x2c, 0xf5, 0x46, 0xe2, 0x58, 0xb0, 0x10, 0x67, 0x96, 0x27, 0xaf,
-	0x60, 0xfe, 0x5c, 0x2b, 0x16, 0x94, 0x62, 0x45, 0x2b, 0x4e, 0xb4, 0x26, 0x16, 0xd6, 0x40, 0xf2,
-	0x12, 0xe6, 0x22, 0x29, 0x5a, 0xb3, 0x55, 0xc4, 0x4a, 0xdc, 0x62, 0x95, 0x89, 0xc1, 0x6a, 0x04,
-	0x6d, 0xa7, 0x52, 0x8c, 0x38, 0x69, 0x25, 0x62, 0xba, 0xbc, 0x6a, 0x2c, 0x96, 0x6e, 0xe9, 0xa4,
-	0x1a, 0xdd, 0x83, 0xd5, 0x3d, 0x14, 0xdd, 0xb8, 0x99, 0xb3, 0x3f, 0xf4, 0xf6, 0x14, 0x51, 0xc4,
-	0x1f, 0x1b, 0x07, 0xda, 0x01, 0x68, 0x07, 0x01, 0xeb, 0xff, 0x8b, 0xe4, 0xe6, 0x3d, 0xc7, 0x13,
-	0x6a, 0x47, 0xb0, 0x76, 0x10, 0x99, 0xdc, 0x3a, 0x8c, 0x89, 0x48, 0x84, 0x1e, 0x9f, 0x5d, 0x78,
-	0x27, 0x93, 0x4e, 0xe5, 0x30, 0x77, 0xe5, 0x05, 0x23, 0xbd, 0xce, 0x8b, 0x71, 0xb3, 0x94, 0x89,
-	0x7e, 0xb5, 0xa0, 0x92, 0x80, 0x4d, 0xf0, 0xec, 0x83, 0x95, 0x4c, 0x49, 0xe1, 0xa9, 0x29, 0x91,
-	0x27, 0xa3, 0x8f, 0x41, 0x60, 0xe6, 0x29, 0x39, 0x19, 0x5d, 0x0c, 0x82, 0x58, 0x4e, 0xfa, 0xe9,
-	0x51, 0x46, 0x7e, 0x11, 0x27, 0x6f, 0xa0, 0xe2, 0x05, 0x21, 0x7a, 0xfe, 0x75, 0xe2, 0xe5, 0xe8,
-	0x4f, 0x54, 0x98, 0x05, 0xa0, 0x5f, 0x2c, 0x28, 0x4b, 0x8d, 0x7d, 0xf4, 0x42, 0x71, 0x82, 0x9e,
-	0x98, 0xbd, 0xd8, 0xb8, 0x82, 0xc2, 0xe3, 0x15, 0xa4, 0xf6, 0xdb, 0x7e, 0xf0, 0x3c, 0xc6, 0xfb,
-	0x7d, 0x38, 0x9d, 0x9d, 0x2a, 0x15, 0xfa, 0xc9, 0x69, 0x36, 0x4b, 0x54, 0x36, 0x27, 0x39, 0xb1,
-	0x1b, 0x9e, 0x14, 0x72, 0x6b, 0x1b, 0x4a, 0x93, 0x27, 0x9b, 0x2c, 0xc1, 0x42, 0xdb, 0xf7, 0x3f,
-	0x30, 0x1f, 0xcb, 0x39, 0x52, 0x02, 0x70, 0x71, 0xc0, 0xae, 0x50, 0x7d, 0x5b, 0xad, 0xef, 0x05,
-	0x28, 0xf6, 0x76, 0x8f, 0x31, 0xbc, 0xba, 0xe8, 0x23, 0x69, 0x42, 0x71, 0x0f, 0x85, 0xb9, 0xa0,
-	0xab, 0xe9, 0x8b, 0xe4, 0xe2, 0xa5, 0x33, 0x69, 0x88, 0x38, 0xcd, 0x91, 0x26, 0x2c, 0x98, 0xb1,
-	0x27, 0x26, 0xb9, 0xfb, 0x4d, 0x72, 0xa6, 0x2c, 0x2a, 0xe0, 0x1d, 0x2c, 0xa7, 0x57, 0x93, 0xac,
-	0x69, 0xcc, 0xd4, 0xde, 0x3b, 0x59, 0x66, 0x15, 0xdf, 0x03, 0xf2, 0xe7, 0xb8, 0x93, 0xe7, 0x1a,
-	0x9e, 0xb9, 0x57, 0xce, 0xc3, 0x4e, 0xc5, 0x78, 0x08, 0xe5, 0xe9, 0x51, 0x23, 0xcf, 0x74, 0x48,
-	0xc6, 0x8a, 0x38, 0x0f, 0xb9, 0x14, 0x57, 0x1b, 0x56, 0x26, 0x1a, 0x49, 0xfe, 0x37, 0x1d, 0x9b,
-	0x9a, 0x3d, 0x27, 0xd3, 0xae, 0x28, 0x5a, 0xb0, 0x18, 0xdf, 0x51, 0xf2, 0x9f, 0x46, 0xa5, 0x4e,
-	0xbf, 0x33, 0x6d, 0x92, 0x31, 0x9d, 0xea, 0xed, 0xcf, 0x7a, 0xee, 0x66, 0x5c, 0xb7, 0x6e, 0xc7,
-	0x75, 0xeb, 0xc7, 0xb8, 0x6e, 0x7d, 0xfe, 0x55, 0xcf, 0xfd, 0x0e, 0x00, 0x00, 0xff, 0xff, 0xc9,
-	0x8c, 0xcc, 0xea, 0x1a, 0x08, 0x00, 0x00,
+	// 947 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xac, 0x56, 0xcd, 0x6e, 0xdb, 0x46,
+	0x10, 0x16, 0x25, 0x59, 0xb6, 0x46, 0xb6, 0x22, 0xaf, 0x9d, 0x96, 0x65, 0x0b, 0x45, 0xe0, 0x21,
+	0x50, 0x83, 0xc6, 0x6e, 0x95, 0xa0, 0xbd, 0x15, 0x90, 0x64, 0xc0, 0x71, 0xd0, 0x14, 0x86, 0x14,
+	0xa0, 0xbd, 0xae, 0xc4, 0x89, 0x42, 0x80, 0x22, 0xd7, 0xdc, 0x95, 0x00, 0xf5, 0x09, 0xfa, 0x08,
+	0x3d, 0x14, 0x05, 0x7a, 0xed, 0x73, 0xf4, 0x90, 0x63, 0x9e, 0x20, 0x68, 0xdd, 0x17, 0x29, 0xf6,
+	0x87, 0x14, 0x29, 0xd3, 0x31, 0xaa, 0xe6, 0x64, 0xf1, 0x9b, 0x6f, 0xbe, 0x99, 0xd9, 0x9d, 0x99,
+	0x35, 0x00, 0xf3, 0xd8, 0xe4, 0x84, 0xc5, 0x91, 0x88, 0x48, 0x55, 0xfe, 0x76, 0x8e, 0x67, 0xd1,
+	0x2c, 0x52, 0xc0, 0xa9, 0xfc, 0xa5, 0x6d, 0xce, 0xd1, 0x1c, 0x05, 0x65, 0x93, 0x53, 0xfd, 0x47,
+	0x83, 0xae, 0x07, 0x30, 0x7c, 0x4d, 0xc3, 0x19, 0x5e, 0x22, 0xc6, 0xe4, 0x04, 0xaa, 0x62, 0xc5,
+	0xd0, 0xb6, 0x3a, 0x56, 0xb7, 0xd9, 0x3b, 0x3e, 0x51, 0xca, 0xc3, 0x28, 0x7c, 0xa5, 0x39, 0x2f,
+	0x57, 0x0c, 0x07, 0xd5, 0x37, 0xef, 0x1e, 0x94, 0x46, 0x8a, 0x47, 0x1e, 0x42, 0x95, 0x21, 0xc6,
+	0x76, 0xb9, 0x63, 0x75, 0x1b, 0xbd, 0xfd, 0x13, 0x23, 0x2d, 0xb5, 0x14, 0xcf, 0x1a, 0x29, 0xbb,
+	0xfb, 0x67, 0x05, 0x60, 0x2c, 0xa2, 0x18, 0xc7, 0x82, 0x0a, 0x4e, 0xda, 0xb0, 0xcb, 0xe5, 0xd7,
+	0xc5, 0x99, 0x8a, 0x54, 0x35, 0x9a, 0x09, 0x48, 0x3a, 0xb0, 0x37, 0xa5, 0x8c, 0x4e, 0x7d, 0xb1,
+	0x52, 0xd2, 0x09, 0x21, 0x45, 0x89, 0x0b, 0x75, 0xba, 0xa4, 0x7e, 0x40, 0x27, 0x01, 0xda, 0x95,
+	0x0c, 0x65, 0x0d, 0x93, 0x87, 0xd0, 0x88, 0x71, 0xe6, 0x47, 0xe1, 0x30, 0x5a, 0x84, 0xc2, 0xae,
+	0x76, 0xac, 0xee, 0x81, 0x61, 0x65, 0x0d, 0xe4, 0x4b, 0x68, 0x71, 0x0c, 0x3d, 0x3f, 0x9c, 0x8d,
+	0x43, 0xca, 0x34, 0x79, 0x27, 0x43, 0xbe, 0x61, 0x25, 0x4f, 0x81, 0xc4, 0x38, 0x45, 0x7f, 0x99,
+	0xf3, 0xa9, 0x65, 0x7c, 0x0a, 0xec, 0x32, 0x67, 0x2e, 0x68, 0x2c, 0x5e, 0xfa, 0x73, 0xb4, 0x77,
+	0x33, 0xe4, 0x35, 0x4c, 0x7a, 0x70, 0x48, 0x19, 0x0b, 0x56, 0x39, 0xe1, 0xbd, 0x0c, 0xf7, 0xa6,
+	0x99, 0x7c, 0x06, 0x35, 0x9f, 0x0f, 0x16, 0x7c, 0x65, 0xd7, 0x3b, 0x56, 0x77, 0xcf, 0x10, 0x0d,
+	0x26, 0xcf, 0x72, 0xc1, 0xd1, 0x1b, 0xfb, 0x3f, 0xa1, 0x0d, 0xd9, 0xb3, 0x4c, 0x50, 0xd2, 0x85,
+	0xfd, 0xc9, 0x4a, 0x20, 0xff, 0x21, 0xf6, 0x85, 0xc0, 0xd0, 0x6e, 0x64, 0x58, 0x39, 0x8b, 0xfb,
+	0x04, 0x0e, 0x46, 0x78, 0xb5, 0x40, 0x2e, 0x9e, 0x21, 0xf5, 0x30, 0x96, 0x25, 0x4d, 0x83, 0x05,
+	0x17, 0x18, 0x6f, 0x5c, 0xe5, 0x1a, 0x76, 0x9f, 0x42, 0x73, 0x84, 0x9c, 0x45, 0x21, 0xc7, 0xff,
+	0xe0, 0xf5, 0x23, 0xd4, 0xbe, 0xd3, 0x6c, 0x07, 0xca, 0xbe, 0x67, 0x68, 0x20, 0x69, 0xd7, 0xef,
+	0x1e, 0x94, 0x2f, 0xce, 0x46, 0x65, 0xdf, 0x23, 0x36, 0x54, 0x43, 0x3a, 0x47, 0xd5, 0x24, 0xf5,
+	0xa4, 0x33, 0x25, 0x22, 0x2d, 0xd4, 0xf3, 0x62, 0xd5, 0x1b, 0xa9, 0x45, 0x22, 0x6e, 0x1f, 0xea,
+	0x5a, 0x79, 0x84, 0x57, 0x92, 0xf6, 0x2a, 0x8e, 0xe6, 0x4a, 0x3e, 0xa5, 0x49, 0xc4, 0x84, 0x2d,
+	0x17, 0x85, 0x75, 0xbf, 0x49, 0x25, 0x38, 0x23, 0x8f, 0xa0, 0x16, 0xa8, 0x0f, 0x25, 0x22, 0xa7,
+	0x40, 0x4d, 0x8d, 0x26, 0x24, 0x97, 0xa1, 0x19, 0xee, 0xef, 0x16, 0x34, 0x2e, 0x17, 0x42, 0x8d,
+	0xc2, 0xd6, 0xe1, 0xc9, 0x57, 0x50, 0x7b, 0xad, 0x23, 0x56, 0x54, 0xc4, 0x23, 0x1d, 0x31, 0x77,
+	0x35, 0x49, 0x60, 0x4d, 0x24, 0x9f, 0xc3, 0x8e, 0x1a, 0x2e, 0x35, 0x05, 0x8d, 0xde, 0x41, 0x32,
+	0xa9, 0x2a, 0x13, 0xc3, 0xd5, 0x0c, 0xb7, 0x9f, 0x49, 0x91, 0x33, 0xd2, 0x4b, 0x83, 0xe9, 0xf2,
+	0x8e, 0x93, 0x60, 0xd9, 0x2b, 0xcd, 0x47, 0x73, 0xcf, 0xe1, 0xde, 0x39, 0x8a, 0x61, 0x72, 0x99,
+	0xdb, 0x1f, 0xf4, 0xe3, 0x0d, 0x21, 0xce, 0xde, 0xd7, 0x0e, 0xee, 0x00, 0xa0, 0x1f, 0x04, 0xd1,
+	0xf4, 0xff, 0x84, 0xec, 0xae, 0x35, 0xee, 0x88, 0xf6, 0x02, 0xee, 0x5f, 0x70, 0x93, 0xdb, 0x20,
+	0x8a, 0x04, 0x17, 0x31, 0x65, 0xdb, 0x07, 0x7e, 0x52, 0x28, 0xa7, 0x72, 0xd8, 0x59, 0xd2, 0x60,
+	0xa1, 0xb7, 0x72, 0x32, 0xde, 0x1a, 0x72, 0x7f, 0xb3, 0xe0, 0x28, 0x25, 0x1b, 0xe7, 0xed, 0x1b,
+	0x2b, 0xed, 0x92, 0xca, 0x5d, 0x5d, 0x22, 0x37, 0xff, 0x14, 0x83, 0xc0, 0xf4, 0x53, 0xba, 0xf9,
+	0x87, 0x18, 0x04, 0x49, 0x38, 0x69, 0x77, 0x5f, 0x14, 0xe4, 0xc7, 0x19, 0xf9, 0x1a, 0x8e, 0x68,
+	0x10, 0x23, 0xf5, 0x56, 0xa9, 0x95, 0xa1, 0x97, 0xab, 0xb0, 0x88, 0xe0, 0xfe, 0x6a, 0x41, 0x4b,
+	0xc6, 0x78, 0x86, 0x34, 0x16, 0x13, 0xa4, 0x62, 0xfb, 0x62, 0x93, 0x0a, 0x2a, 0xef, 0xaf, 0x20,
+	0x33, 0xdf, 0xd5, 0x5b, 0x5f, 0xb9, 0x64, 0xbe, 0x9f, 0x6f, 0x66, 0xa7, 0x4a, 0x85, 0x69, 0xfa,
+	0xc2, 0x9a, 0x21, 0x6a, 0x99, 0x97, 0x35, 0xc5, 0x8d, 0x4e, 0x86, 0xe9, 0xfe, 0x61, 0xc1, 0xa1,
+	0x3a, 0xf8, 0x0f, 0x50, 0xeb, 0x16, 0x1b, 0xe3, 0x0b, 0xd9, 0x0b, 0x54, 0x70, 0x53, 0xb5, 0xc9,
+	0x78, 0xfd, 0x88, 0x9b, 0x8c, 0x35, 0xc9, 0x3d, 0xbf, 0x91, 0xeb, 0x76, 0xab, 0xe3, 0xd1, 0x63,
+	0x68, 0xe6, 0xff, 0xdf, 0x20, 0x0d, 0xd8, 0xed, 0x7b, 0xde, 0xf7, 0x91, 0x87, 0xad, 0x12, 0x69,
+	0x02, 0x8c, 0x70, 0x1e, 0x2d, 0x51, 0x7d, 0x5b, 0xbd, 0x9f, 0xab, 0x50, 0xbf, 0x3c, 0x1b, 0x63,
+	0xbc, 0xf4, 0xa7, 0x48, 0x4e, 0xa1, 0x7e, 0x8e, 0xc2, 0xbc, 0x1b, 0xf7, 0xb2, 0x7b, 0x78, 0x84,
+	0x57, 0x4e, 0x1e, 0xe0, 0xcc, 0x2d, 0x91, 0x53, 0xd8, 0x35, 0xc3, 0x4e, 0x4c, 0x81, 0xeb, 0xfd,
+	0xe1, 0x6c, 0x20, 0xca, 0xe1, 0x5b, 0xd8, 0xcf, 0x2e, 0x24, 0x72, 0x5f, 0x73, 0x36, 0xb6, 0x9d,
+	0x53, 0x04, 0x2b, 0xff, 0x4b, 0x20, 0x37, 0x87, 0x9c, 0x7c, 0xaa, 0xe9, 0x85, 0xdb, 0xc4, 0xb9,
+	0xdd, 0xa8, 0x14, 0x9f, 0x43, 0x6b, 0x73, 0xc0, 0xc8, 0x27, 0xda, 0xa5, 0x60, 0x31, 0x38, 0xb7,
+	0x99, 0x94, 0x56, 0x0f, 0xf6, 0x92, 0xd5, 0x4f, 0x0e, 0x35, 0x31, 0xf3, 0x5a, 0x39, 0x9b, 0x90,
+	0xf2, 0xe9, 0xc3, 0x41, 0xae, 0xe5, 0xc9, 0x47, 0xa6, 0xb7, 0x37, 0xa6, 0xd4, 0x29, 0xc4, 0x95,
+	0xc4, 0x19, 0x34, 0xf3, 0xcd, 0x43, 0x3e, 0xce, 0x74, 0x5b, 0x4e, 0xa4, 0xd8, 0x20, 0x55, 0x06,
+	0xc7, 0x6f, 0xff, 0x6e, 0x97, 0xde, 0x5c, 0xb7, 0xad, 0xb7, 0xd7, 0x6d, 0xeb, 0xaf, 0xeb, 0xb6,
+	0xf5, 0xcb, 0x3f, 0xed, 0xd2, 0xbf, 0x01, 0x00, 0x00, 0xff, 0xff, 0x58, 0x09, 0x05, 0x08, 0x1d,
+	0x0b, 0x00, 0x00,
 }

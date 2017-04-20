@@ -164,3 +164,12 @@ func (n *Node) startStore() {
 		store.Stop()
 	})
 }
+
+func (n *Node) putStore() {
+	req := new(pdpb.PutStoreReq)
+	req.Header.ClusterID = n.clusterID
+	_, err := n.pdClient.PutStore(context.TODO(), req)
+	if err != nil {
+		log.Fatalf("bootstrap: put store to pd failed, errors:\n %+v", err)
+	}
+}

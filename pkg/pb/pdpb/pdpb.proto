@@ -15,8 +15,9 @@ service PDService {
     rpc GetClusterID(GetClusterIDReq) returns (GetClusterIDRsp) {}
     rpc IsClusterBootstrap (IsClusterBootstrapReq) returns (IsClusterBootstrapRsp) {}
     rpc BootstrapCluster (BootstrapClusterReq) returns (BootstrapClusterRsp) {}
-    rpc CellHeartbeat (CellHeartbeatReq) returns (CellHeartbeatRsp) {}
     rpc PutStore(PutStoreReq) returns (PutStoreRsp) {}
+    rpc CellHeartbeat (CellHeartbeatReq) returns (CellHeartbeatRsp) {}
+    rpc StoreHeartbeat (StoreHeartbeatReq) returns (StoreHeartbeatRsp) {}
 }
 
 enum ConfChangeType {
@@ -27,6 +28,30 @@ enum ConfChangeType {
 message ChangePeer {
     optional ConfChangeType type = 1 [(gogoproto.nullable) = false];
     optional metapb.Peer    peer = 2 [(gogoproto.nullable) = true];
+}
+
+message StoreStats {
+    optional uint64 storeID            = 1 [(gogoproto.nullable) = false];
+    // Capacity for the store.
+    optional uint64 capacity           = 2 [(gogoproto.nullable) = false];
+    // Available size for the store.
+    optional uint64 available          = 3 [(gogoproto.nullable) = false];
+    // Total region count in this store.
+    optional uint32 regionCount        = 4 [(gogoproto.nullable) = false];
+    // Current sending snapshot count.
+    optional uint32 sendingSnapCount   = 5 [(gogoproto.nullable) = false];
+    // Current receiving snapshot count.
+    optional uint32 receivingSnapCount = 6 [(gogoproto.nullable) = false];
+    // When the store is started (unix timestamp in seconds).
+    optional uint32 startTime          = 7 [(gogoproto.nullable) = false];
+    // How many region is applying snapshot.
+    optional uint32 applyingSnapCount  = 8 [(gogoproto.nullable) = false];
+    // If the store is busy
+    optional bool   isBusy             = 9 [(gogoproto.nullable) = false];
+    // Actually used space by db
+    optional uint64 usedSize           = 10 [(gogoproto.nullable) = false];
+    // Bytes written for the store.
+    optional uint64 bytesWritten       = 11 [(gogoproto.nullable) = false];
 }
 
 message RequestHeader {
@@ -111,4 +136,15 @@ message CellHeartbeatReq {
 
 message CellHeartbeatRsp {
     optional ChangePeer changePeer = 1 [(gogoproto.nullable) = true];
+}
+
+message StoreHeartbeatReq {
+    optional string        from   = 1 [(gogoproto.nullable) = false];
+    optional uint64        id     = 2 [(gogoproto.nullable) = false, (gogoproto.customname) = "ID"];
+    optional RequestHeader header = 3 [(gogoproto.nullable) = false];
+    optional StoreStats    stats  = 4 [(gogoproto.nullable) = true];
+}
+
+message StoreHeartbeatRsp {
+    optional ResponseHeader header = 1 [(gogoproto.nullable) = false];
 }

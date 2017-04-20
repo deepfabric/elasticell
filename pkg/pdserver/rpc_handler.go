@@ -183,6 +183,24 @@ func (h *RPCHandler) CellHeartbeat(c context.Context, req *pdpb.CellHeartbeatReq
 	return rsp.(*pdpb.CellHeartbeatRsp), nil
 }
 
+// StoreHeartbeat returns store heartbeat response
+func (h *RPCHandler) StoreHeartbeat(c context.Context, req *pdpb.StoreHeartbeatReq) (*pdpb.StoreHeartbeatRsp, error) {
+	doFun := func() (interface{}, error) {
+		return h.server.storeHeartbeat(req)
+	}
+
+	forwardFun := func(proxy *pd.Client) (interface{}, error) {
+		return proxy.StoreHeartbeat(c, req)
+	}
+
+	rsp, err := h.doHandle("CellHeartbeat", req, forwardFun, doFun)
+	if err != nil {
+		return nil, err
+	}
+
+	return rsp.(*pdpb.StoreHeartbeatRsp), nil
+}
+
 func (h *RPCHandler) doHandle(name string, req pb.BaseReq, forwardFun func(*pd.Client) (interface{}, error), doFun func() (interface{}, error)) (interface{}, error) {
 	log.Debugf("rpc: req<%s-%d>, type=<%s> req=<%v>",
 		req.GetFrom(),

@@ -86,6 +86,10 @@ func newCellCache() *cellCache {
 	return cc
 }
 
+func (cc *cellCache) getStoreLeaderCount(storeID uint64) int {
+	return len(cc.leaders[storeID])
+}
+
 func (c *cache) allocPeer(storeID uint64) (meta.Peer, error) {
 	peerID, err := c.allocator.newID()
 	if err != nil {
@@ -123,7 +127,7 @@ func (c *cache) getCellStores(cell *cellRuntime) []*storeRuntime {
 	return stores
 }
 
-func (c *cache) iteratorStore(fn func(*storeRuntime) (bool, error)) error {
+func (c *cache) foreachStore(fn func(*storeRuntime) (bool, error)) error {
 	c.RLock()
 	defer c.RUnlock()
 

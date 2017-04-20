@@ -267,6 +267,24 @@ func (c *Client) CellHeartbeat(ctx context.Context, req *pdpb.CellHeartbeatReq) 
 	return rsp.(*pdpb.CellHeartbeatRsp), nil
 }
 
+// StoreHeartbeat returns store heartbeat response
+func (c *Client) StoreHeartbeat(ctx context.Context, req *pdpb.StoreHeartbeatReq) (*pdpb.StoreHeartbeatRsp, error) {
+	rsp, err := c.proxyRPC(ctx,
+		req,
+		func() {
+			req.From = c.name
+			req.ID = c.seq
+		},
+		func() (interface{}, error) {
+			return c.pd.StoreHeartbeat(ctx, req, grpc.FailFast(true))
+		})
+	if err != nil {
+		return nil, err
+	}
+
+	return rsp.(*pdpb.StoreHeartbeatRsp), nil
+}
+
 func (c *Client) proxyRPC(ctx context.Context, req pb.BaseReq, setFromFun func(), doRPC func() (interface{}, error)) (interface{}, error) {
 	c.mut.RLock()
 

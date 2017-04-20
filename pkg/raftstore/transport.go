@@ -46,8 +46,14 @@ type transport struct {
 	conns map[string]*goetty.Connector
 }
 
-func newTransport(handler func(msg *mraft.RaftMessage)) *transport {
+func newTransport(cfg *RaftCfg, handler func(msg *mraft.RaftMessage)) *transport {
+	addr := cfg.PeerAddr
+	if cfg.PeerAdvertiseAddr != "" {
+		addr = cfg.PeerAdvertiseAddr
+	}
+	
 	return &transport{
+		server:  goetty.NewServer(addr, decoder, encoder, goetty.NewUUIDV4IdGenerator()),
 		conns:   make(map[string]*goetty.Connector, 32),
 		handler: handler,
 	}

@@ -50,6 +50,31 @@ func (m *cellPeersMap) delete(key uint64) {
 	m.Unlock()
 }
 
+func (m *cellPeersMap) foreach(fn func(*PeerReplicate) (bool, error)) error {
+	m.RLock()
+	var err error
+	var c bool
+	for _, v := range m.m {
+		c, err = fn(v)
+		if err != nil || !c {
+			break
+		}
+	}
+	m.RUnlock()
+
+	return err
+}
+func (m *cellPeersMap) values() []*PeerReplicate {
+	m.RLock()
+	var values []*PeerReplicate
+	for _, v := range m.m {
+		values = append(values, v)
+	}
+	m.RUnlock()
+
+	return values
+}
+
 type peerCacheMap struct {
 	sync.RWMutex
 	m map[uint64]metapb.Peer
