@@ -156,7 +156,7 @@ func (n *Node) bootstrapCluster(cell metapb.Cell) {
 
 func (n *Node) startStore() {
 	log.Infof("bootstrap: begin to start store, storeID=<%d>", n.storeMeta.ID)
-	store := raftstore.NewStore(n.storeMeta, n.driver, n.cfg.RaftStore)
+	store := raftstore.NewStore(n.clusterID, n.pdClient, n.storeMeta, n.driver, n.cfg.RaftStore)
 
 	n.runner.RunCancelableTask(func(c context.Context) {
 		store.Start()

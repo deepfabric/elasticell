@@ -21,8 +21,9 @@ import (
 	"github.com/coreos/etcd/raft/raftpb"
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
-	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
+	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
+	"github.com/deepfabric/elasticell/pkg/pd"
 	"github.com/deepfabric/elasticell/pkg/storage"
 	"github.com/deepfabric/elasticell/pkg/util"
 	"golang.org/x/net/context"
@@ -36,8 +37,11 @@ var (
 type Store struct {
 	cfg *Cfg
 
-	id   uint64
-	meta metapb.Store
+	id        uint64
+	clusterID uint64
+	meta      metapb.Store
+
+	pdClient *pd.Client
 
 	replicatesMap *cellPeersMap // cellid -> peer replicate
 	keyRanges     *util.CellTree
@@ -51,12 +55,14 @@ type Store struct {
 }
 
 // NewStore returns store
-func NewStore(meta metapb.Store, engine storage.Driver, cfg *Cfg) *Store {
+func NewStore(clusterID uint64, pdClient *pd.Client, meta metapb.Store, engine storage.Driver, cfg *Cfg) *Store {
 	s := new(Store)
+	s.clusterID = clusterID
 	s.id = meta.ID
 	s.meta = meta
 	s.engine = engine
 	s.cfg = cfg
+	s.pdClient = pdClient
 
 	s.trans = newTransport(s.cfg.Raft, s.onRaftMessage)
 
@@ -400,12 +406,33 @@ func (s *Store) addJob(task func() error) (*util.Job, error) {
 }
 
 func (s *Store) handleStoreHeartbeat() {
+	req := new(pdpb.StoreHeartbeatReq)
+	req.Header.ClusterID = s.clusterID
 	// TODO: impl
-	// req := new(pdpb.Sto)
+	req.Stats = &pdpb.StoreStats{
+		StoreID:            s.GetID(),
+		Capacity:           0,
+		Available:          0,
+		CellCount:          s.replicatesMap.size(),
+		SendingSnapCount:   0,
+		ReceivingSnapCount: 0,
+		StartTime:          0,
+		ApplyingSnapCount:  0,
+		IsBusy:             false,
+		UsedSize:           0,
+		BytesWritten:       0,
+	}
+
+	_, err := s.pdClient.StoreHeartbeat(context.TODO(), req)
+	if err != nil {
+		log.Errorf("heartbeat-store[%d]: heartbeat failed, errors:\n +%v",
+			s.id,
+			err)
+	}
 }
 
 func (s *Store) handleCellHeartbeat() {
 	for _, p := range s.replicatesMap.values() {
-		p.sendHeartbeat()
+		p.sendHeartbeat(s.clusterID)
 	}
 }

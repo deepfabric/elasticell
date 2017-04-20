@@ -37,7 +37,7 @@ message StoreStats {
     // Available size for the store.
     optional uint64 available          = 3 [(gogoproto.nullable) = false];
     // Total region count in this store.
-    optional uint32 regionCount        = 4 [(gogoproto.nullable) = false];
+    optional uint32 cellCount          = 4 [(gogoproto.nullable) = false];
     // Current sending snapshot count.
     optional uint32 sendingSnapCount   = 5 [(gogoproto.nullable) = false];
     // Current receiving snapshot count.

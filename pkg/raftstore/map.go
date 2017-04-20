@@ -30,6 +30,14 @@ func newCellPeersMap() *cellPeersMap {
 	}
 }
 
+func (m *cellPeersMap) size() uint32 {
+	m.RLock()
+	v := uint32(len(m.m))
+	m.RUnlock()
+
+	return v
+}
+
 func (m *cellPeersMap) put(key uint64, peers *PeerReplicate) {
 	m.Lock()
 	m.m[key] = peers

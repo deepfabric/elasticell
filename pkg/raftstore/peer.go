@@ -107,6 +107,6 @@ func (pr *PeerReplicate) getCell() metapb.Cell {
 	return pr.getStore().getCell()
 }
 
-func (pr *PeerReplicate) sendHeartbeat() {
+func (pr *PeerReplicate) sendHeartbeat(clusterID uint64) {
 	// TODO: impl
 }
