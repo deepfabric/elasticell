@@ -17,10 +17,10 @@ import "time"
 
 // Cfg for raftstore
 type Cfg struct {
-	StoreHeartbeatIntervalMs int `json:"storeHeartbeatIntervalMs"`
-	CellHeartbeatIntervalMs  int `json:"cellHeartbeatIntervalMs"`
-
-	Raft *RaftCfg `json:"raft"`
+	StoreHeartbeatIntervalMs int      `json:"storeHeartbeatIntervalMs"`
+	CellHeartbeatIntervalMs  int      `json:"cellHeartbeatIntervalMs"`
+	MaxPeerDownSec           int      `json:"maxPeerDownSec"`
+	Raft                     *RaftCfg `json:"raft"`
 }
 
 func (c *Cfg) getStoreHeartbeatDuration() time.Duration {
@@ -29,6 +29,10 @@ func (c *Cfg) getStoreHeartbeatDuration() time.Duration {
 
 func (c *Cfg) getCellHeartbeatDuration() time.Duration {
 	return time.Duration(c.CellHeartbeatIntervalMs) * time.Millisecond
+}
+
+func (c *Cfg) getMaxPeerDownSecDuration() time.Duration {
+	return time.Duration(c.MaxPeerDownSec) * time.Second
 }
 
 // RaftCfg is the cfg for raft

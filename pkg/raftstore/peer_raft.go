@@ -16,6 +16,8 @@ package raftstore
 import (
 	"fmt"
 
+	"time"
+
 	"github.com/coreos/etcd/raft"
 	"github.com/coreos/etcd/raft/raftpb"
 	"github.com/deepfabric/elasticell/pkg/log"
@@ -204,7 +206,7 @@ func (pr *PeerReplicate) sendRaftMsg(msg raftpb.Message) error {
 	sendMsg.CellEpoch = pr.ps.cell.Epoch
 
 	sendMsg.FromPeer = pr.peer
-	sendMsg.ToPeer = pr.store.peerCache.get(msg.To)
+	sendMsg.ToPeer, _ = pr.store.peerCache.get(msg.To)
 	if sendMsg.ToPeer.ID == 0 {
 		return fmt.Errorf("can not found peer<%d>", msg.To)
 	}
@@ -256,6 +258,9 @@ func (pr *PeerReplicate) getCurrentTerm() uint64 {
 }
 
 func (pr *PeerReplicate) step(msg raftpb.Message) error {
+	if pr.isLeader() && msg.From != 0 {
+		pr.peerHeartbeatsMap.put(msg.From, time.Now())
+	}
 	return pr.rn.Step(context.TODO(), msg)
 }
 

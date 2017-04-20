@@ -22,6 +22,10 @@ import (
 	"github.com/coreos/etcd/raft/raftpb"
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
+	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
+	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
+	"github.com/deepfabric/elasticell/pkg/util"
+	"golang.org/x/net/context"
 )
 
 const (
@@ -31,15 +35,17 @@ const (
 
 // PeerReplicate is the cell's peer replicate. Every cell replicate has a PeerReplicate.
 type PeerReplicate struct {
-	cellID     uint64
-	peer       metapb.Peer
-	raftTicker *time.Ticker
-	rn         raft.Node
-	store      *Store
-	ps         *peerStorage
-	msgC       chan raftpb.Message
+	cellID            uint64
+	peer              metapb.Peer
+	raftTicker        *time.Ticker
+	rn                raft.Node
+	store             *Store
+	ps                *peerStorage
+	msgC              chan raftpb.Message
+	pendingReads      *readIndexQueue
+	peerHeartbeatsMap *peerHeartbeatsMap
 
-	pendingReads *readIndexQueue
+	lastHBJob *util.Job
 }
 
 func createPeerReplicate(store *Store, cell *metapb.Cell) (*PeerReplicate, error) {
@@ -94,9 +100,114 @@ func newPeerReplicate(store *Store, cell *metapb.Cell, peerID uint64) (*PeerRepl
 		reads:    queue.NewRingBuffer(defaultQueueSize),
 		readyCnt: 0,
 	}
+	pr.peerHeartbeatsMap = newPeerHeartbeatsMap()
 
 	store.runner.RunCancelableTask(pr.doSendFromChan)
 	return pr, nil
+}
+
+func (pr *PeerReplicate) doHeartbeat() error {
+	req := new(pdpb.CellHeartbeatReq)
+	req.Cell = pr.getCell()
+	req.Leader = &pr.peer
+	req.DownPeers = pr.collectDownPeers(pr.store.cfg.getMaxPeerDownSecDuration())
+	req.PendingPeers = pr.collectPendingPeers()
+
+	rsp, err := pr.store.pdClient.CellHeartbeat(context.TODO(), req)
+	if err != nil {
+		log.Errorf("heartbeat-cell[%d]: send cell heartbeat failed, errors:\n %+v",
+			pr.cellID,
+			err)
+		return err
+	}
+
+	if rsp.ChangePeer != nil {
+		log.Infof("heartbeat-cell[%d]: try to change peer, type=<%v> peer=<%+v>",
+			pr.cellID,
+			rsp.ChangePeer.Type,
+			rsp.ChangePeer.Peer)
+
+		if nil == rsp.ChangePeer.Peer {
+			log.Fatal("bug: peer can not be nil")
+		}
+
+		adminReq := newChangePeerRequest(rsp.ChangePeer.Type, *rsp.ChangePeer.Peer)
+		pr.store.sendAdminRequest(pr.getCell(), pr.peer, adminReq)
+	}
+
+	return nil
+}
+
+func (pr *PeerReplicate) checkPeers() {
+	if !pr.isLeader() {
+		pr.peerHeartbeatsMap.clear()
+		return
+	}
+
+	peers := pr.getCell().Peers
+	if pr.peerHeartbeatsMap.size() == len(peers) {
+		return
+	}
+
+	// Insert heartbeats in case that some peers never response heartbeats.
+	for _, p := range peers {
+		pr.peerHeartbeatsMap.putOnlyNotExist(p.ID, time.Now())
+	}
+}
+
+func (pr *PeerReplicate) collectDownPeers(maxDuration time.Duration) []pdpb.PeerStats {
+	now := time.Now()
+	var downPeers []pdpb.PeerStats
+	for _, p := range pr.getCell().Peers {
+		if p.ID == pr.cellID {
+			continue
+		}
+
+		if pr.peerHeartbeatsMap.has(p.ID) {
+			last := pr.peerHeartbeatsMap.get(p.ID)
+			if now.Sub(last) >= maxDuration {
+				state := pdpb.PeerStats{}
+				state.Peer = *p
+				state.DownSeconds = uint64(now.Sub(last).Seconds())
+
+				downPeers = append(downPeers, state)
+			}
+		}
+	}
+	return downPeers
+}
+
+func (pr *PeerReplicate) collectPendingPeers() []metapb.Peer {
+	var pendingPeers []metapb.Peer
+	status := pr.rn.Status()
+	truncatedIdx := pr.getStore().getTruncatedIndex()
+
+	for id, progress := range status.Progress {
+		if id == pr.peer.ID {
+			continue
+		}
+
+		if progress.Match < truncatedIdx {
+			p, ok := pr.store.peerCache.get(id)
+			if ok {
+				pendingPeers = append(pendingPeers, p)
+			}
+		}
+	}
+
+	return pendingPeers
+}
+
+func newChangePeerRequest(changeType pdpb.ConfChangeType, peer metapb.Peer) *raftcmdpb.AdminRequest {
+	req := new(raftcmdpb.AdminRequest)
+	req.Type = raftcmdpb.ChangePeer
+
+	subReq := new(raftcmdpb.ChangePeerRequest)
+	subReq.ChangeType = changeType
+	subReq.Peer = peer
+	req.Body = util.MustMarshal(subReq)
+
+	return req
 }
 
 func (pr *PeerReplicate) getStore() *peerStorage {
@@ -105,8 +216,4 @@ func (pr *PeerReplicate) getStore() *peerStorage {
 
 func (pr *PeerReplicate) getCell() metapb.Cell {
 	return pr.getStore().getCell()
-}
-
-func (pr *PeerReplicate) sendHeartbeat(clusterID uint64) {
-	// TODO: impl
 }

@@ -41,17 +41,17 @@ type transport struct {
 	sync.RWMutex
 
 	server  *goetty.Server
-	handler func(msg *mraft.RaftMessage)
+	handler func(interface{})
 
 	conns map[string]*goetty.Connector
 }
 
-func newTransport(cfg *RaftCfg, handler func(msg *mraft.RaftMessage)) *transport {
+func newTransport(cfg *RaftCfg, handler func(interface{})) *transport {
 	addr := cfg.PeerAddr
 	if cfg.PeerAdvertiseAddr != "" {
 		addr = cfg.PeerAdvertiseAddr
 	}
-	
+
 	return &transport{
 		server:  goetty.NewServer(addr, decoder, encoder, goetty.NewUUIDV4IdGenerator()),
 		conns:   make(map[string]*goetty.Connector, 32),
@@ -69,12 +69,11 @@ func (t *transport) stop() {
 
 func (t *transport) doConnection(session goetty.IOSession) error {
 	for {
-		origin, err := session.Read()
+		msg, err := session.Read()
 		if err != nil {
 			return err
 		}
 
-		msg := origin.(*mraft.RaftMessage)
 		t.handler(msg)
 		return nil
 	}

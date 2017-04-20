@@ -522,7 +522,7 @@ func (ps *peerStorage) Snapshot() (raftpb.Snapshot, error) {
 	log.Infof("raftstore[cell-%d]: start snapshot", ps.cell.ID)
 	ps.snapTriedCnt++
 
-	job, err := ps.store.addJob(ps.doGenerateSnapshotJob)
+	job, err := ps.store.addSnapJob(ps.doGenerateSnapshotJob)
 	if err != nil {
 		log.Fatalf("raftstore[cell-%d]: add generate job failed, errors:\n %+v",
 			ps.cell.ID,

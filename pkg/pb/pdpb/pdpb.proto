@@ -30,6 +30,11 @@ message ChangePeer {
     optional metapb.Peer    peer = 2 [(gogoproto.nullable) = true];
 }
 
+message PeerStats {
+    optional metapb.Peer peer        = 1 [(gogoproto.nullable) = false];
+    optional uint64      downSeconds = 2 [(gogoproto.nullable) = false];
+}
+
 message StoreStats {
     optional uint64 storeID            = 1 [(gogoproto.nullable) = false];
     // Capacity for the store.
@@ -128,10 +133,21 @@ message BootstrapClusterRsp {
 }
 
 message CellHeartbeatReq {
-    optional string from        = 1 [(gogoproto.nullable) = false];
-    optional uint64 id          = 2 [(gogoproto.nullable) = false, (gogoproto.customname) = "ID"];
-    optional metapb.Cell cell   = 3 [(gogoproto.nullable) = false];
-    optional metapb.Peer leader = 4 [(gogoproto.nullable) = true];
+    optional string from              = 1  [(gogoproto.nullable) = false];
+    optional uint64 id                = 2  [(gogoproto.nullable) = false, (gogoproto.customname) = "ID"];
+    optional metapb.Cell cell         = 3  [(gogoproto.nullable) = false];
+    optional metapb.Peer leader       = 4  [(gogoproto.nullable) = true];
+    // Leader considers that these peers are down.
+    repeated PeerStats   downPeers    = 5  [(gogoproto.nullable) = false];
+    // Pending peers are the peers that the leader can't consider as
+    // working followers.
+    repeated metapb.Peer pendingPeers = 6  [(gogoproto.nullable) = false];
+    // Bytes read/written during this period.
+    optional uint64      bytesWritten = 7  [(gogoproto.nullable) = false];
+    optional uint64      bytesRead    = 8  [(gogoproto.nullable) = false];
+    // Keys read/written during this period.
+    optional uint64      keysWritten  = 9  [(gogoproto.nullable) = false];
+    optional uint64      keysRead     = 10 [(gogoproto.nullable) = false];
 }
 
 message CellHeartbeatRsp {

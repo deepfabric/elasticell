@@ -22,7 +22,9 @@ import (
 )
 
 var (
-	errStaleCMD  = errors.New("stale command")
+	errStaleCMD       = errors.New("stale command")
+	errMissingUUIDCMD = errors.New("missing request uuid")
+
 	infoStaleCMD = new(errorpb.StaleCommand)
 )
 
@@ -34,6 +36,12 @@ func buildUUID(uuid []byte, resp *raftcmdpb.RaftCMDResponse) {
 	if resp.Header.UUID != nil {
 		resp.Header.UUID = uuid
 	}
+}
+
+func errorOtherCMDResp(err error) *raftcmdpb.RaftCMDResponse {
+	resp := errorBaseResp(nil, 0)
+	resp.Header.Error.Message = err.Error()
+	return resp
 }
 
 func errorStaleCMDResp(uuid []byte, currentTerm uint64) *raftcmdpb.RaftCMDResponse {

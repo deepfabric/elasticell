@@ -56,23 +56,25 @@ func (s *storeRuntime) isTombstone() bool {
 }
 
 func (s *storeRuntime) storageRatio() int {
-	if s.store.Metric.Capacity == 0 {
+	cap := s.status.stats.Capacity
+
+	if cap == 0 {
 		return 0
 	}
 
-	return int(float64(s.storageSize()) * 100 / float64(s.store.Metric.Capacity))
+	return int(float64(s.storageSize()) * 100 / float64(cap))
 }
 
 func (s *storeRuntime) storageSize() uint64 {
-	return s.store.Metric.Capacity - s.store.Metric.Available
+	return s.status.stats.Capacity - s.status.stats.Available
 }
 
 func (s *storeRuntime) cellScore() float64 {
-	if s.store.Metric.Capacity == 0 {
+	if s.status.stats.Capacity == 0 {
 		return 0
 	}
 
-	return float64(s.store.Metric.CellCount) / float64(s.store.Metric.Capacity)
+	return float64(s.status.stats.CellCount) / float64(s.status.stats.Capacity)
 }
 
 func (s *storeRuntime) getLocationID(keys []string) string {

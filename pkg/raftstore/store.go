@@ -23,14 +23,24 @@ import (
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
 	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
+	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
 	"github.com/deepfabric/elasticell/pkg/pd"
 	"github.com/deepfabric/elasticell/pkg/storage"
 	"github.com/deepfabric/elasticell/pkg/util"
+	"github.com/deepfabric/elasticell/pkg/util/uuid"
 	"golang.org/x/net/context"
 )
 
 var (
 	defaultJobQueueCap uint64 = 10000
+)
+
+const (
+	applyWorker            = "apply-work"
+	snapWorker             = "snap-work"
+	heartbeatWorker        = "hb-work"
+	defaultWorkerQueueSize = 32
+	defaultNotifyChanSize  = 1024
 )
 
 // Store is the store for raft
@@ -49,9 +59,10 @@ type Store struct {
 	delegates     *applyDelegateMap
 	pendingCells  []metapb.Cell
 
-	trans  *transport
-	engine storage.Driver
-	runner *util.Runner
+	trans      *transport
+	engine     storage.Driver
+	runner     *util.Runner
+	notifyChan chan interface{}
 }
 
 // NewStore returns store
@@ -64,7 +75,8 @@ func NewStore(clusterID uint64, pdClient *pd.Client, meta metapb.Store, engine s
 	s.cfg = cfg
 	s.pdClient = pdClient
 
-	s.trans = newTransport(s.cfg.Raft, s.onRaftMessage)
+	s.trans = newTransport(s.cfg.Raft, s.notify)
+	s.notifyChan = make(chan interface{}, defaultNotifyChanSize)
 
 	s.keyRanges = util.NewCellTree()
 	s.replicatesMap = newCellPeersMap()
@@ -72,6 +84,9 @@ func NewStore(clusterID uint64, pdClient *pd.Client, meta metapb.Store, engine s
 	s.delegates = newApplyDelegateMap()
 
 	s.runner = util.NewRunner()
+	s.runner.AddNamedWorker(snapWorker, defaultWorkerQueueSize)
+	s.runner.AddNamedWorker(applyWorker, defaultWorkerQueueSize)
+	s.runner.AddNamedWorker(heartbeatWorker, defaultWorkerQueueSize)
 
 	s.init()
 
@@ -168,6 +183,7 @@ func (s *Store) Start() {
 	go s.startTransfer()
 	<-s.trans.server.Started()
 
+	s.startHandleNotifyMsg()
 	s.startStoreHeartbeatTask()
 	s.startCellHeartbeatTask()
 	s.startGCTask()
@@ -181,16 +197,48 @@ func (s *Store) startTransfer() {
 	}
 }
 
+func (s *Store) startHandleNotifyMsg() {
+	s.runner.RunCancelableTask(func(ctx context.Context) {
+		for {
+			select {
+			case <-ctx.Done():
+				log.Infof("stop: store msg handler stopped")
+				return
+			case n := <-s.notifyChan:
+				if msg, ok := n.(*mraft.RaftMessage); ok {
+					s.onRaftMessage(msg)
+				} else if msg, ok := n.(*raftCMD); ok {
+					s.onRaftCMD(msg)
+				}
+			}
+		}
+	})
+}
+
 func (s *Store) startStoreHeartbeatTask() {
 	s.runner.RunCancelableTask(func(ctx context.Context) {
 		ticker := time.NewTicker(s.cfg.getStoreHeartbeatDuration())
 
+		var err error
+		var job *util.Job
+
 		for {
 			select {
 			case <-ctx.Done():
+				log.Infof("stop: store heart beat job stopped")
 				return
 			case <-ticker.C:
-				s.handleStoreHeartbeat()
+				if job != nil && job.IsNotComplete() {
+					// cancel last if not complete
+					job.Cancel()
+				} else {
+					job, err = s.addHeartbeatJob(s.handleStoreHeartbeat)
+					if err != nil {
+						log.Errorf("heartbeat-store[%d]: add job failed, errors:\n %+v",
+							s.GetID(),
+							err)
+					}
+				}
 			}
 		}
 	})
@@ -203,6 +251,7 @@ func (s *Store) startCellHeartbeatTask() {
 		for {
 			select {
 			case <-ctx.Done():
+				log.Infof("stop: cell heart beat job stopped")
 				return
 			case <-ticker.C:
 				s.handleCellHeartbeat()
@@ -234,6 +283,10 @@ func (s *Store) GetID() uint64 {
 // GetMeta returns store meta
 func (s *Store) GetMeta() metapb.Store {
 	return s.meta
+}
+
+func (s *Store) notify(msg interface{}) {
+	s.notifyChan <- msg
 }
 
 func (s *Store) onRaftMessage(msg *mraft.RaftMessage) {
@@ -279,6 +332,24 @@ func (s *Store) onRaftMessage(msg *mraft.RaftMessage) {
 	if err != nil {
 		return
 	}
+}
+
+func (s *Store) onRaftCMD(cmd *raftCMD) {
+	// we handle all read, write and admin cmd here
+
+	if cmd.req.Header == nil || cmd.req.Header.UUID == nil {
+		cmd.resp(errorOtherCMDResp(errMissingUUIDCMD))
+		return
+	}
+
+	err := s.validateStoreID(cmd.req)
+	if err != nil {
+		cmd.resp(errorOtherCMDResp(err))
+		return
+	}
+
+	rsp := new(raftcmdpb.RaftCMDResponse)
+	buildUUID(cmd.req.Header.UUID, rsp)
 }
 
 func (s *Store) handleGCPeerMsg(msg *mraft.RaftMessage) {
@@ -401,11 +472,23 @@ func (s *Store) addPeerToCache(peer metapb.Peer) {
 	s.peerCache.put(peer.ID, peer)
 }
 
-func (s *Store) addJob(task func() error) (*util.Job, error) {
-	return s.runner.RunJob(task)
+func (s *Store) addHeartbeatJob(task func() error) (*util.Job, error) {
+	return s.addNamedJob(heartbeatWorker, task)
 }
 
-func (s *Store) handleStoreHeartbeat() {
+func (s *Store) addSnapJob(task func() error) (*util.Job, error) {
+	return s.addNamedJob(snapWorker, task)
+}
+
+func (s *Store) addApplyJob(task func() error) (*util.Job, error) {
+	return s.addNamedJob(applyWorker, task)
+}
+
+func (s *Store) addNamedJob(worker string, task func() error) (*util.Job, error) {
+	return s.runner.RunJobWithNamedWorker(worker, task)
+}
+
+func (s *Store) handleStoreHeartbeat() error {
 	req := new(pdpb.StoreHeartbeatReq)
 	req.Header.ClusterID = s.clusterID
 	// TODO: impl
@@ -429,10 +512,42 @@ func (s *Store) handleStoreHeartbeat() {
 			s.id,
 			err)
 	}
+
+	return err
 }
 
 func (s *Store) handleCellHeartbeat() {
+	var err error
+
 	for _, p := range s.replicatesMap.values() {
-		p.sendHeartbeat(s.clusterID)
+		p.checkPeers()
 	}
+
+	for _, p := range s.replicatesMap.values() {
+		if p.isLeader() {
+			if p.lastHBJob != nil && p.lastHBJob.IsNotComplete() {
+				// cancel last if not complete
+				p.lastHBJob.Cancel()
+			} else {
+				p.lastHBJob, err = s.addHeartbeatJob(p.doHeartbeat)
+				if err != nil {
+					log.Errorf("heartbeat-cell[%d]: add cell heartbeat job failed, errors:\n %+v",
+						p.cellID,
+						err)
+				}
+			}
+		}
+	}
+}
+
+func (s *Store) sendAdminRequest(cell metapb.Cell, peer metapb.Peer, adminReq *raftcmdpb.AdminRequest) {
+	req := new(raftcmdpb.RaftCMDRequest)
+	req.Header = &raftcmdpb.RaftRequestHeader{
+		CellId:    cell.ID,
+		CellEpoch: cell.Epoch,
+		Peer:      peer,
+		UUID:      uuid.NewV4().Bytes(),
+	}
+	req.AdminRequest = adminReq
+	s.notify(newRaftCmd(req, nil))
 }

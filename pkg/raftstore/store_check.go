@@ -21,6 +21,7 @@ import (
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
+	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
 )
 
 func (s *Store) isRaftMsgValid(msg *mraft.RaftMessage) bool {
@@ -182,4 +183,14 @@ func (s *Store) inPending(cell metapb.Cell) bool {
 	}
 
 	return false
+}
+
+func (s *Store) validateStoreID(req *raftcmdpb.RaftCMDRequest) error {
+	if req.Header.Peer.StoreID != s.GetID() {
+		return fmt.Errorf("store not match, give=<%d> want=<%d>",
+			req.Header.Peer.StoreID,
+			s.GetID())
+	}
+
+	return nil
 }

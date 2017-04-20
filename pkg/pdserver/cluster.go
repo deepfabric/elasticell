@@ -84,17 +84,18 @@ func (s *Server) cellHeartbeat(req *pdpb.CellHeartbeatReq) (*pdpb.CellHeartbeatR
 		return nil, errRPCReq
 	}
 
-	// TODO: for peer is down or pending
-
 	if req.Cell.ID == 0 {
 		return nil, errRPCReq
 	}
 
-	return cluster.doCellHeartbeat(req.Cell)
+	cr := newCellRuntime(req.Cell, req.Leader)
+	cr.downPeers = req.DownPeers
+	cr.pendingPeers = req.PendingPeers
+
+	return cluster.doCellHeartbeat(cr)
 }
 
 func (s *Server) storeHeartbeat(req *pdpb.StoreHeartbeatReq) (*pdpb.StoreHeartbeatRsp, error) {
-	// TODO: impl
 	if req.Stats == nil {
 		return nil, fmt.Errorf("invalid store heartbeat command, but %+v", req)
 	}
@@ -198,17 +199,17 @@ func (c *CellCluster) doBootstrap(store metapb.Store, cell metapb.Cell) (*pdpb.B
 	}, nil
 }
 
-func (c *CellCluster) doCellHeartbeat(cell metapb.Cell) (*pdpb.CellHeartbeatRsp, error) {
-	err := c.cache.doCellHeartbeat(cell)
+func (c *CellCluster) doCellHeartbeat(cr *cellRuntime) (*pdpb.CellHeartbeatRsp, error) {
+	err := c.cache.doCellHeartbeat(cr)
 	if err != nil {
 		return nil, err
 	}
 
-	if len(cell.Peers) == 0 {
+	if len(cr.cell.Peers) == 0 {
 		return nil, errRPCReq
 	}
 
-	rsp := c.coordinator.dispatch(c.cache.getCell(cell.ID))
+	rsp := c.coordinator.dispatch(c.cache.getCell(cr.cell.ID))
 	if rsp == nil {
 		return emptyRsp, nil
 	}
@@ -319,7 +320,7 @@ func (c *CellCluster) start() error {
 		return err
 	}
 
-	err = c.s.store.LoadCellMeta(clusterID, batchLimit, c.cache.addCell)
+	err = c.s.store.LoadCellMeta(clusterID, batchLimit, c.cache.addCellFromMeta)
 	if err != nil {
 		return err
 	}

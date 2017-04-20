@@ -15,25 +15,27 @@ package pdserver
 
 import (
 	meta "github.com/deepfabric/elasticell/pkg/pb/metapb"
+	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
 )
 
 type cellRuntime struct {
-	cell   meta.Cell
-	leader meta.Cell
-	// downPeers    []*pdpb.PeerStats
-	pendingPeers []*meta.Peer
+	cell         meta.Cell
+	leader       *meta.Peer
+	downPeers    []pdpb.PeerStats
+	pendingPeers []meta.Peer
 }
 
-func newCellRuntime(cell meta.Cell) *cellRuntime {
+func newCellRuntime(cell meta.Cell, leader *meta.Peer) *cellRuntime {
 	return &cellRuntime{
-		cell: cell,
+		cell:   cell,
+		leader: leader,
 	}
 }
 
 func (cc *cellRuntime) getPendingPeer(peerID uint64) *meta.Peer {
 	for _, peer := range cc.pendingPeers {
 		if peer.ID == peerID {
-			return peer
+			return &peer
 		}
 	}
 	return nil

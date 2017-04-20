@@ -23,7 +23,7 @@ import (
 
 func (pr *PeerReplicate) startApplyingSnapJob() {
 	pr.ps.applySnapJobLock.Lock()
-	job, err := pr.store.addJob(pr.doApplyingSnapshotJob)
+	job, err := pr.store.addApplyJob(pr.doApplyingSnapshotJob)
 	if err != nil {
 		log.Fatalf("raftstore[cell-%d]: add apply snapshot task fail, errors:\n %+v",
 			pr.cellID,
@@ -35,7 +35,7 @@ func (pr *PeerReplicate) startApplyingSnapJob() {
 }
 
 func (ps *peerStorage) startDestroyDataJob(cellID uint64, start, end []byte) error {
-	_, err := ps.store.addJob(func() error {
+	_, err := ps.store.addApplyJob(func() error {
 		return ps.doDestroyDataJob(cellID, start, end)
 	})
 
@@ -51,7 +51,7 @@ func (pr *PeerReplicate) startRegistrationJob() {
 		applyState:       *pr.ps.getApplyState(),
 		appliedIndexTerm: pr.ps.getAppliedIndexTerm(),
 	}
-	_, err := pr.store.addJob(func() error {
+	_, err := pr.store.addApplyJob(func() error {
 		return pr.doRegistrationJob(delegate)
 	})
 
@@ -63,7 +63,7 @@ func (pr *PeerReplicate) startRegistrationJob() {
 }
 
 func (pr *PeerReplicate) startApplyCommittedEntriesJob(cellID uint64, term uint64, commitedEntries []raftpb.Entry) error {
-	_, err := pr.store.addJob(func() error {
+	_, err := pr.store.addApplyJob(func() error {
 		return pr.doApplyCommittedEntries(cellID, term, commitedEntries)
 	})
 

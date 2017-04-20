@@ -16,6 +16,8 @@ package raftstore
 import (
 	"sync"
 
+	"time"
+
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 )
 
@@ -100,12 +102,12 @@ func (m *peerCacheMap) put(key uint64, peer metapb.Peer) {
 	m.Unlock()
 }
 
-func (m *peerCacheMap) get(key uint64) metapb.Peer {
+func (m *peerCacheMap) get(key uint64) (metapb.Peer, bool) {
 	m.RLock()
-	v := m.m[key]
+	v, ok := m.m[key]
 	m.RUnlock()
 
-	return v
+	return v, ok
 }
 
 func (m *peerCacheMap) delete(key uint64) {
@@ -143,6 +145,70 @@ func (m *applyDelegateMap) get(key uint64) *applyDelegate {
 }
 
 func (m *applyDelegateMap) delete(key uint64) {
+	m.Lock()
+	delete(m.m, key)
+	m.Unlock()
+}
+
+type peerHeartbeatsMap struct {
+	sync.RWMutex
+	m map[uint64]time.Time
+}
+
+func newPeerHeartbeatsMap() *peerHeartbeatsMap {
+	return &peerHeartbeatsMap{
+		m: make(map[uint64]time.Time, 3),
+	}
+}
+
+func (m *peerHeartbeatsMap) clear() {
+	m.Lock()
+	for key := range m.m {
+		delete(m.m, key)
+	}
+	m.Unlock()
+}
+
+func (m *peerHeartbeatsMap) has(key uint64) bool {
+	m.Lock()
+	_, ok := m.m[key]
+	m.Unlock()
+
+	return ok
+}
+
+func (m *peerHeartbeatsMap) put(key uint64, value time.Time) {
+	m.Lock()
+	m.m[key] = value
+	m.Unlock()
+}
+
+func (m *peerHeartbeatsMap) putOnlyNotExist(key uint64, value time.Time) {
+	m.Lock()
+	_, ok := m.m[key]
+	if !ok {
+		m.m[key] = value
+	}
+	m.Unlock()
+}
+
+func (m *peerHeartbeatsMap) size() int {
+	m.Lock()
+	v := len(m.m)
+	m.Unlock()
+
+	return v
+}
+
+func (m *peerHeartbeatsMap) get(key uint64) time.Time {
+	m.RLock()
+	v := m.m[key]
+	m.RUnlock()
+
+	return v
+}
+
+func (m *peerHeartbeatsMap) delete(key uint64) {
 	m.Lock()
 	delete(m.m, key)
 	m.Unlock()

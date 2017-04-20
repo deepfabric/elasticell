@@ -177,11 +177,18 @@ func (c *cache) setStore(store *storeRuntime) {
 	c.sc.stores[store.store.ID] = store
 }
 
-func (c *cache) addCell(cell meta.Cell) {
+func (c *cache) addCellFromMeta(cell meta.Cell) {
 	c.Lock()
 	defer c.Unlock()
 
-	c.cc.addCell(newCellRuntime(cell))
+	c.cc.addCell(newCellRuntime(cell, nil))
+}
+
+func (c *cache) addCell(source *cellRuntime) {
+	c.Lock()
+	defer c.Unlock()
+
+	c.cc.addCell(source)
 }
 
 func (c *cache) getCell(id uint64) *cellRuntime {
@@ -191,8 +198,8 @@ func (c *cache) getCell(id uint64) *cellRuntime {
 	return c.cc.cells[id]
 }
 
-func (c *cache) doCellHeartbeat(source meta.Cell) error {
-	current := c.getCell(source.ID)
+func (c *cache) doCellHeartbeat(source *cellRuntime) error {
+	current := c.getCell(source.cell.ID)
 
 	// add new cell
 	if nil == current {
@@ -201,13 +208,13 @@ func (c *cache) doCellHeartbeat(source meta.Cell) error {
 
 	// update cell
 	currentEpoch := current.cell.Epoch
-	sourceEpoch := source.Epoch
+	sourceEpoch := source.cell.Epoch
 
 	// cell meta is stale, return an error.
 	if sourceEpoch.CellVer < currentEpoch.CellVer ||
 		sourceEpoch.ConfVer < currentEpoch.ConfVer {
-		log.Warnf("cell-heartbeat: cell is stale, cell=<%d> current<%d,%d> source<%d,%d>",
-			source.ID,
+		log.Warnf("cell-heartbeat[%d]: cell is stale, current<%d,%d> source<%d,%d>",
+			source.cell.ID,
 			currentEpoch.CellVer,
 			currentEpoch.ConfVer,
 			sourceEpoch.CellVer,
@@ -218,8 +225,8 @@ func (c *cache) doCellHeartbeat(source meta.Cell) error {
 	// cell meta is updated, update kv and cache.
 	if sourceEpoch.CellVer > currentEpoch.CellVer ||
 		sourceEpoch.ConfVer > currentEpoch.ConfVer {
-		log.Infof("cell-heartbeat: cell version updated, cell=<%d> cellVer=<%d->%d> confVer=<%d->%d>",
-			source.ID,
+		log.Infof("cell-heartbeat[%d]: cell version updated, cellVer=<%d->%d> confVer=<%d->%d>",
+			source.cell.ID,
 			currentEpoch.CellVer,
 			sourceEpoch.CellVer,
 			currentEpoch.ConfVer,
@@ -227,17 +234,24 @@ func (c *cache) doCellHeartbeat(source meta.Cell) error {
 		return c.doSave(source)
 	}
 
+	if current.leader.ID != source.leader.ID {
+		log.Infof("cell-heartbeat[%d]: update cell leader, from=<%v> to=<%+v>",
+			current.getID(),
+			current,
+			source)
+	}
+
 	// cell meta is the same, update cache only.
 	c.addCell(source)
 	return nil
 }
 
-func (c *cache) doSave(cell meta.Cell) error {
-	err := c.store.SetCellMeta(c.clusterID, cell)
+func (c *cache) doSave(source *cellRuntime) error {
+	err := c.store.SetCellMeta(c.clusterID, source.cell)
 	if err != nil {
 		return err
 	}
-	c.addCell(cell)
+	c.addCell(source)
 	return nil
 }
 
