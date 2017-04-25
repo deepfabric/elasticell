@@ -28,45 +28,7 @@ type execContext struct {
 }
 
 func (d *applyDelegate) checkEpoch(req *raftcmdpb.RaftCMDRequest) bool {
-	checkVer := false
-	checkConfVer := false
-
-	if req.AdminRequest != nil {
-		switch req.AdminRequest.Type {
-		case raftcmdpb.Split:
-			checkVer = true
-		case raftcmdpb.ChangePeer:
-			checkConfVer = true
-		case raftcmdpb.TransferLeader:
-			checkVer = true
-			checkConfVer = true
-		}
-	} else {
-		// for redis command, we don't care conf version.
-		checkConfVer = true
-	}
-
-	if !checkConfVer && !checkVer {
-		return true
-	}
-
-	if req.Header == nil {
-		return false
-	}
-
-	fromEpoch := req.Header.CellEpoch
-	lastestEpoch := d.cell.Epoch
-
-	if (checkConfVer && fromEpoch.ConfVer < lastestEpoch.ConfVer) ||
-		(checkVer && fromEpoch.CellVer < lastestEpoch.CellVer) {
-		log.Infof("raftstore-apply[cell-%d]: reveiced stale epoch, lastest=<%s> reveived=<%s>",
-			d.cell.ID,
-			lastestEpoch.String(),
-			fromEpoch.String())
-		return false
-	}
-
-	return true
+	return checkEpoch(d.cell, req)
 }
 
 func (d *applyDelegate) doApplyRaftCMD(req *raftcmdpb.RaftCMDRequest, term uint64, index uint64) *execResult {
@@ -105,7 +67,7 @@ func (d *applyDelegate) doApplyRaftCMD(req *raftcmdpb.RaftCMDRequest, term uint6
 	ctx.applyState.AppliedIndex = index
 	if !d.isPendingRemove() {
 		// TODO: use write batch
-		err := d.store.engine.Set(getApplyStateKey(d.cell.ID), util.MustMarshal(&ctx.applyState))
+		err := d.store.getMetaEngine().Set(getApplyStateKey(d.cell.ID), util.MustMarshal(&ctx.applyState))
 		if err != nil {
 			log.Fatalf("raftstore-apply[cell-%d]: save apply context failed, errors:\n %+v",
 				d.cell.ID,
@@ -162,12 +124,6 @@ func (d *applyDelegate) execWriteRequest(ctx *execContext) *raftcmdpb.RaftCMDRes
 	}
 
 	return nil
-}
-
-func (pr *PeerReplicate) execReadRequest(req *readIndexRequest) {
-	for _, cmd := range req.cmds {
-		pr.doExecReadCmd(cmd)
-	}
 }
 
 func (pr *PeerReplicate) doExecReadCmd(cmd *cmd) {

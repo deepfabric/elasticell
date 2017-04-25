@@ -113,6 +113,45 @@ func (t *CellTree) Ascend(fn func(cell *metapb.Cell) bool) {
 	})
 }
 
+// NextCell return the next bigger key range cell
+func (t *CellTree) NextCell(start []byte) *metapb.Cell {
+	var value *CellItem
+
+	p := &CellItem{
+		cell: metapb.Cell{Start: start},
+	}
+
+	t.tree.DescendLessOrEqual(p, func(item btree.Item) bool {
+		if bytes.Compare(item.(*CellItem).cell.Start, start) > 0 {
+			value = item.(*CellItem)
+			return false
+		}
+
+		return true
+	})
+
+	if nil == value {
+		return nil
+	}
+
+	return &value.cell
+}
+
+// AscendRange asc iterator the tree in the range [start, end) until fn returns false
+func (t *CellTree) AscendRange(start, end []byte, fn func(cell *metapb.Cell) bool) {
+	startItem := &CellItem{
+		cell: metapb.Cell{Start: start},
+	}
+
+	endItem := &CellItem{
+		cell: metapb.Cell{Start: end},
+	}
+
+	t.tree.DescendRange(startItem, endItem, func(item btree.Item) bool {
+		return fn(&item.(*CellItem).cell)
+	})
+}
+
 // Search returns a cell that contains the key.
 func (t *CellTree) Search(key []byte) metapb.Cell {
 	cell := metapb.Cell{Start: key}

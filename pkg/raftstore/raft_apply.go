@@ -26,10 +26,21 @@ import (
 	"github.com/deepfabric/elasticell/pkg/util"
 )
 
+// TODO: change every redis command apply to rocksdb
+type applyMetrics struct {
+	/// an inaccurate difference in region size since last reset.
+	sizeDiffHint uint64
+	/// delete keys' count since last reset.
+	deleteKeysHint uint64
+	writtenBytes   uint64
+	writtenKeys    uint64
+}
+
 type asyncApplyResult struct {
 	cellID           uint64
 	appliedIndexTerm uint64
 	applyState       mraft.RaftApplyState
+	metrics          applyMetrics
 	result           *execResult
 }
 
@@ -37,9 +48,13 @@ type execResult struct {
 }
 
 type pendingCmd struct {
-	uuid []byte
 	term uint64
-	cb   func(*raftcmdpb.RaftCMDResponse)
+	cmd  *cmd
+}
+
+func (res *asyncApplyResult) hasSplitExecResult() bool {
+	// TODO: impl
+	return false
 }
 
 type applyDelegate struct {
@@ -79,8 +94,8 @@ func (d *applyDelegate) findCB(uuid []byte, term uint64, req *raftcmdpb.RaftCMDR
 		cmd := d.getPendingChangePeerCMD()
 		if cmd == nil {
 			return nil
-		} else if bytes.Compare(uuid, cmd.uuid) == 0 {
-			return cmd.cb
+		} else if bytes.Compare(uuid, cmd.cmd.getUUID()) == 0 {
+			return cmd.cmd.cb
 		}
 
 		d.notifyStaleCMD(cmd)
@@ -93,8 +108,8 @@ func (d *applyDelegate) findCB(uuid []byte, term uint64, req *raftcmdpb.RaftCMDR
 			return nil
 		}
 
-		if bytes.Compare(head.uuid, uuid) == 0 {
-			return head.cb
+		if bytes.Compare(head.cmd.getUUID(), uuid) == 0 {
+			return head.cmd.cb
 		}
 
 		// Because of the lack of original RaftCmdRequest, we skip calling
@@ -103,9 +118,19 @@ func (d *applyDelegate) findCB(uuid []byte, term uint64, req *raftcmdpb.RaftCMDR
 	}
 }
 
-func (d *applyDelegate) setPedingChangePeerCMD(cmd *pendingCmd) {
+func (d *applyDelegate) appendPendingCmd(term uint64, cmd *cmd) {
+	d.pendingCmds = append(d.pendingCmds, &pendingCmd{
+		cmd:  cmd,
+		term: term,
+	})
+}
+
+func (d *applyDelegate) setPedingChangePeerCMD(term uint64, cmd *cmd) {
 	d.Lock()
-	d.pendingChangePeerCMD = cmd
+	d.pendingChangePeerCMD = &pendingCmd{
+		cmd:  cmd,
+		term: term,
+	}
 	d.Unlock()
 }
 
@@ -142,9 +167,9 @@ func isChangePeerCMD(req *raftcmdpb.RaftCMDRequest) bool {
 }
 
 func (d *applyDelegate) notifyStaleCMD(cmd *pendingCmd) {
-	resp := errorStaleCMDResp(cmd.uuid, d.term)
+	resp := errorStaleCMDResp(cmd.cmd.getUUID(), d.term)
 	log.Infof("raftstore-apply[cell-%d]: cmd is stale, skip. cmd=<%+v>", d.cell.ID, cmd)
-	cmd.cb(resp)
+	cmd.cmd.resp(resp)
 }
 
 func (d *applyDelegate) applyCommittedEntries(commitedEntries []raftpb.Entry) {
@@ -198,7 +223,7 @@ func (d *applyDelegate) applyEntry(entry *raftpb.Entry) *execResult {
 	state := d.applyState
 	state.AppliedIndex = entry.Index
 
-	err := d.store.engine.Set(getApplyStateKey(d.cell.ID), util.MustMarshal(&state))
+	err := d.store.getMetaEngine().Set(getApplyStateKey(d.cell.ID), util.MustMarshal(&state))
 	if err != nil {
 		log.Fatalf("raftstore-apply[cell-%d]: apply empty entry failed, entry=<%s> errors:\n %+v",
 			d.cell.ID,

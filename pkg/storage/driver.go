@@ -13,19 +13,38 @@
 
 package storage
 
-// KVPair is a key and value pair
-type KVPair struct {
-	Key   []byte
-	Value []byte
-}
+// Kind is the type for engine
+type Kind int
+
+var (
+	// Meta is used for meta info storage
+	Meta = Kind(0)
+	// DataKV is used for KV storage
+	DataKV = Kind(1)
+	// DataHash is used for Hash storage
+	DataHash = Kind(2)
+	// DataSet is used for Set storage
+	DataSet = Kind(4)
+	// DataZSet is used for ZSet storage
+	DataZSet = Kind(8)
+	// DataList is used for List storage
+	DataList = Kind(16)
+	// Data is used for DATA storage
+	Data = Kind(DataKV | DataHash | DataSet | DataZSet | DataList)
+)
 
 // Driver is def storage interface
 type Driver interface {
+	GetEngine(kind Kind) Engine
+}
+
+// Engine is the data storage engine
+type Engine interface {
 	Set(key []byte, value []byte) error
 	Get(key []byte) ([]byte, error)
 	Delete(key []byte) error
 	RangeDelete(start, end []byte) error
 	// Scan scans the range and execute the handler fun.
-	// returns true means end the scan.
+	// returns false means end the scan.
 	Scan(startKey []byte, endKey []byte, handler func(key, value []byte) (bool, error)) error
 }

@@ -18,6 +18,7 @@ import (
 
 	"github.com/coreos/etcd/raft/raftpb"
 	"github.com/deepfabric/elasticell/pkg/log"
+	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
 )
 
@@ -65,6 +66,36 @@ func (pr *PeerReplicate) startRegistrationJob() {
 func (pr *PeerReplicate) startApplyCommittedEntriesJob(cellID uint64, term uint64, commitedEntries []raftpb.Entry) error {
 	_, err := pr.store.addApplyJob(func() error {
 		return pr.doApplyCommittedEntries(cellID, term, commitedEntries)
+	})
+
+	return err
+}
+
+func (pr *PeerReplicate) startProposeJob(meta *proposalMeta, isConfChange bool, cmd *cmd) error {
+	pr.ps.applySnapJobLock.Lock()
+	_, err := pr.store.addApplyJob(func() error {
+		return pr.doPropose(meta, isConfChange, cmd)
+	})
+
+	return err
+}
+
+func (pr *PeerReplicate) startSplitCheckJob() error {
+	cell := pr.getCell()
+	epoch := cell.Epoch
+	startKey := encStartKey(&cell)
+	endKey := encEndKey(&cell)
+
+	_, err := pr.store.addSplitJob(func() error {
+		return pr.doSplitCheck(epoch, startKey, endKey)
+	})
+
+	return err
+}
+
+func (pr *PeerReplicate) startAskSplitJob(cell metapb.Cell, peer metapb.Peer, splitKey []byte) error {
+	_, err := pr.store.addSplitJob(func() error {
+		return pr.doAskSplit(cell, peer, splitKey)
 	})
 
 	return err

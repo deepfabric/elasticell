@@ -35,17 +35,24 @@ const (
 
 // PeerReplicate is the cell's peer replicate. Every cell replicate has a PeerReplicate.
 type PeerReplicate struct {
-	cellID            uint64
-	peer              metapb.Peer
-	raftTicker        *time.Ticker
-	rn                raft.Node
-	store             *Store
-	ps                *peerStorage
-	msgC              chan raftpb.Message
-	pendingReads      *readIndexQueue
+	cellID     uint64
+	peer       metapb.Peer
+	raftTicker *time.Ticker
+	rn         raft.Node
+	store      *Store
+	ps         *peerStorage
+	msgC       chan raftpb.Message
+
 	peerHeartbeatsMap *peerHeartbeatsMap
+	pendingReads      *readIndexQueue
+	proposals         *proposalQueue
 
 	lastHBJob *util.Job
+
+	writtenKeys    uint64
+	writtenBytes   uint64
+	sizeDiffHint   uint64
+	deleteKeysHint uint64
 }
 
 func createPeerReplicate(store *Store, cell *metapb.Cell) (*PeerReplicate, error) {
@@ -97,12 +104,23 @@ func newPeerReplicate(store *Store, cell *metapb.Cell, peerID uint64) (*PeerRepl
 	pr.msgC = make(chan raftpb.Message, msgChanBuf)
 	pr.store = store
 	pr.pendingReads = &readIndexQueue{
+		cellID:   cell.ID,
 		reads:    queue.NewRingBuffer(defaultQueueSize),
 		readyCnt: 0,
 	}
 	pr.peerHeartbeatsMap = newPeerHeartbeatsMap()
+	pr.proposals = newProposalQueue()
 
 	store.runner.RunCancelableTask(pr.doSendFromChan)
+
+	// If this region has only one peer and I am the one, campaign directly.
+	if len(cell.Peers) == 1 && cell.Peers[0].StoreID == store.id {
+		err = rn.Campaign(context.TODO())
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	return pr, nil
 }
 

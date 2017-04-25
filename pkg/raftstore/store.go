@@ -38,8 +38,9 @@ var (
 const (
 	applyWorker            = "apply-work"
 	snapWorker             = "snap-work"
-	heartbeatWorker        = "hb-work"
-	defaultWorkerQueueSize = 32
+	pdWorker               = "pd-work"
+	splitWorker            = "split-work"
+	defaultWorkerQueueSize = 64
 	defaultNotifyChanSize  = 1024
 )
 
@@ -86,7 +87,8 @@ func NewStore(clusterID uint64, pdClient *pd.Client, meta metapb.Store, engine s
 	s.runner = util.NewRunner()
 	s.runner.AddNamedWorker(snapWorker, defaultWorkerQueueSize)
 	s.runner.AddNamedWorker(applyWorker, defaultWorkerQueueSize)
-	s.runner.AddNamedWorker(heartbeatWorker, defaultWorkerQueueSize)
+	s.runner.AddNamedWorker(pdWorker, defaultWorkerQueueSize)
+	s.runner.AddNamedWorker(splitWorker, defaultWorkerQueueSize)
 
 	s.init()
 
@@ -98,7 +100,7 @@ func (s *Store) init() {
 	tomebstoneCount := 0
 	applyingCount := 0
 
-	err := s.engine.Scan(cellMetaMinKey, cellMetaMaxKey, func(key, value []byte) (bool, error) {
+	err := s.getMetaEngine().Scan(cellMetaMinKey, cellMetaMaxKey, func(key, value []byte) (bool, error) {
 		cellID, suffix, err := decodeCellMetaKey(key)
 		if err != nil {
 			return false, err
@@ -154,7 +156,7 @@ func (s *Store) cleanup() {
 
 	s.keyRanges.Ascend(func(cell *metapb.Cell) bool {
 		start := encStartKey(cell)
-		err := s.engine.RangeDelete(lastStartKey, start)
+		err := s.getDataEngine().RangeDelete(lastStartKey, start)
 		if err != nil {
 			log.Fatalf("bootstrap: cleanup possible garbage data failed, start=<%v> end=<%v> errors:\n %+v",
 				lastStartKey,
@@ -166,7 +168,7 @@ func (s *Store) cleanup() {
 		return true
 	})
 
-	err := s.engine.RangeDelete(lastStartKey, dataMaxKey)
+	err := s.getDataEngine().RangeDelete(lastStartKey, dataMaxKey)
 	if err != nil {
 		log.Fatalf("bootstrap: cleanup possible garbage data failed, start=<%v> end=<%v> errors:\n %+v",
 			lastStartKey,
@@ -187,7 +189,7 @@ func (s *Store) Start() {
 	s.startStoreHeartbeatTask()
 	s.startCellHeartbeatTask()
 	s.startGCTask()
-	s.startSplitCheckTask()
+	s.startCellSplitCheckTask()
 }
 
 func (s *Store) startTransfer() {
@@ -207,8 +209,10 @@ func (s *Store) startHandleNotifyMsg() {
 			case n := <-s.notifyChan:
 				if msg, ok := n.(*mraft.RaftMessage); ok {
 					s.onRaftMessage(msg)
-				} else if msg, ok := n.(*raftCMD); ok {
+				} else if msg, ok := n.(*cmd); ok {
 					s.onRaftCMD(msg)
+				} else if ret, ok := n.(*splitCheckResult); ok {
+					s.onSplitCheckResult(ret)
 				}
 			}
 		}
@@ -232,7 +236,7 @@ func (s *Store) startStoreHeartbeatTask() {
 					// cancel last if not complete
 					job.Cancel()
 				} else {
-					job, err = s.addHeartbeatJob(s.handleStoreHeartbeat)
+					job, err = s.addPDJob(s.handleStoreHeartbeat)
 					if err != nil {
 						log.Errorf("heartbeat-store[%d]: add job failed, errors:\n %+v",
 							s.GetID(),
@@ -262,10 +266,24 @@ func (s *Store) startCellHeartbeatTask() {
 
 func (s *Store) startGCTask() {
 	// TODO: impl
+
 }
 
-func (s *Store) startSplitCheckTask() {
+func (s *Store) startCellSplitCheckTask() {
 	// TODO: impl
+	s.runner.RunCancelableTask(func(ctx context.Context) {
+		ticker := time.NewTicker(s.cfg.getSplitCellCheckDuration())
+
+		for {
+			select {
+			case <-ctx.Done():
+				log.Infof("stop: cell heart beat job stopped")
+				return
+			case <-ticker.C:
+				s.handleCellSplitCheck()
+			}
+		}
+	})
 }
 
 // Stop returns the error when stop store
@@ -334,9 +352,8 @@ func (s *Store) onRaftMessage(msg *mraft.RaftMessage) {
 	}
 }
 
-func (s *Store) onRaftCMD(cmd *raftCMD) {
+func (s *Store) onRaftCMD(cmd *cmd) {
 	// we handle all read, write and admin cmd here
-
 	if cmd.req.Header == nil || cmd.req.Header.UUID == nil {
 		cmd.resp(errorOtherCMDResp(errMissingUUIDCMD))
 		return
@@ -344,12 +361,60 @@ func (s *Store) onRaftCMD(cmd *raftCMD) {
 
 	err := s.validateStoreID(cmd.req)
 	if err != nil {
-		cmd.resp(errorOtherCMDResp(err))
+		cmd.respOtherError(err)
 		return
 	}
 
-	rsp := new(raftcmdpb.RaftCMDResponse)
-	buildUUID(cmd.req.Header.UUID, rsp)
+	pr := s.replicatesMap.get(cmd.req.Header.CellId)
+	term := pr.getCurrentTerm()
+
+	pe := s.validateCell(cmd.req)
+	if err != nil {
+		cmd.resp(errorPbResp(pe, cmd.req.Header.UUID, term))
+		return
+	}
+
+	// Note:
+	// The peer that is being checked is a leader. It might step down to be a follower later. It
+	// doesn't matter whether the peer is a leader or not. If it's not a leader, the proposing
+	// command log entry can't be committed.
+	meta := &proposalMeta{
+		uuid: cmd.req.Header.UUID,
+		term: term,
+	}
+
+	// TODO: Parallel on every PeerReplicate
+	pr.propose(meta, cmd)
+}
+
+func (s *Store) onSplitCheckResult(result *splitCheckResult) {
+	if len(result.splitKey) == 0 {
+		log.Errorf("raftstore-split[cell-%d]: split key must not be empty", result.cellID)
+		return
+	}
+
+	p := s.replicatesMap.get(result.cellID)
+	if p == nil || !p.isLeader() {
+		log.Errorf("raftstore-split[cell-%d]: cell not exist or not leader, skip", result.cellID)
+		return
+	}
+
+	cell := p.getCell()
+
+	if cell.Epoch.CellVer != result.epoch.CellVer {
+		log.Infof("raftstore-split[cell-%d]: epoch changed, need re-check later, current=<%+v> split=<%+v>",
+			result.cellID,
+			cell.Epoch,
+			result.epoch)
+		return
+	}
+
+	err := p.startAskSplitJob(cell, p.peer, result.splitKey)
+	if err != nil {
+		log.Errorf("raftstore-split[cell-%d]: add ask split job failed, errors:\n %+v",
+			result.cellID,
+			err)
+	}
 }
 
 func (s *Store) handleGCPeerMsg(msg *mraft.RaftMessage) {
@@ -472,8 +537,8 @@ func (s *Store) addPeerToCache(peer metapb.Peer) {
 	s.peerCache.put(peer.ID, peer)
 }
 
-func (s *Store) addHeartbeatJob(task func() error) (*util.Job, error) {
-	return s.addNamedJob(heartbeatWorker, task)
+func (s *Store) addPDJob(task func() error) (*util.Job, error) {
+	return s.addNamedJob(pdWorker, task)
 }
 
 func (s *Store) addSnapJob(task func() error) (*util.Job, error) {
@@ -482,6 +547,10 @@ func (s *Store) addSnapJob(task func() error) (*util.Job, error) {
 
 func (s *Store) addApplyJob(task func() error) (*util.Job, error) {
 	return s.addNamedJob(applyWorker, task)
+}
+
+func (s *Store) addSplitJob(task func() error) (*util.Job, error) {
+	return s.addNamedJob(splitWorker, task)
 }
 
 func (s *Store) addNamedJob(worker string, task func() error) (*util.Job, error) {
@@ -529,7 +598,7 @@ func (s *Store) handleCellHeartbeat() {
 				// cancel last if not complete
 				p.lastHBJob.Cancel()
 			} else {
-				p.lastHBJob, err = s.addHeartbeatJob(p.doHeartbeat)
+				p.lastHBJob, err = s.addPDJob(p.doHeartbeat)
 				if err != nil {
 					log.Errorf("heartbeat-cell[%d]: add cell heartbeat job failed, errors:\n %+v",
 						p.cellID,
@@ -538,6 +607,38 @@ func (s *Store) handleCellHeartbeat() {
 			}
 		}
 	}
+}
+
+func (s *Store) handleCellSplitCheck() {
+	if s.runner.IsNamedWorkerBusy(splitWorker) {
+		return
+	}
+
+	s.replicatesMap.foreach(func(pr *PeerReplicate) (bool, error) {
+		if !pr.isLeader() {
+			return true, nil
+		}
+
+		if pr.sizeDiffHint < s.cfg.CellCheckSizeDiff {
+			return true, nil
+		}
+
+		log.Infof("raftstore-split[cell-%d]: cell need to check whether should split, diff=<%d> max=<%d>",
+			pr.cellID,
+			pr.sizeDiffHint,
+			s.cfg.CellCheckSizeDiff)
+
+		err := pr.startSplitCheckJob()
+		if err != nil {
+			log.Errorf("raftstore-split[cell-%d]: add split check job failed, errors:\n %+v",
+				pr.cellID,
+				err)
+			return false, err
+		}
+
+		pr.sizeDiffHint = 0
+		return true, nil
+	})
 }
 
 func (s *Store) sendAdminRequest(cell metapb.Cell, peer metapb.Peer, adminReq *raftcmdpb.AdminRequest) {
@@ -549,5 +650,17 @@ func (s *Store) sendAdminRequest(cell metapb.Cell, peer metapb.Peer, adminReq *r
 		UUID:      uuid.NewV4().Bytes(),
 	}
 	req.AdminRequest = adminReq
-	s.notify(newRaftCmd(req, nil))
+	s.notify(newCMD(req, nil))
+}
+
+func (s *Store) getEngine(kind storage.Kind) storage.Engine {
+	return s.engine.GetEngine(kind)
+}
+
+func (s *Store) getMetaEngine() storage.Engine {
+	return s.getEngine(storage.Meta)
+}
+
+func (s *Store) getDataEngine() storage.Engine {
+	return s.getEngine(storage.Data)
 }

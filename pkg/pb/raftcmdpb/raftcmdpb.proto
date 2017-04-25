@@ -71,18 +71,12 @@ message ChangePeerRequest {
     optional metapb.Peer         peer       = 2 [(gogoproto.nullable) = false];
 }
 
-// admin request
-
 message Request {
-    optional CMDType type = 1;
+    optional CMDType type = 1 [(gogoproto.nullable) = false];;
     optional bytes   body = 2;
 }
 
 message Response {
-    optional CMDType type = 1;
+    optional CMDType type = 1 [(gogoproto.nullable) = false];;
     optional bytes   body = 2;
-}
-
-message GetRequest {
-
 }

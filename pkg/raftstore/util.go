@@ -53,7 +53,7 @@ func SaveFirstCell(driver storage.Driver, cell metapb.Cell) error {
 	// TODO: batch write
 
 	// save state
-	err := driver.Set(getCellStateKey(cell.ID), util.MustMarshal(&mraft.CellLocalState{Cell: cell}))
+	err := driver.GetEngine(storage.Meta).Set(getCellStateKey(cell.ID), util.MustMarshal(&mraft.CellLocalState{Cell: cell}))
 	if err != nil {
 		return err
 	}
@@ -64,7 +64,7 @@ func SaveFirstCell(driver storage.Driver, cell metapb.Cell) error {
 		Term:   raftInitLogTerm,
 		Commit: raftInitLogIndex,
 	}
-	err = driver.Set(getRaftStateKey(cell.ID), util.MustMarshal(raftState))
+	err = driver.GetEngine(storage.Meta).Set(getRaftStateKey(cell.ID), util.MustMarshal(raftState))
 	if err != nil {
 		return err
 	}
@@ -75,7 +75,7 @@ func SaveFirstCell(driver storage.Driver, cell metapb.Cell) error {
 		Term:  raftInitLogTerm,
 		Index: raftInitLogIndex,
 	}
-	err = driver.Set(getApplyStateKey(cell.ID), util.MustMarshal(applyState))
+	err = driver.GetEngine(storage.Meta).Set(getApplyStateKey(cell.ID), util.MustMarshal(applyState))
 	if err != nil {
 		return err
 	}

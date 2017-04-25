@@ -119,7 +119,7 @@ func (ps *peerStorage) getSnapDir() string {
 }
 
 func (ps *peerStorage) initRaftState() error {
-	v, err := ps.store.engine.Get(getRaftStateKey(ps.cell.ID))
+	v, err := ps.store.getMetaEngine().Get(getRaftStateKey(ps.cell.ID))
 	if err != nil {
 		return errors.Wrap(err, "")
 	}
@@ -139,7 +139,7 @@ func (ps *peerStorage) initRaftState() error {
 }
 
 func (ps *peerStorage) initApplyState() error {
-	v, err := ps.store.engine.Get(getApplyStateKey(ps.cell.ID))
+	v, err := ps.store.getMetaEngine().Get(getApplyStateKey(ps.cell.ID))
 	if err != nil {
 		return errors.Wrap(err, "")
 	}
@@ -180,7 +180,7 @@ func (ps *peerStorage) initLastTerm() error {
 		return nil
 	}
 
-	v, err := ps.store.engine.Get(getRaftLogKey(ps.cell.ID, lastIndex))
+	v, err := ps.store.getMetaEngine().Get(getRaftLogKey(ps.cell.ID, lastIndex))
 	if err != nil {
 		return errors.Wrap(err, "")
 	}
@@ -307,7 +307,7 @@ func (ps *peerStorage) checkRange(low, high uint64) error {
 
 func (ps *peerStorage) loadLogEntry(index uint64) (*raftpb.Entry, error) {
 	key := getRaftLogKey(ps.cell.ID, index)
-	v, err := ps.store.engine.Get(key)
+	v, err := ps.store.getMetaEngine().Get(key)
 	if err != nil {
 		log.Errorf("raftstore[cell-%d]: load entry failure, index=<%d> errors:\n %+v",
 			ps.cell.ID,
@@ -331,7 +331,7 @@ func (ps *peerStorage) loadCellLocalState(job *util.Job) (*mraft.CellLocalState,
 	}
 
 	key := getCellStateKey(ps.cell.ID)
-	v, err := ps.store.engine.Get(key)
+	v, err := ps.store.getMetaEngine().Get(key)
 	if err != nil {
 		log.Errorf("raftstore[cell-%d]: load raft state failed, errors:\n %+v",
 			ps.cell.ID,
@@ -366,7 +366,7 @@ func (ps *peerStorage) loadSnapshot(job *util.Job) (*raftpb.Snapshot, error) {
 
 func (ps *peerStorage) loadApplyState() (*mraft.RaftApplyState, error) {
 	key := getApplyStateKey(ps.cell.ID)
-	v, err := ps.store.engine.Get(key)
+	v, err := ps.store.getMetaEngine().Get(key)
 	if err != nil {
 		log.Errorf("raftstore[cell-%d]: load apply state failed, errors:\n %+v",
 			ps.cell.ID,
@@ -411,8 +411,8 @@ func (ps *peerStorage) clearMeta() error {
 	metaStart := getCellMetaPrefix(ps.cell.ID)
 	metaEnd := getCellMetaPrefix(ps.cell.ID + 1)
 
-	err := ps.store.engine.Scan(metaStart, metaEnd, func(key, value []byte) (bool, error) {
-		err := ps.store.engine.Delete(key)
+	err := ps.store.getMetaEngine().Scan(metaStart, metaEnd, func(key, value []byte) (bool, error) {
+		err := ps.store.getMetaEngine().Delete(key)
 		if err != nil {
 			return false, errors.Wrapf(err, "")
 		}
@@ -428,8 +428,8 @@ func (ps *peerStorage) clearMeta() error {
 	raftStart := getCellRaftPrefix(ps.cell.ID)
 	raftEnd := getCellRaftPrefix(ps.cell.ID + 1)
 
-	err = ps.store.engine.Scan(raftStart, raftEnd, func(key, value []byte) (bool, error) {
-		err := ps.store.engine.Delete(key)
+	err = ps.store.getMetaEngine().Scan(raftStart, raftEnd, func(key, value []byte) (bool, error) {
+		err := ps.store.getMetaEngine().Delete(key)
 		if err != nil {
 			return false, errors.Wrapf(err, "")
 		}
@@ -483,7 +483,7 @@ func (ps *peerStorage) updatePeerState(cell metapb.Cell, state mraft.PeerState) 
 	cellState.Cell = cell
 
 	data, _ := cellState.Marshal()
-	return ps.store.engine.Set(getCellStateKey(cell.ID), data)
+	return ps.store.getMetaEngine().Set(getCellStateKey(cell.ID), data)
 }
 
 func (ps *peerStorage) deleteAllInRange(start, end []byte, job *util.Job) error {

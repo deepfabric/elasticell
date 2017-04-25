@@ -23,9 +23,9 @@ import (
 	"github.com/coreos/etcd/raft"
 	"github.com/coreos/etcd/raft/raftpb"
 	"github.com/deepfabric/elasticell/pkg/log"
+	"github.com/deepfabric/elasticell/pkg/pb/errorpb"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
-	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
 	"github.com/deepfabric/elasticell/pkg/util"
 	"github.com/pkg/errors"
 )
@@ -42,25 +42,25 @@ type applySnapResult struct {
 	cell     metapb.Cell
 }
 
-type readIndexRequest struct {
-	uuid []byte
-	cmds []*cmd
-}
-
 type readIndexQueue struct {
+	cellID   uint64
 	reads    *queue.RingBuffer
 	readyCnt int32
 }
 
-func (q *readIndexQueue) mustGet(cellID uint64) *readIndexRequest {
+func (q *readIndexQueue) push(cmd *cmd) error {
+	return q.reads.Put(cmd)
+}
+
+func (q *readIndexQueue) pop() *cmd {
 	v, err := q.reads.Get()
 	if err != nil {
 		log.Fatalf("raftstore[cell-%d]: handle read index failed, errors:\n %+v",
-			cellID,
+			q.cellID,
 			err)
 	}
 
-	return v.(*readIndexRequest)
+	return v.(*cmd)
 }
 
 func (q *readIndexQueue) incrReadyCnt() int32 {
@@ -77,11 +77,6 @@ func (q *readIndexQueue) resetReadyCnt() {
 
 func (q *readIndexQueue) getReadyCnt() int32 {
 	return atomic.LoadInt32(&q.readyCnt)
-}
-
-type cmd struct {
-	req *raftcmdpb.RaftCMDRequest
-	cb  func(*raftcmdpb.RaftCMDResponse)
 }
 
 // ====================== raft ready handle methods
@@ -158,7 +153,7 @@ func (ps *peerStorage) doAppendEntries(ctx *tempRaftContext, entries []raftpb.En
 
 	for _, e := range entries {
 		d := util.MustMarshal(&e)
-		err := ps.store.engine.Set(getRaftLogKey(ps.cell.ID, e.Index), d)
+		err := ps.store.getMetaEngine().Set(getRaftLogKey(ps.cell.ID, e.Index), d)
 		if err != nil {
 			log.Errorf("raftstore[cell-%d]: append entry failure, entry=<%s> errors:\n %+v",
 				ps.cell.ID,
@@ -170,7 +165,7 @@ func (ps *peerStorage) doAppendEntries(ctx *tempRaftContext, entries []raftpb.En
 
 	// Delete any previously appended log entries which never committed.
 	for index := lastIndex + 1; index < prevLastIndex+1; index++ {
-		err := ps.store.engine.Delete(getRaftLogKey(ps.cell.ID, index))
+		err := ps.store.getMetaEngine().Delete(getRaftLogKey(ps.cell.ID, index))
 		if err != nil {
 			log.Errorf("raftstore[cell-%d]: delete any previously appended log entries failure, index=<%d> errors:\n %+v",
 				ps.cell.ID,
@@ -188,7 +183,7 @@ func (ps *peerStorage) doAppendEntries(ctx *tempRaftContext, entries []raftpb.En
 
 func (pr *PeerReplicate) doSaveRaftState(ctx *tempRaftContext) error {
 	data, _ := ctx.raftState.Marshal()
-	err := pr.store.engine.Set(getRaftStateKey(pr.ps.cell.ID), data)
+	err := pr.store.getMetaEngine().Set(getRaftStateKey(pr.ps.cell.ID), data)
 	if err != nil {
 		log.Errorf("raftstore[cell-%d]: save temp raft state failure, errors:\n %+v",
 			pr.ps.cell.ID,
@@ -199,7 +194,7 @@ func (pr *PeerReplicate) doSaveRaftState(ctx *tempRaftContext) error {
 }
 
 func (pr *PeerReplicate) doSaveApplyState(ctx *tempRaftContext) error {
-	err := pr.store.engine.Set(getApplyStateKey(pr.ps.cell.ID), util.MustMarshal(&ctx.applyState))
+	err := pr.store.getMetaEngine().Set(getApplyStateKey(pr.ps.cell.ID), util.MustMarshal(&ctx.applyState))
 	if err != nil {
 		log.Errorf("raftstore[cell-%d]: save temp apply state failure, errors:\n %+v",
 			pr.ps.cell.ID,
@@ -265,6 +260,85 @@ func (pr *PeerReplicate) applyCommittedEntries(rd *raft.Ready) bool {
 	return false
 }
 
+func (pr *PeerReplicate) doPropose(meta *proposalMeta, isConfChange bool, cmd *cmd) error {
+	delegate := pr.store.delegates.get(pr.cellID)
+	if delegate == nil {
+		err := new(errorpb.CellNotFound)
+		err.CellID = pr.cellID
+
+		rsp := errorPbResp(&errorpb.Error{
+			Message:      errCellNotFound.Error(),
+			CellNotFound: err,
+		}, meta.uuid, meta.term)
+
+		cmd.resp(rsp)
+		return nil
+	}
+
+	if delegate.cell.ID != pr.cellID {
+		log.Fatal("bug: delegate id not match")
+	}
+
+	if isConfChange {
+		c := delegate.getPendingChangePeerCMD()
+		if nil != delegate.getPendingChangePeerCMD() {
+			delegate.notifyStaleCMD(c)
+		}
+		delegate.setPedingChangePeerCMD(meta.term, cmd)
+	} else {
+		delegate.appendPendingCmd(meta.term, cmd)
+	}
+
+	return nil
+}
+
+func (pr *PeerReplicate) doSplitCheck(epoch metapb.CellEpoch, startKey, endKey []byte) error {
+	var size uint64
+	var splitKey []byte
+
+	err := pr.store.getDataEngine().Scan(startKey, endKey, func(key, value []byte) (bool, error) {
+		size += uint64(len(value))
+
+		if len(splitKey) == 0 && size > pr.store.cfg.CellSplitSize {
+			splitKey = key
+		}
+
+		if size > pr.store.cfg.CellMaxSize {
+			return false, nil
+		}
+
+		return true, nil
+	})
+
+	if err != nil {
+		log.Errorf("raftstore-split[cell-%d]: failed to scan split key, errors:\n %+v",
+			pr.cellID,
+			err)
+		return err
+	}
+
+	if size < pr.store.cfg.CellMaxSize {
+		log.Debugf("raftstore-split[cell-%d]: no need to split, size=<%d> max=<%d>",
+			pr.cellID,
+			size,
+			pr.store.cfg.CellMaxSize)
+		return nil
+	}
+
+	pr.store.notify(&splitCheckResult{
+		cellID:   pr.cellID,
+		splitKey: splitKey,
+		epoch:    epoch,
+	})
+
+	return nil
+}
+
+func (pr *PeerReplicate) doAskSplit(cell metapb.Cell, peer metapb.Peer, splitKey []byte) error {
+	// TODO: ask pd
+	return nil
+}
+
 func (pr *PeerReplicate) doPostApply(result *asyncApplyResult) {
 	if pr.ps.isApplyingSnap() {
 		log.Fatalf("raftstore[cell-%d]: should not applying snapshot, when do post apply.",
@@ -275,11 +349,21 @@ func (pr *PeerReplicate) doPostApply(result *asyncApplyResult) {
 
 	pr.ps.setApplyState(&result.applyState)
 	pr.ps.setAppliedIndexTerm(result.appliedIndexTerm)
+	pr.writtenBytes += result.metrics.writtenBytes
+	pr.writtenKeys += result.metrics.writtenKeys
+
+	if result.hasSplitExecResult() {
+		pr.deleteKeysHint = result.metrics.deleteKeysHint
+		pr.sizeDiffHint = result.metrics.sizeDiffHint
+	} else {
+		pr.deleteKeysHint += result.metrics.deleteKeysHint
+		pr.sizeDiffHint += result.metrics.sizeDiffHint
+	}
 
 	readyCnt := int(pr.pendingReads.getReadyCnt())
 	if readyCnt > 0 && pr.readyToHandleRead() {
 		for index := 0; index < readyCnt; index++ {
-			pr.execReadRequest(pr.pendingReads.mustGet(pr.cellID))
+			pr.doExecReadCmd(pr.pendingReads.pop())
 		}
 
 		pr.pendingReads.resetReadyCnt()
@@ -289,14 +373,14 @@ func (pr *PeerReplicate) doPostApply(result *asyncApplyResult) {
 func (pr *PeerReplicate) doApplyReads(rd *raft.Ready) {
 	if pr.readyToHandleRead() {
 		for _, state := range rd.ReadStates {
-			readReq := pr.pendingReads.mustGet(pr.cellID)
+			cmd := pr.pendingReads.pop()
 
-			if bytes.Compare(state.RequestCtx, readReq.uuid) != 0 {
+			if bytes.Compare(state.RequestCtx, cmd.getUUID()) != 0 {
 				log.Fatalf("raftstore[cell-%d]: apply read failed, uuid not match",
 					pr.cellID)
 			}
 
-			pr.execReadRequest(readReq)
+			pr.doExecReadCmd(cmd)
 		}
 	} else {
 		for _ = range rd.ReadStates {
@@ -304,20 +388,21 @@ func (pr *PeerReplicate) doApplyReads(rd *raft.Ready) {
 		}
 	}
 
+	// Note that only after handle read_states can we identify what requests are
+	// actually stale.
 	if rd.SoftState != nil {
 		if rd.SoftState.RaftState != raft.StateLeader {
 			n := int(pr.pendingReads.getReadyCnt())
 			if n > 0 {
+				// all uncommitted reads will be dropped silently in raft.
 				for index := 0; index < n; index++ {
-					req := pr.pendingReads.mustGet(pr.cellID)
-					resp := errorStaleCMDResp(req.uuid, pr.getCurrentTerm())
+					cmd := pr.pendingReads.pop()
+					resp := errorStaleCMDResp(cmd.getUUID(), pr.getCurrentTerm())
 
-					for _, cmd := range req.cmds {
-						log.Infof("raftstore[cell-%d]: cmd is stale, skip. cmd=<%+v>",
-							pr.cellID,
-							cmd)
-						cmd.cb(resp)
-					}
+					log.Infof("raftstore[cell-%d]: cmd is stale, skip. cmd=<%+v>",
+						pr.cellID,
+						cmd)
+					cmd.resp(resp)
 				}
 			}
 		}
@@ -395,7 +480,7 @@ func (ps *peerStorage) Entries(low, high, maxSize uint64) ([]raftpb.Entry, error
 	if low+1 == high {
 		// If election happens in inactive cells, they will just try
 		// to fetch one empty log.
-		v, err := ps.store.engine.Get(startKey)
+		v, err := ps.store.getMetaEngine().Get(startKey)
 		if err != nil {
 			return nil, errors.Wrap(err, "")
 		}
@@ -414,7 +499,7 @@ func (ps *peerStorage) Entries(low, high, maxSize uint64) ([]raftpb.Entry, error
 	}
 
 	endKey := getRaftLogKey(ps.cell.ID, high)
-	err = ps.store.engine.Scan(startKey, endKey, func(data, value []byte) (bool, error) {
+	err = ps.store.getMetaEngine().Scan(startKey, endKey, func(data, value []byte) (bool, error) {
 		e, err := ps.unmarshal(data, nextIndex)
 		if err != nil {
 			return false, err
@@ -463,7 +548,7 @@ func (ps *peerStorage) Term(idx uint64) (uint64, error) {
 	}
 
 	key := getRaftLogKey(ps.cell.ID, idx)
-	v, err := ps.store.engine.Get(key)
+	v, err := ps.store.getMetaEngine().Get(key)
 	if err != nil {
 		return 0, err
 	}

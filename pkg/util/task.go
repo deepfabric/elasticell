@@ -207,6 +207,14 @@ func (s *Runner) AddNamedWorker(name string, cap uint64) error {
 	return s.startWorker(q)
 }
 
+// IsNamedWorkerBusy returns true if named queue is not empty
+func (s *Runner) IsNamedWorkerBusy(worker string) bool {
+	s.RLock()
+	defer s.RUnlock()
+
+	return len(s.getNamedQueue(worker)) > 0
+}
+
 func (s *Runner) startWorker(q chan *Job) error {
 	return s.RunCancelableTask(func(ctx context.Context) {
 		for {

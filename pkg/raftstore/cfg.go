@@ -20,6 +20,10 @@ type Cfg struct {
 	StoreHeartbeatIntervalMs int      `json:"storeHeartbeatIntervalMs"`
 	CellHeartbeatIntervalMs  int      `json:"cellHeartbeatIntervalMs"`
 	MaxPeerDownSec           int      `json:"maxPeerDownSec"`
+	SplitCellCheckIntervalMs int      `json:"splitCellCheckIntervalMs"`
+	CellCheckSizeDiff        uint64   `json:"cellCheckSizeDiff"`
+	CellMaxSize              uint64   `json:"cellMaxSize"`
+	CellSplitSize            uint64   `json:"cellSplitSize"`
 	Raft                     *RaftCfg `json:"raft"`
 }
 
@@ -35,6 +39,10 @@ func (c *Cfg) getMaxPeerDownSecDuration() time.Duration {
 	return time.Duration(c.MaxPeerDownSec) * time.Second
 }
 
+func (c *Cfg) getSplitCellCheckDuration() time.Duration {
+	return time.Duration(c.SplitCellCheckIntervalMs) * time.Millisecond
+}
+
 // RaftCfg is the cfg for raft
 type RaftCfg struct {
 	PeerAddr          string
@@ -42,6 +50,7 @@ type RaftCfg struct {
 	ElectionTick      int
 	HeartbeatTick     int
 	MaxSizePerMsg     uint64
+	MaxSizePerEntry   uint64
 	MaxInflightMsgs   int
 	SnapDir           string
 	BaseTick          int

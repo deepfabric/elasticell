@@ -19,6 +19,7 @@ import (
 
 	"github.com/coreos/etcd/raft/raftpb"
 	"github.com/deepfabric/elasticell/pkg/log"
+	"github.com/deepfabric/elasticell/pkg/pb/errorpb"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
 	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
@@ -175,6 +176,48 @@ func (s *Store) checkSnapshot(msg *mraft.RaftMessage) (bool, error) {
 	return true, nil
 }
 
+func checkEpoch(cell metapb.Cell, req *raftcmdpb.RaftCMDRequest) bool {
+	checkVer := false
+	checkConfVer := false
+
+	if req.AdminRequest != nil {
+		switch req.AdminRequest.Type {
+		case raftcmdpb.Split:
+			checkVer = true
+		case raftcmdpb.ChangePeer:
+			checkConfVer = true
+		case raftcmdpb.TransferLeader:
+			checkVer = true
+			checkConfVer = true
+		}
+	} else {
+		// for redis command, we don't care conf version.
+		checkConfVer = true
+	}
+
+	if !checkConfVer && !checkVer {
+		return true
+	}
+
+	if req.Header == nil {
+		return false
+	}
+
+	fromEpoch := req.Header.CellEpoch
+	lastestEpoch := cell.Epoch
+
+	if (checkConfVer && fromEpoch.ConfVer < lastestEpoch.ConfVer) ||
+		(checkVer && fromEpoch.CellVer < lastestEpoch.CellVer) {
+		log.Infof("check-epoch[cell-%d]: reveiced stale epoch, lastest=<%s> reveived=<%s>",
+			cell.ID,
+			lastestEpoch.String(),
+			fromEpoch.String())
+		return false
+	}
+
+	return true
+}
+
 func (s *Store) inPending(cell metapb.Cell) bool {
 	for _, c := range s.pendingCells {
 		if c.ID == cell.ID {
@@ -190,6 +233,67 @@ func (s *Store) validateStoreID(req *raftcmdpb.RaftCMDRequest) error {
 		return fmt.Errorf("store not match, give=<%d> want=<%d>",
 			req.Header.Peer.StoreID,
 			s.GetID())
+	}
+
+	return nil
+}
+
+func (s *Store) validateCell(req *raftcmdpb.RaftCMDRequest) *errorpb.Error {
+	cellID := req.Header.CellId
+	peerID := req.Header.Peer.ID
+
+	pr := s.getPeerReplicate(cellID)
+	if nil == pr {
+		err := new(errorpb.CellNotFound)
+		err.CellID = cellID
+
+		return &errorpb.Error{
+			Message:      errCellNotFound.Error(),
+			CellNotFound: err,
+		}
+	}
+
+	if !pr.isLeader() {
+		err := new(errorpb.NotLeader)
+		err.CellID = cellID
+		err.Leader, _ = s.peerCache.get(pr.rn.Status().Lead)
+
+		return &errorpb.Error{
+			Message:   errNotLeader.Error(),
+			NotLeader: err,
+		}
+	}
+
+	if pr.peer.ID != peerID {
+		return &errorpb.Error{
+			Message: fmt.Sprintf("mismatch peer id, give=<%d> want=<%d>", peerID, pr.peer.ID),
+		}
+	}
+
+	// If header's term is 2 verions behind current term,
+	// leadership may have been changed away.
+	if req.Header.Term > 0 && pr.getCurrentTerm() > req.Header.Term+1 {
+		return &errorpb.Error{
+			Message:      errStaleCMD.Error(),
+			StaleCommand: infoStaleCMD,
+		}
+	}
+
+	if !checkEpoch(pr.getCell(), req) {
+		err := new(errorpb.StaleEpoch)
+		// Attach the next cell which might be split from the current cell. But it doesn't
+		// matter if the next cell is not split from the current cell. If the cell meta
+		// received by the KV driver is newer than the meta cached in the driver, the meta is
+		// updated.
+		nextCell := s.keyRanges.NextCell(pr.getCell().Start)
+		if nextCell != nil {
+			err.NewCells = append(err.NewCells, *nextCell)
+		}
+
+		return &errorpb.Error{
+			Message:    errStaleEpoch.Error(),
+			StaleEpoch: err,
+		}
 	}
 
 	return nil
