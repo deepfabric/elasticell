@@ -55,20 +55,9 @@ message RaftCMDRequest {
 }
 
 message RaftCMDResponse {
-    optional RaftResponseHeader header    = 1 [(gogoproto.nullable) = true];
-    repeated Response           responses = 2 [(gogoproto.nullable) = true];
-}
-
-// admin request
-
-message AdminRequest {
-    optional AdminCmdType type = 1 [(gogoproto.nullable) = false];
-    optional bytes        body = 2;
-}
-
-message ChangePeerRequest {
-    optional pdpb.ConfChangeType changeType = 1 [(gogoproto.nullable) = false];
-    optional metapb.Peer         peer       = 2 [(gogoproto.nullable) = false];
+    optional RaftResponseHeader header        = 1 [(gogoproto.nullable) = true];
+    repeated Response           responses     = 2 [(gogoproto.nullable) = true];
+    optional AdminResponse      adminResponse = 3 [(gogoproto.nullable) = true];
 }
 
 message Request {
@@ -79,4 +68,44 @@ message Request {
 message Response {
     optional CMDType type = 1 [(gogoproto.nullable) = false];;
     optional bytes   body = 2;
+}
+
+// admin request
+message AdminRequest {
+    optional AdminCmdType type = 1 [(gogoproto.nullable) = false];
+    optional bytes        body = 2;
+}
+
+message AdminResponse {
+    optional AdminCmdType type = 1 [(gogoproto.nullable) = false];
+    optional bytes        body = 2;
+}
+
+message ChangePeerRequest {
+    optional pdpb.ConfChangeType changeType = 1 [(gogoproto.nullable) = false];
+    optional metapb.Peer         peer       = 2 [(gogoproto.nullable) = false];
+}
+
+message ChangePeerResponse {
+    optional metapb.Cell cell = 1 [(gogoproto.nullable) = false];
+}
+
+message SplitRequest {
+    // This can be only called in internal RaftStore now.
+    // The splitKey must be in the been splitting cell.
+    optional bytes  splitKey    = 1;
+    // We split the cell into two, first uses the origin 
+    // parent cell id, and the second uses the new_cell_id.
+    // We must guarantee that the new_cell_id is global unique.
+    optional uint64 newCellID   = 2 [(gogoproto.nullable) = false];
+    // The peer ids for the new split cell.
+    repeated uint64 newPeerIDs  = 3;
+    // If true, right cell derive the origin cell_id, 
+    // left cell use new_cell_id.
+    optional bool   rightDerive = 4 [(gogoproto.nullable) = false];
+}
+
+message SplitResponse {
+    optional metapb.Cell left  = 1 [(gogoproto.nullable) = false];
+    optional metapb.Cell right = 2 [(gogoproto.nullable) = false];
 }

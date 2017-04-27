@@ -29,6 +29,7 @@ var (
 	errCellNotFound       = errors.New("cell not found")
 	errMissingUUIDCMD     = errors.New("missing request uuid")
 	errLargeRaftEntrySize = errors.New("entry is too large")
+	errKeyNotInCell       = errors.New("key not in cell")
 
 	infoStaleCMD = new(errorpb.StaleCommand)
 )

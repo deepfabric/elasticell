@@ -44,7 +44,21 @@ type asyncApplyResult struct {
 	result           *execResult
 }
 
+type changePeer struct {
+	confChange raftpb.ConfChange
+	peer       metapb.Peer
+	cell       metapb.Cell
+}
+
+type splitResult struct {
+	left  metapb.Cell
+	right metapb.Cell
+}
+
 type execResult struct {
+	adminType   raftcmdpb.AdminCmdType
+	changePeer  *changePeer
+	splitResult *splitResult
 }
 
 type pendingCmd struct {
@@ -61,6 +75,7 @@ type applyDelegate struct {
 	sync.RWMutex
 
 	store *Store
+	ps    *peerStorage
 
 	peerID uint64
 	cell   metapb.Cell
@@ -200,14 +215,20 @@ func (d *applyDelegate) applyCommittedEntries(commitedEntries []raftpb.Entry) {
 			result = d.applyConfChange(&entry)
 		}
 
+		asyncResult := &asyncApplyResult{
+			cellID:           d.cell.ID,
+			appliedIndexTerm: d.appliedIndexTerm,
+			applyState:       d.applyState,
+			result:           result,
+		}
+
 		pr := d.store.replicatesMap.get(d.cell.ID)
 		if pr != nil {
-			pr.doPostApply(&asyncApplyResult{
-				cellID:           d.cell.ID,
-				appliedIndexTerm: d.appliedIndexTerm,
-				applyState:       d.applyState,
-				result:           result,
-			})
+			pr.doPostApply(asyncResult)
+		}
+
+		if result != nil {
+			d.store.doPostApplyResult(asyncResult)
 		}
 	}
 }
@@ -249,8 +270,24 @@ func (d *applyDelegate) applyEntry(entry *raftpb.Entry) *execResult {
 }
 
 func (d *applyDelegate) applyConfChange(entry *raftpb.Entry) *execResult {
-	// TODO: impl
-	return nil
+	index := entry.Index
+	term := entry.Term
+	cc := new(raftpb.ConfChange)
+	util.MustUnmarshal(cc, entry.Data)
+
+	req := new(raftcmdpb.RaftCMDRequest)
+	util.MustUnmarshal(req, cc.Context)
+
+	result := d.doApplyRaftCMD(req, term, index)
+	if nil == result {
+		return &execResult{
+			adminType:  raftcmdpb.ChangePeer,
+			changePeer: &changePeer{},
+		}
+	}
+
+	result.changePeer.confChange = *cc
+	return result
 }
 
 func (d *applyDelegate) destroy() {

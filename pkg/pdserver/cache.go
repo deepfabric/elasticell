@@ -145,6 +145,15 @@ func (c *cache) foreachStore(fn func(*storeRuntime) (bool, error)) error {
 	return nil
 }
 
+func (c *cache) searchCell(startKey []byte) *cellRuntime {
+	cell := c.cc.tree.Search(startKey)
+	if cell.ID == 0 {
+		return nil
+	}
+
+	return c.getCell(cell.ID)
+}
+
 func (c *cache) doGetStore(storeID uint64) *storeRuntime {
 	store, ok := c.sc.stores[storeID]
 	if !ok {

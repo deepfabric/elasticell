@@ -66,7 +66,7 @@ func (s *Store) isMsgStale(msg *mraft.RaftMessage) (bool, error) {
 		c := peers.getCell()
 		epoch := c.Epoch
 		if isEpochStale(fromEpoch, epoch) &&
-			findPeer(c, fromStoreID) != nil {
+			findPeer(&c, fromStoreID) != nil {
 			s.handleStaleMsg(msg, epoch, isVoteMsg)
 			return true, nil
 		}
@@ -97,7 +97,7 @@ func (s *Store) isMsgStale(msg *mraft.RaftMessage) (bool, error) {
 				cellID,
 				msg.String())
 
-			notExist := findPeer(localState.Cell, fromStoreID) == nil
+			notExist := findPeer(&localState.Cell, fromStoreID) == nil
 			s.handleStaleMsg(msg, cellEpoch, isVoteMsg && notExist)
 
 			return true, nil

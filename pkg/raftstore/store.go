@@ -586,26 +586,12 @@ func (s *Store) handleStoreHeartbeat() error {
 }
 
 func (s *Store) handleCellHeartbeat() {
-	var err error
-
 	for _, p := range s.replicatesMap.values() {
 		p.checkPeers()
 	}
 
 	for _, p := range s.replicatesMap.values() {
-		if p.isLeader() {
-			if p.lastHBJob != nil && p.lastHBJob.IsNotComplete() {
-				// cancel last if not complete
-				p.lastHBJob.Cancel()
-			} else {
-				p.lastHBJob, err = s.addPDJob(p.doHeartbeat)
-				if err != nil {
-					log.Errorf("heartbeat-cell[%d]: add cell heartbeat job failed, errors:\n %+v",
-						p.cellID,
-						err)
-				}
-			}
-		}
+		p.handleHeartbeat()
 	}
 }
 
@@ -650,7 +636,9 @@ func (s *Store) sendAdminRequest(cell metapb.Cell, peer metapb.Peer, adminReq *r
 		UUID:      uuid.NewV4().Bytes(),
 	}
 	req.AdminRequest = adminReq
-	s.notify(newCMD(req, nil))
+
+	cmd := newCMD(req, nil)
+	s.notify(cmd)
 }
 
 func (s *Store) getEngine(kind storage.Kind) storage.Engine {

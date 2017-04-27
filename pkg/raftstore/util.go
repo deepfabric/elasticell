@@ -14,7 +14,10 @@
 package raftstore
 
 import (
+	"bytes"
+
 	"github.com/coreos/etcd/raft/raftpb"
+	"github.com/deepfabric/elasticell/pkg/pb/errorpb"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
 	"github.com/deepfabric/elasticell/pkg/storage"
@@ -31,7 +34,7 @@ func isEpochStale(epoch metapb.CellEpoch, checkEpoch metapb.CellEpoch) bool {
 		epoch.ConfVer < checkEpoch.ConfVer
 }
 
-func findPeer(cell metapb.Cell, storeID uint64) *metapb.Peer {
+func findPeer(cell *metapb.Cell, storeID uint64) *metapb.Peer {
 	for _, peer := range cell.Peers {
 		if peer.StoreID == storeID {
 			return peer
@@ -41,10 +44,40 @@ func findPeer(cell metapb.Cell, storeID uint64) *metapb.Peer {
 	return nil
 }
 
+func removePeer(cell *metapb.Cell, storeID uint64) {
+	var newPeers []*metapb.Peer
+	for _, peer := range cell.Peers {
+		if peer.StoreID != storeID {
+			newPeers = append(newPeers, peer)
+		}
+	}
+
+	cell.Peers = newPeers
+}
+
 func newPeer(peerID, storeID uint64) metapb.Peer {
 	return metapb.Peer{
 		ID:      peerID,
 		StoreID: storeID,
+	}
+}
+
+// Check if key in cell range [`startKey`, `endKey`).
+func checkKeyInCell(key []byte, cell *metapb.Cell) *errorpb.Error {
+	if bytes.Compare(key, cell.Start) >= 0 && (len(cell.End) == 0 || bytes.Compare(key, cell.End) < 0) {
+		return nil
+	}
+
+	e := &errorpb.KeyNotInCell{
+		Key:      key,
+		CellID:   cell.ID,
+		StartKey: cell.Start,
+		EndKey:   cell.End,
+	}
+
+	return &errorpb.Error{
+		Message:      errKeyNotInCell.Error(),
+		KeyNotInCell: e,
 	}
 }
 

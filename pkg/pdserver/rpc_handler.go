@@ -193,12 +193,48 @@ func (h *RPCHandler) StoreHeartbeat(c context.Context, req *pdpb.StoreHeartbeatR
 		return proxy.StoreHeartbeat(c, req)
 	}
 
-	rsp, err := h.doHandle("CellHeartbeat", req, forwardFun, doFun)
+	rsp, err := h.doHandle("StoreHeartbeat", req, forwardFun, doFun)
 	if err != nil {
 		return nil, err
 	}
 
 	return rsp.(*pdpb.StoreHeartbeatRsp), nil
+}
+
+// AskSplit returns ask split response
+func (h *RPCHandler) AskSplit(c context.Context, req *pdpb.AskSplitReq) (*pdpb.AskSplitRsp, error) {
+	doFun := func() (interface{}, error) {
+		return h.server.askSplit(req)
+	}
+
+	forwardFun := func(proxy *pd.Client) (interface{}, error) {
+		return proxy.AskSplit(c, req)
+	}
+
+	rsp, err := h.doHandle("AskSplit", req, forwardFun, doFun)
+	if err != nil {
+		return nil, err
+	}
+
+	return rsp.(*pdpb.AskSplitRsp), nil
+}
+
+// ReportSplit returns report split response
+func (h *RPCHandler) ReportSplit(c context.Context, req *pdpb.ReportSplitReq) (*pdpb.ReportSplitRsp, error) {
+	doFun := func() (interface{}, error) {
+		return h.server.reportSplit(req)
+	}
+
+	forwardFun := func(proxy *pd.Client) (interface{}, error) {
+		return proxy.ReportSplit(c, req)
+	}
+
+	rsp, err := h.doHandle("AskSplit", req, forwardFun, doFun)
+	if err != nil {
+		return nil, err
+	}
+
+	return rsp.(*pdpb.ReportSplitRsp), nil
 }
 
 func (h *RPCHandler) doHandle(name string, req pb.BaseReq, forwardFun func(*pd.Client) (interface{}, error), doFun func() (interface{}, error)) (interface{}, error) {

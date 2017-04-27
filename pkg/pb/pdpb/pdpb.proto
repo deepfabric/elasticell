@@ -18,6 +18,8 @@ service PDService {
     rpc PutStore(PutStoreReq) returns (PutStoreRsp) {}
     rpc CellHeartbeat (CellHeartbeatReq) returns (CellHeartbeatRsp) {}
     rpc StoreHeartbeat (StoreHeartbeatReq) returns (StoreHeartbeatRsp) {}
+    rpc AskSplit (AskSplitReq) returns (AskSplitRsp) {}
+    rpc ReportSplit(ReportSplitReq) returns (ReportSplitRsp) {}
 }
 
 enum ConfChangeType {
@@ -162,5 +164,30 @@ message StoreHeartbeatReq {
 }
 
 message StoreHeartbeatRsp {
+    optional ResponseHeader header = 1 [(gogoproto.nullable) = false];
+}
+
+message AskSplitReq {
+    optional string        from   = 1 [(gogoproto.nullable) = false];
+    optional uint64        id     = 2 [(gogoproto.nullable) = false, (gogoproto.customname) = "ID"];
+    optional RequestHeader header = 3 [(gogoproto.nullable) = false];
+    optional metapb.Cell   cell   = 4 [(gogoproto.nullable) = false];
+}
+
+message AskSplitRsp {
+    optional ResponseHeader header     = 1 [(gogoproto.nullable) = false];
+    optional uint64         newCellID  = 2 [(gogoproto.nullable) = false];
+    repeated uint64         newPeerIDs = 3;
+}
+
+message ReportSplitReq {
+    optional string        from   = 1 [(gogoproto.nullable) = false];
+    optional uint64        id     = 2 [(gogoproto.nullable) = false, (gogoproto.customname) = "ID"];
+    optional RequestHeader header = 3 [(gogoproto.nullable) = false];
+    optional metapb.Cell   left   = 4 [(gogoproto.nullable) = false];
+    optional metapb.Cell   right  = 5 [(gogoproto.nullable) = false];
+}
+
+message ReportSplitRsp {
     optional ResponseHeader header = 1 [(gogoproto.nullable) = false];
 }

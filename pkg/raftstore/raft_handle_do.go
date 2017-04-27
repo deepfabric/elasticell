@@ -14,10 +14,11 @@
 package raftstore
 
 import (
+	"bytes"
 	"fmt"
 	"sync/atomic"
 
-	"bytes"
+	"time"
 
 	"github.com/Workiva/go-datastructures/queue"
 	"github.com/coreos/etcd/raft"
@@ -26,8 +27,11 @@ import (
 	"github.com/deepfabric/elasticell/pkg/pb/errorpb"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
+	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
+	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
 	"github.com/deepfabric/elasticell/pkg/util"
 	"github.com/pkg/errors"
+	"golang.org/x/net/context"
 )
 
 type tempRaftContext struct {
@@ -81,32 +85,32 @@ func (q *readIndexQueue) getReadyCnt() int32 {
 
 // ====================== raft ready handle methods
 func (ps *peerStorage) doAppendSnapshot(ctx *tempRaftContext, snap raftpb.Snapshot) error {
-	log.Infof("raftstore[cell-%d]: begin to apply snapshot", ps.cell.ID)
+	log.Infof("raftstore[cell-%d]: begin to apply snapshot", ps.getCell().ID)
 
 	snapData := &mraft.RaftSnapshotData{}
 	util.MustUnmarshal(snapData, snap.Data)
 
-	if snapData.Cell.ID != ps.cell.ID {
+	if snapData.Cell.ID != ps.getCell().ID {
 		return fmt.Errorf("raftstore[cell-%d]: cell not match, snapCell=<%d> currCell=<%d>",
-			ps.cell.ID,
+			ps.getCell().ID,
 			snapData.Cell.ID,
-			ps.cell.ID)
+			ps.getCell().ID)
 	}
 
 	if ps.isInitialized() {
 		err := ps.clearMeta()
 		if err != nil {
 			log.Errorf("raftstore[cell-%d]: clear meta failed, errors:\n %+v",
-				ps.cell.ID,
+				ps.getCell().ID,
 				err)
 			return err
 		}
 	}
 
-	err := ps.updatePeerState(ps.cell, mraft.Applying)
+	err := ps.updatePeerState(ps.getCell(), mraft.Applying)
 	if err != nil {
 		log.Errorf("raftstore[cell-%d]: write peer state failed, errors:\n %+v",
-			ps.cell.ID,
+			ps.getCell().ID,
 			err)
 		return err
 	}
@@ -124,7 +128,7 @@ func (ps *peerStorage) doAppendSnapshot(ctx *tempRaftContext, snap raftpb.Snapsh
 	ctx.applyState.TruncatedState.Term = lastTerm
 
 	log.Infof("raftstore[cell-%d]: apply snapshot ok, state=<%s>",
-		ps.cell.ID,
+		ps.getCell().ID,
 		ctx.applyState.String())
 
 	c := snapData.Cell
@@ -140,7 +144,7 @@ func (ps *peerStorage) doAppendEntries(ctx *tempRaftContext, entries []raftpb.En
 	c := len(entries)
 
 	log.Debugf("raftstore[cell-%d]: append entries, count=<%d>",
-		ps.cell.ID,
+		ps.getCell().ID,
 		c)
 
 	if c == 0 {
@@ -153,10 +157,10 @@ func (ps *peerStorage) doAppendEntries(ctx *tempRaftContext, entries []raftpb.En
 
 	for _, e := range entries {
 		d := util.MustMarshal(&e)
-		err := ps.store.getMetaEngine().Set(getRaftLogKey(ps.cell.ID, e.Index), d)
+		err := ps.store.getMetaEngine().Set(getRaftLogKey(ps.getCell().ID, e.Index), d)
 		if err != nil {
 			log.Errorf("raftstore[cell-%d]: append entry failure, entry=<%s> errors:\n %+v",
-				ps.cell.ID,
+				ps.getCell().ID,
 				e.String(),
 				err)
 			return err
@@ -165,10 +169,10 @@ func (ps *peerStorage) doAppendEntries(ctx *tempRaftContext, entries []raftpb.En
 
 	// Delete any previously appended log entries which never committed.
 	for index := lastIndex + 1; index < prevLastIndex+1; index++ {
-		err := ps.store.getMetaEngine().Delete(getRaftLogKey(ps.cell.ID, index))
+		err := ps.store.getMetaEngine().Delete(getRaftLogKey(ps.getCell().ID, index))
 		if err != nil {
 			log.Errorf("raftstore[cell-%d]: delete any previously appended log entries failure, index=<%d> errors:\n %+v",
-				ps.cell.ID,
+				ps.getCell().ID,
 				index,
 				err)
 			return err
@@ -183,10 +187,10 @@ func (ps *peerStorage) doAppendEntries(ctx *tempRaftContext, entries []raftpb.En
 
 func (pr *PeerReplicate) doSaveRaftState(ctx *tempRaftContext) error {
 	data, _ := ctx.raftState.Marshal()
-	err := pr.store.getMetaEngine().Set(getRaftStateKey(pr.ps.cell.ID), data)
+	err := pr.store.getMetaEngine().Set(getRaftStateKey(pr.ps.getCell().ID), data)
 	if err != nil {
 		log.Errorf("raftstore[cell-%d]: save temp raft state failure, errors:\n %+v",
-			pr.ps.cell.ID,
+			pr.ps.getCell().ID,
 			err)
 	}
 
@@ -194,10 +198,10 @@ func (pr *PeerReplicate) doSaveRaftState(ctx *tempRaftContext) error {
 }
 
 func (pr *PeerReplicate) doSaveApplyState(ctx *tempRaftContext) error {
-	err := pr.store.getMetaEngine().Set(getApplyStateKey(pr.ps.cell.ID), util.MustMarshal(&ctx.applyState))
+	err := pr.store.getMetaEngine().Set(getApplyStateKey(pr.ps.getCell().ID), util.MustMarshal(&ctx.applyState))
 	if err != nil {
 		log.Errorf("raftstore[cell-%d]: save temp apply state failure, errors:\n %+v",
-			pr.ps.cell.ID,
+			pr.ps.getCell().ID,
 			err)
 	}
 
@@ -217,7 +221,7 @@ func (pr *PeerReplicate) doApplySnap(ctx *tempRaftContext) *applySnapResult {
 	// cleanup data before apply snap job
 	if pr.ps.isInitialized() {
 		// TODO: why??
-		err := pr.ps.clearExtraData(pr.ps.cell)
+		err := pr.ps.clearExtraData(pr.ps.getCell())
 		if err != nil {
 			// No need panic here, when applying snapshot, the deletion will be tried
 			// again. But if the region range changes, like [a, c) -> [a, b) and [b, c),
@@ -232,12 +236,12 @@ func (pr *PeerReplicate) doApplySnap(ctx *tempRaftContext) *applySnapResult {
 
 	pr.startApplyingSnapJob()
 
-	prevCell := pr.ps.cell
-	pr.ps.cell = *ctx.snapCell
+	prevCell := pr.ps.getCell()
+	pr.ps.setCell(*ctx.snapCell)
 
 	return &applySnapResult{
 		prevCell: prevCell,
-		cell:     pr.ps.cell,
+		cell:     pr.ps.getCell(),
 	}
 }
 
@@ -246,10 +250,10 @@ func (pr *PeerReplicate) applyCommittedEntries(rd *raft.Ready) bool {
 		// TODO: update lease??
 
 		if len(rd.CommittedEntries) > 0 {
-			err := pr.startApplyCommittedEntriesJob(pr.ps.cell.ID, pr.getCurrentTerm(), rd.CommittedEntries)
+			err := pr.startApplyCommittedEntriesJob(pr.ps.getCell().ID, pr.getCurrentTerm(), rd.CommittedEntries)
 			if err != nil {
 				log.Fatalf("raftstore[cell-%d]: add apply committed entries job failed, errors:\n %+v",
-					pr.ps.cell.ID,
+					pr.ps.getCell().ID,
 					err)
 			}
 
@@ -336,6 +340,28 @@ func (pr *PeerReplicate) doSplitCheck(epoch metapb.CellEpoch, startKey, endKey [
 
 func (pr *PeerReplicate) doAskSplit(cell metapb.Cell, peer metapb.Peer, splitKey []byte) error {
 	// TODO: ask pd
+	req := &pdpb.AskSplitReq{
+		Cell: cell,
+	}
+
+	rsp, err := pr.store.pdClient.AskSplit(context.TODO(), req)
+	if err != nil {
+		log.Debugf("raftstore-split[cell-%d]: ask split to pd failed, error:\n %+v",
+			pr.cellID,
+			err)
+		return err
+	}
+
+	splitReq := new(raftcmdpb.SplitRequest)
+	splitReq.NewCellID = rsp.NewCellID
+	splitReq.SplitKey = splitKey
+	splitReq.NewPeerIDs = rsp.NewPeerIDs
+
+	adminReq := new(raftcmdpb.AdminRequest)
+	adminReq.Type = raftcmdpb.Split
+	adminReq.Body = util.MustMarshal(splitReq)
+
+	pr.store.sendAdminRequest(cell, peer, adminReq)
 	return nil
 }
 
@@ -368,6 +394,146 @@ func (pr *PeerReplicate) doPostApply(result *asyncApplyResult) {
 
 		pr.pendingReads.resetReadyCnt()
 	}
+}
+
+func (s *Store) doPostApplyResult(result *asyncApplyResult) {
+	switch result.result.adminType {
+	case raftcmdpb.ChangePeer:
+		s.doApplyConfChange(result.cellID, result.result.changePeer)
+	case raftcmdpb.Split:
+		s.doApplySplit(result.cellID, result.result.splitResult)
+	}
+}
+
+func (s *Store) doApplyConfChange(cellID uint64, cp *changePeer) {
+	pr := s.replicatesMap.get(cellID)
+	if nil == pr {
+		log.Fatalf("raftstore-apply[cell-%d]: missing cell",
+			cellID)
+	}
+
+	pr.rn.ApplyConfChange(cp.confChange)
+	if cp.confChange.NodeID == 0 {
+		// Apply failed, skip.
+		return
+	}
+
+	pr.ps.setCell(cp.cell)
+
+	if pr.isLeader() {
+		// Notify pd immediately.
+		log.Infof("raftstore-apply[cell-%d]: notify pd with change peer, cell=<%+v>",
+			cellID,
+			cp.cell)
+		pr.handleHeartbeat()
+	}
+
+	switch cp.confChange.Type {
+	case raftpb.ConfChangeAddNode:
+		// Add this peer to cache.
+		pr.peerHeartbeatsMap.put(cp.peer.ID, time.Now())
+		s.peerCache.put(cp.peer.ID, cp.peer)
+	case raftpb.ConfChangeRemoveNode:
+		// Remove this peer from cache.
+		pr.peerHeartbeatsMap.delete(cp.peer.ID)
+		s.peerCache.delete(cp.peer.ID)
+
+		// We only care remove itself now.
+		if cp.peer.StoreID == pr.store.GetID() {
+			if cp.peer.ID == pr.peer.ID {
+				// TODO: check if async needed?
+				s.destroyPeer(cellID, cp.peer, false)
+			} else {
+				log.Fatalf("raftstore-apply[cell-%d]: trying to remove unknown peer, peer=<%+v>",
+					cellID,
+					cp.peer)
+			}
+		}
+	}
+}
+
+func (s *Store) doApplySplit(cellID uint64, result *splitResult) {
+	pr := s.replicatesMap.get(cellID)
+	if nil == pr {
+		log.Fatalf("raftstore-apply[cell-%d]: missing cell",
+			cellID)
+	}
+
+	left := result.left
+	right := result.right
+
+	pr.ps.setCell(left)
+
+	// add new cell peers to cache
+	for _, p := range right.Peers {
+		s.peerCache.put(p.ID, *p)
+	}
+
+	newCellID := right.ID
+	newPR := s.replicatesMap.get(newCellID)
+	if nil != newPR {
+		for _, p := range right.Peers {
+			s.peerCache.put(p.ID, *p)
+		}
+
+		// If the store received a raft msg with the new region raft group
+		// before splitting, it will creates a uninitialized peer.
+		// We can remove this uninitialized peer directly.
+		if newPR.ps.isInitialized() {
+			log.Fatalf("raftstore-apply[cell-%d]: duplicated cell for split, newCellID=<%d>",
+				cellID,
+				newCellID)
+		}
+	}
+
+	newPR, err := createPeerReplicate(s, &right)
+	if err != nil {
+		// peer information is already written into db, can't recover.
+		// there is probably a bug.
+		log.Fatalf("raftstore-apply[cell-%d]: create new split cell failed, newCell=<%d> errors:\n %+v",
+			cellID,
+			right,
+			err)
+	}
+
+	// If this peer is the leader of the cell before split, it's intuitional for
+	// it to become the leader of new split cell.
+	// The ticks are accelerated here, so that the peer for the new split cell
+	// comes to campaign earlier than the other follower peers. And then it's more
+	// likely for this peer to become the leader of the new split cell.
+	// If the other follower peers applies logs too slowly, they may fail to vote the
+	// `MsgRequestVote` from this peer on its campaign.
+	// In this worst case scenario, the new split raft group will not be available
+	// since there is no leader established during one election timeout after the split.
+	if pr.isLeader() && len(right.Peers) > 1 {
+		// TODO: accelerate tick for first election timeout, it will most become leader
+	}
+
+	if pr.isLeader() {
+		log.Infof("raftstore-apply[cell-%d]: notify pd with split, left=<%+v> right=<%+v>",
+			cellID,
+			left,
+			right)
+
+		pr.handleHeartbeat()
+		newPR.handleHeartbeat()
+
+		err := s.startReportSpltJob(left, right)
+		log.Errorf("raftstore-apply[cell-%d]: add report split job failed, errors:\n %+v",
+			cellID,
+			err)
+	}
+
+	log.Infof("raftstore-apply[cell-%d]: insert new cell, left=<%+v> right <%+v>",
+		cellID,
+		left,
+		right)
+	s.keyRanges.Update(left)
+	s.keyRanges.Update(right)
+
+	newPR.sizeDiffHint = s.cfg.CellCheckSizeDiff
+	newPR.startRegistrationJob()
+	s.replicatesMap.put(newPR.cellID, newPR)
 }
 
 func (pr *PeerReplicate) doApplyReads(rd *raft.Ready) {
@@ -446,14 +612,14 @@ func (ps *peerStorage) InitialState() (raftpb.HardState, raftpb.ConfState, error
 		hardState.Vote == 0 {
 		if ps.isInitialized() {
 			log.Fatalf("raftstore[cell-%d]: cell is initialized but local state has empty hard state, hardState=<%v>",
-				ps.cell.ID,
+				ps.getCell().ID,
 				hardState)
 		}
 
 		return hardState, confState, nil
 	}
 
-	for _, p := range ps.cell.Peers {
+	for _, p := range ps.getCell().Peers {
 		confState.Nodes = append(confState.Nodes, p.ID)
 	}
 
@@ -475,7 +641,7 @@ func (ps *peerStorage) Entries(low, high, maxSize uint64) ([]raftpb.Entry, error
 	nextIndex := low
 	exceededMaxSize := false
 
-	startKey := getRaftLogKey(ps.cell.ID, low)
+	startKey := getRaftLogKey(ps.getCell().ID, low)
 
 	if low+1 == high {
 		// If election happens in inactive cells, they will just try
@@ -498,7 +664,7 @@ func (ps *peerStorage) Entries(low, high, maxSize uint64) ([]raftpb.Entry, error
 		return ents, nil
 	}
 
-	endKey := getRaftLogKey(ps.cell.ID, high)
+	endKey := getRaftLogKey(ps.getCell().ID, high)
 	err = ps.store.getMetaEngine().Scan(startKey, endKey, func(data, value []byte) (bool, error) {
 		e, err := ps.unmarshal(data, nextIndex)
 		if err != nil {
@@ -547,7 +713,7 @@ func (ps *peerStorage) Term(idx uint64) (uint64, error) {
 		return ps.lastTerm, nil
 	}
 
-	key := getRaftLogKey(ps.cell.ID, idx)
+	key := getRaftLogKey(ps.getCell().ID, idx)
 	v, err := ps.store.getMetaEngine().Get(key)
 	if err != nil {
 		return 0, err
@@ -583,7 +749,7 @@ func (ps *peerStorage) Snapshot() (raftpb.Snapshot, error) {
 		// snapshot failure, we will continue try do snapshot
 		if nil == result {
 			log.Warnf("raftstore[cell-%d]: snapshot generating failed, triedCnt=<%d>",
-				ps.cell.ID,
+				ps.getCell().ID,
 				ps.snapTriedCnt)
 			ps.snapTriedCnt++
 		} else {
@@ -600,17 +766,17 @@ func (ps *peerStorage) Snapshot() (raftpb.Snapshot, error) {
 		cnt := ps.snapTriedCnt
 		ps.resetGenSnapJob()
 		return raftpb.Snapshot{}, fmt.Errorf("raftstore[cell-%d]: failed to get snapshot after %d times",
-			ps.cell.ID,
+			ps.getCell().ID,
 			cnt)
 	}
 
-	log.Infof("raftstore[cell-%d]: start snapshot", ps.cell.ID)
+	log.Infof("raftstore[cell-%d]: start snapshot", ps.getCell().ID)
 	ps.snapTriedCnt++
 
 	job, err := ps.store.addSnapJob(ps.doGenerateSnapshotJob)
 	if err != nil {
 		log.Fatalf("raftstore[cell-%d]: add generate job failed, errors:\n %+v",
-			ps.cell.ID,
+			ps.getCell().ID,
 			err)
 	}
 	ps.genSnapJob = job

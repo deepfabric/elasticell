@@ -39,7 +39,7 @@ const (
 	readIndex             = requestPolicy(1)
 	proposeNormal         = requestPolicy(2)
 	proposeTransferLeader = requestPolicy(3)
-	proposeConfChange     = requestPolicy(4)
+	proposeChange         = requestPolicy(4)
 )
 
 type proposalMeta struct {
@@ -120,7 +120,7 @@ func (pr *PeerReplicate) handleRaftReadyAppend(ctx *tempRaftContext, rd *raft.Re
 	// leader will send all the remaining messages to this follower, which can lead
 	// to full message queue under high load.
 	if pr.ps.isApplyingSnap() {
-		log.Debugf("raftstore[cell-%d]: still applying snapshot, skip further handling", pr.ps.cell.ID)
+		log.Debugf("raftstore[cell-%d]: still applying snapshot, skip further handling", pr.ps.getCell().ID)
 		return
 	}
 
@@ -130,7 +130,7 @@ func (pr *PeerReplicate) handleRaftReadyAppend(ctx *tempRaftContext, rd *raft.Re
 	if !raft.IsEmptySnap(rd.Snapshot) &&
 		!pr.ps.isApplyComplete() {
 		log.Debugf("raftstore[cell-%d]: apply index and committed index not match, skip applying snapshot, apply=<%d> commit=<%d>",
-			pr.ps.cell.ID,
+			pr.ps.getCell().ID,
 			pr.ps.getAppliedIndex(),
 			pr.ps.raftState.HardState.Commit)
 		return
@@ -188,7 +188,7 @@ func (pr *PeerReplicate) handleAppendSnapshot(ctx *tempRaftContext, rd *raft.Rea
 		err := pr.getStore().doAppendSnapshot(ctx, rd.Snapshot)
 		if err != nil {
 			log.Fatalf("raftstore[cell-%d]: handle raft ready failure, errors:\n %+v",
-				pr.ps.cell.ID,
+				pr.ps.getCell().ID,
 				err)
 		}
 	}
@@ -199,7 +199,7 @@ func (pr *PeerReplicate) handleAppendEntries(ctx *tempRaftContext, rd *raft.Read
 		err := pr.getStore().doAppendEntries(ctx, rd.Entries)
 		if err != nil {
 			log.Fatalf("raftstore[cell-%d]: handle raft ready failure, errors:\n %+v",
-				pr.ps.cell.ID,
+				pr.ps.getCell().ID,
 				err)
 		}
 	}
@@ -216,7 +216,7 @@ func (pr *PeerReplicate) handleSaveRaftState(ctx *tempRaftContext) {
 		err := pr.doSaveRaftState(ctx)
 		if err != nil {
 			log.Fatalf("raftstore[cell-%d]: handle raft ready failure, errors:\n %+v",
-				pr.ps.cell.ID,
+				pr.ps.getCell().ID,
 				err)
 		}
 	}
@@ -232,7 +232,7 @@ func (pr *PeerReplicate) handleSaveApplyState(ctx *tempRaftContext) {
 		err := pr.doSaveApplyState(ctx)
 		if err != nil {
 			log.Fatalf("raftstore[cell-%d]: handle raft ready failure, errors:\n %+v",
-				pr.ps.cell.ID,
+				pr.ps.getCell().ID,
 				err)
 		}
 	}
@@ -266,7 +266,7 @@ func (pr *PeerReplicate) propose(meta *proposalMeta, cmd *cmd) {
 		pr.proposeNormal(meta, cmd)
 	case proposeTransferLeader:
 		// TODO: impl
-	case proposeConfChange:
+	case proposeChange:
 		isConfChange = true
 		pr.proposeConfChange(meta, cmd)
 	}
@@ -432,7 +432,7 @@ func (pr *PeerReplicate) doSendFromChan(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			log.Infof("raftstore[cell-%d]: server stopped",
-				pr.ps.cell.ID)
+				pr.ps.getCell().ID)
 			close(pr.msgC)
 			return
 		// TODO: use queue instead of chan
@@ -441,7 +441,7 @@ func (pr *PeerReplicate) doSendFromChan(ctx context.Context) {
 			if err != nil {
 				// We don't care that the message is sent failed, so here just log this error
 				log.Warnf("raftstore[cell-%d]: send msg failure, error:\n %+v",
-					pr.ps.cell.ID,
+					pr.ps.getCell().ID,
 					err)
 			}
 		}
@@ -450,8 +450,8 @@ func (pr *PeerReplicate) doSendFromChan(ctx context.Context) {
 
 func (pr *PeerReplicate) sendRaftMsg(msg raftpb.Message) error {
 	sendMsg := mraft.RaftMessage{}
-	sendMsg.CellID = pr.ps.cell.ID
-	sendMsg.CellEpoch = pr.ps.cell.Epoch
+	sendMsg.CellID = pr.ps.getCell().ID
+	sendMsg.CellEpoch = pr.ps.getCell().Epoch
 
 	sendMsg.FromPeer = pr.peer
 	sendMsg.ToPeer, _ = pr.store.peerCache.get(msg.To)
@@ -461,7 +461,7 @@ func (pr *PeerReplicate) sendRaftMsg(msg raftpb.Message) error {
 
 	if log.DebugEnabled() {
 		log.Debugf("raftstore[cell-%d]: send raft msg, from=<%d> to=<%d> msg=<%s>",
-			pr.ps.cell.ID,
+			pr.ps.getCell().ID,
 			sendMsg.FromPeer.ID,
 			sendMsg.ToPeer.ID,
 			msg.String())
@@ -479,8 +479,8 @@ func (pr *PeerReplicate) sendRaftMsg(msg raftpb.Message) error {
 		(msg.Type == raftpb.MsgVote ||
 			// the peer has not been known to this leader, it may exist or not.
 			(msg.Type == raftpb.MsgHeartbeat && msg.Commit == 0)) {
-		sendMsg.Start = pr.ps.cell.Start
-		sendMsg.End = pr.ps.cell.End
+		sendMsg.Start = pr.ps.getCell().Start
+		sendMsg.End = pr.ps.getCell().End
 	}
 
 	sendMsg.Message = msg
@@ -505,7 +505,7 @@ func (pr *PeerReplicate) getHandlePolicy(req *raftcmdpb.RaftCMDRequest) (request
 	if req.AdminRequest != nil {
 		switch req.AdminRequest.Type {
 		case raftcmdpb.ChangePeer:
-			return proposeConfChange, nil
+			return proposeChange, nil
 		case raftcmdpb.TransferLeader:
 			return proposeTransferLeader, nil
 		default:

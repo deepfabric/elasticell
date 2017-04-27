@@ -1,10 +1,10 @@
 package pdserver
 
 import (
+	"bytes"
+	"fmt"
 	"sync"
 	"time"
-
-	"fmt"
 
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
@@ -111,6 +111,28 @@ func (s *Server) storeHeartbeat(req *pdpb.StoreHeartbeatReq) (*pdpb.StoreHeartbe
 	}
 
 	return c.doStoreHeartbeat(req)
+}
+
+func (s *Server) askSplit(req *pdpb.AskSplitReq) (*pdpb.AskSplitRsp, error) {
+	if nil == req.Cell.Start || len(req.Cell.Start) == 0 {
+		return nil, errors.New("missing cell start key for split")
+	}
+
+	c := s.GetCellCluster()
+	if c == nil {
+		return nil, errNotBootstrapped
+	}
+
+	return c.doAskSplit(req)
+}
+
+func (s *Server) reportSplit(req *pdpb.ReportSplitReq) (*pdpb.ReportSplitRsp, error) {
+	c := s.GetCellCluster()
+	if c == nil {
+		return nil, errNotBootstrapped
+	}
+
+	return c.doReportSplit(req)
 }
 
 // GetClusterID returns cluster id
@@ -282,6 +304,69 @@ func (c *CellCluster) doPutStore(store metapb.Store) error {
 
 	c.cache.setStore(old)
 	return nil
+}
+
+func (c *CellCluster) doAskSplit(req *pdpb.AskSplitReq) (*pdpb.AskSplitRsp, error) {
+	c.mux.Lock()
+	defer c.mux.Unlock()
+
+	cr := c.cache.searchCell(req.Cell.Start)
+	if cr == nil {
+		return nil, errors.New("cell not found")
+	}
+
+	// If the request epoch is less than current cell epoch, then returns an error.
+	if req.Cell.Epoch.CellVer < cr.cell.Epoch.CellVer ||
+		req.Cell.Epoch.ConfVer < cr.cell.Epoch.ConfVer {
+		return nil, errors.Errorf("invalid cell epoch, request: %v, currenrt: %v",
+			req.Cell.Epoch,
+			cr.cell.Epoch)
+	}
+
+	newCellID, err := c.s.idAlloc.newID()
+	if err != nil {
+		return nil, err
+	}
+
+	cnt := len(req.Cell.Peers)
+	peerIDs := make([]uint64, cnt)
+	for index := 0; index < cnt; index++ {
+		if peerIDs[index], err = c.s.idAlloc.newID(); err != nil {
+			return nil, err
+		}
+	}
+
+	return &pdpb.AskSplitRsp{
+		NewCellID:  newCellID,
+		NewPeerIDs: peerIDs,
+	}, nil
+}
+
+func (c *CellCluster) doReportSplit(req *pdpb.ReportSplitReq) (*pdpb.ReportSplitRsp, error) {
+	left := req.Left
+	right := req.Right
+
+	err := c.checkSplitRegion(&left, &right)
+	if err != nil {
+		log.Warnf("cell-cluster:report split cell is invalid, req=<%+v> errors:\n %+v",
+			req,
+			err)
+		return nil, err
+	}
+
+	return &pdpb.ReportSplitRsp{}, nil
+}
+
+func (c *CellCluster) checkSplitRegion(left *metapb.Cell, right *metapb.Cell) error {
+	if !bytes.Equal(left.End, right.Start) {
+		return errors.New("invalid split cell")
+	}
+
+	if len(right.End) == 0 || bytes.Compare(left.Start, right.End) < 0 {
+		return nil
+	}
+
+	return errors.New("invalid split cell")
 }
 
 func (c *CellCluster) isRunning() bool {

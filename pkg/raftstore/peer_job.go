@@ -14,12 +14,14 @@
 package raftstore
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/coreos/etcd/raft/raftpb"
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
+	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
 )
 
 func (pr *PeerReplicate) startApplyingSnapJob() {
@@ -46,8 +48,9 @@ func (ps *peerStorage) startDestroyDataJob(cellID uint64, start, end []byte) err
 func (pr *PeerReplicate) startRegistrationJob() {
 	delegate := &applyDelegate{
 		store:            pr.store,
+		ps:               pr.ps,
 		peerID:           pr.peer.ID,
-		cell:             pr.ps.cell,
+		cell:             pr.ps.getCell(),
 		term:             pr.getCurrentTerm(),
 		applyState:       *pr.ps.getApplyState(),
 		appliedIndexTerm: pr.ps.getAppliedIndexTerm(),
@@ -58,7 +61,7 @@ func (pr *PeerReplicate) startRegistrationJob() {
 
 	if err != nil {
 		log.Fatalf("raftstore[cell-%d]: add registration job failed, errors:\n %+v",
-			pr.ps.cell.ID,
+			pr.ps.getCell().ID,
 			err)
 	}
 }
@@ -96,6 +99,19 @@ func (pr *PeerReplicate) startSplitCheckJob() error {
 func (pr *PeerReplicate) startAskSplitJob(cell metapb.Cell, peer metapb.Peer, splitKey []byte) error {
 	_, err := pr.store.addSplitJob(func() error {
 		return pr.doAskSplit(cell, peer, splitKey)
+	})
+
+	return err
+}
+
+func (s *Store) startReportSpltJob(left metapb.Cell, right metapb.Cell) error {
+	_, err := s.addPDJob(func() error {
+		_, err := s.pdClient.ReportSplit(context.TODO(), &pdpb.ReportSplitReq{
+			Left:  left,
+			Right: right,
+		})
+
+		return err
 	})
 
 	return err
@@ -167,7 +183,7 @@ func (pr *PeerReplicate) doApplyingSnapshotJob() error {
 	}
 
 	// TODO: decode snapshot and set to local rocksdb.
-	err = pr.ps.updatePeerState(pr.ps.cell, mraft.Normal)
+	err = pr.ps.updatePeerState(pr.ps.getCell(), mraft.Normal)
 	if err != nil {
 		log.Errorf("raftstore[cell-%d]: apply snap update peer state failed, errors:\n %+v",
 			pr.cellID,
@@ -181,17 +197,17 @@ func (pr *PeerReplicate) doApplyingSnapshotJob() error {
 
 func (ps *peerStorage) doGenerateSnapshotJob() error {
 	if ps.genSnapJob == nil {
-		log.Fatalf("raftstore[cell-%d]: generating snapshot job chan is nil", ps.cell.ID)
+		log.Fatalf("raftstore[cell-%d]: generating snapshot job chan is nil", ps.getCell().ID)
 	}
 
 	applyState, err := ps.loadApplyState()
 	if err != nil {
 		log.Errorf("raftstore[cell-%d]: load snapshot failure, errors:\n %+v",
-			ps.cell.ID,
+			ps.getCell().ID,
 			err)
 		return nil
 	} else if nil == applyState {
-		log.Errorf("raftstore[cell-%d]: could not load snapshot", ps.cell.ID)
+		log.Errorf("raftstore[cell-%d]: could not load snapshot", ps.getCell().ID)
 		return nil
 	}
 
@@ -213,7 +229,7 @@ func (ps *peerStorage) doGenerateSnapshotJob() error {
 	}
 
 	if state.State != mraft.Normal {
-		log.Errorf("raftstore[cell-%d]: snap seems stale, skip", ps.cell.ID)
+		log.Errorf("raftstore[cell-%d]: snap seems stale, skip", ps.getCell().ID)
 		return nil
 	}
 
@@ -222,7 +238,7 @@ func (ps *peerStorage) doGenerateSnapshotJob() error {
 	snapshot.Metadata.Index = applyState.AppliedIndex
 
 	confState := raftpb.ConfState{}
-	for _, peer := range ps.cell.Peers {
+	for _, peer := range ps.getCell().Peers {
 		confState.Nodes = append(confState.Nodes, peer.ID)
 	}
 	snapshot.Metadata.ConfState = confState
@@ -246,10 +262,10 @@ func (ps *peerStorage) doGenerateSnapshotJob() error {
 	err = ps.snapshortter.SaveSnap(snapshot)
 	if err != nil {
 		log.Errorf("raftstore[cell-%d]: snapshot failure, errors:\n %+v",
-			ps.cell.ID,
+			ps.getCell().ID,
 			err)
 	} else {
-		log.Infof("raftstore[cell-%d]: snapshot complete", ps.cell.ID)
+		log.Infof("raftstore[cell-%d]: snapshot complete", ps.getCell().ID)
 		ps.genSnapJob.SetResult(snapshot)
 	}
 

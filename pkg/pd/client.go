@@ -285,6 +285,42 @@ func (c *Client) StoreHeartbeat(ctx context.Context, req *pdpb.StoreHeartbeatReq
 	return rsp.(*pdpb.StoreHeartbeatRsp), nil
 }
 
+// AskSplit returns ask split response
+func (c *Client) AskSplit(ctx context.Context, req *pdpb.AskSplitReq) (*pdpb.AskSplitRsp, error) {
+	rsp, err := c.proxyRPC(ctx,
+		req,
+		func() {
+			req.From = c.name
+			req.ID = c.seq
+		},
+		func() (interface{}, error) {
+			return c.pd.AskSplit(ctx, req, grpc.FailFast(true))
+		})
+	if err != nil {
+		return nil, err
+	}
+
+	return rsp.(*pdpb.AskSplitRsp), nil
+}
+
+// ReportSplit returns report split response
+func (c *Client) ReportSplit(ctx context.Context, req *pdpb.ReportSplitReq) (*pdpb.ReportSplitRsp, error) {
+	rsp, err := c.proxyRPC(ctx,
+		req,
+		func() {
+			req.From = c.name
+			req.ID = c.seq
+		},
+		func() (interface{}, error) {
+			return c.pd.ReportSplit(ctx, req, grpc.FailFast(true))
+		})
+	if err != nil {
+		return nil, err
+	}
+
+	return rsp.(*pdpb.ReportSplitRsp), nil
+}
+
 func (c *Client) proxyRPC(ctx context.Context, req pb.BaseReq, setFromFun func(), doRPC func() (interface{}, error)) (interface{}, error) {
 	c.mut.RLock()
 

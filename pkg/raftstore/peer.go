@@ -56,7 +56,7 @@ type PeerReplicate struct {
 }
 
 func createPeerReplicate(store *Store, cell *metapb.Cell) (*PeerReplicate, error) {
-	peer := findPeer(*cell, store.GetID())
+	peer := findPeer(cell, store.GetID())
 	if peer == nil {
 		return nil, fmt.Errorf("bootstrap: find no peer for store in cell. storeID=<%d> cell=<%+v>",
 			store.GetID(),
@@ -122,6 +122,23 @@ func newPeerReplicate(store *Store, cell *metapb.Cell, peerID uint64) (*PeerRepl
 	}
 
 	return pr, nil
+}
+
+func (pr *PeerReplicate) handleHeartbeat() {
+	var err error
+	if pr.isLeader() {
+		if pr.lastHBJob != nil && pr.lastHBJob.IsNotComplete() {
+			// cancel last if not complete
+			pr.lastHBJob.Cancel()
+		} else {
+			pr.lastHBJob, err = pr.store.addPDJob(pr.doHeartbeat)
+			if err != nil {
+				log.Errorf("heartbeat-cell[%d]: add cell heartbeat job failed, errors:\n %+v",
+					pr.cellID,
+					err)
+			}
+		}
+	}
 }
 
 func (pr *PeerReplicate) doHeartbeat() error {
