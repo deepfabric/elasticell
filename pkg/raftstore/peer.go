@@ -24,13 +24,12 @@ import (
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
 	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
-	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
 	"github.com/deepfabric/elasticell/pkg/util"
 	"golang.org/x/net/context"
 )
 
 const (
-	msgChanBuf       = 1024
+	defaultChanBuf   = 1024
 	defaultQueueSize = 1024
 )
 
@@ -42,7 +41,9 @@ type PeerReplicate struct {
 	rn         raft.Node
 	store      *Store
 	ps         *peerStorage
-	msgC       chan raftpb.Message
+
+	proposeC chan *proposalMeta
+	msgC     chan raftpb.Message
 
 	peerHeartbeatsMap *peerHeartbeatsMap
 	pendingReads      *readIndexQueue
@@ -102,7 +103,8 @@ func newPeerReplicate(store *Store, cell *metapb.Cell, peerID uint64) (*PeerRepl
 	rn := raft.StartNode(c, nil)
 	pr.rn = rn
 	pr.raftTicker = time.NewTicker(time.Millisecond * time.Duration(store.cfg.Raft.BaseTick))
-	pr.msgC = make(chan raftpb.Message, msgChanBuf)
+	pr.msgC = make(chan raftpb.Message, defaultChanBuf)
+	pr.proposeC = make(chan *proposalMeta, defaultChanBuf)
 	pr.store = store
 	pr.pendingReads = &readIndexQueue{
 		cellID:   cell.ID,
@@ -112,7 +114,8 @@ func newPeerReplicate(store *Store, cell *metapb.Cell, peerID uint64) (*PeerRepl
 	pr.peerHeartbeatsMap = newPeerHeartbeatsMap()
 	pr.proposals = newProposalQueue()
 
-	store.runner.RunCancelableTask(pr.doSendFromChan)
+	store.runner.RunCancelableTask(pr.readyToProcessPropose)
+	store.runner.RunCancelableTask(pr.readyToSendRaftMessage)
 
 	// If this region has only one peer and I am the one, campaign directly.
 	if len(cell.Peers) == 1 && cell.Peers[0].StoreID == store.id {
@@ -234,23 +237,11 @@ func (pr *PeerReplicate) collectPendingPeers() []metapb.Peer {
 	return pendingPeers
 }
 
-func newChangePeerRequest(changeType pdpb.ConfChangeType, peer metapb.Peer) *raftcmdpb.AdminRequest {
-	req := new(raftcmdpb.AdminRequest)
-	req.Type = raftcmdpb.ChangePeer
-
-	subReq := new(raftcmdpb.ChangePeerRequest)
-	subReq.ChangeType = changeType
-	subReq.Peer = peer
-	req.Body = util.MustMarshal(subReq)
-
-	return req
-}
-
 func (pr *PeerReplicate) destroy() error {
 	log.Infof("raftstore-destroy[cell-%d]: begin to destroy",
 		pr.cellID)
 
-	// TODO: batch
+	// TODO: use write batch
 
 	err := pr.ps.clearMeta()
 	if err != nil {

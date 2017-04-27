@@ -264,8 +264,19 @@ func (s *Store) startCellHeartbeatTask() {
 }
 
 func (s *Store) startGCTask() {
-	// TODO: impl GC Task
+	s.runner.RunCancelableTask(func(ctx context.Context) {
+		ticker := time.NewTicker(s.cfg.getRaftGCLogDuration())
 
+		for {
+			select {
+			case <-ctx.Done():
+				log.Infof("stop: raft log gc job stopped")
+				return
+			case <-ticker.C:
+				s.handleRaftGCLog()
+			}
+		}
+	})
 }
 
 func (s *Store) startCellSplitCheckTask() {
@@ -275,7 +286,7 @@ func (s *Store) startCellSplitCheckTask() {
 		for {
 			select {
 			case <-ctx.Done():
-				log.Infof("stop: cell heart beat job stopped")
+				log.Infof("stop: cell heartbeat job stopped")
 				return
 			case <-ticker.C:
 				s.handleCellSplitCheck()
@@ -377,12 +388,12 @@ func (s *Store) onRaftCMD(cmd *cmd) {
 	// doesn't matter whether the peer is a leader or not. If it's not a leader, the proposing
 	// command log entry can't be committed.
 	meta := &proposalMeta{
+		cmd:  cmd,
 		uuid: cmd.req.Header.UUID,
 		term: term,
 	}
 
-	// TODO: Parallel on every PeerReplicate
-	pr.propose(meta, cmd)
+	pr.notifyPropose(meta)
 }
 
 func (s *Store) onSplitCheckResult(result *splitCheckResult) {
@@ -416,11 +427,61 @@ func (s *Store) onSplitCheckResult(result *splitCheckResult) {
 }
 
 func (s *Store) handleGCPeerMsg(msg *mraft.RaftMessage) {
-	// TODO: impl handle gc raft msg
+	cellID := msg.CellID
+	needRemove := false
+	asyncRemoved := true
+
+	pr := s.replicatesMap.get(cellID)
+	if pr != nil {
+		fromEpoch := msg.CellEpoch
+
+		if isEpochStale(pr.getCell().Epoch, fromEpoch) {
+			log.Infof("raftstore[cell-%d]: receives gc message, remove. msg=<%+v>",
+				cellID,
+				msg)
+			needRemove = true
+			asyncRemoved = pr.ps.isInitialized()
+		}
+	}
+
+	if needRemove {
+		s.destroyPeer(cellID, msg.ToPeer, asyncRemoved)
+	}
 }
 
 func (s *Store) handleStaleMsg(msg *mraft.RaftMessage, currEpoch metapb.CellEpoch, needGC bool) {
-	// TODO: impl handle stale msg
+	cellID := msg.CellID
+	fromPeer := msg.FromPeer
+	toPeer := msg.ToPeer
+
+	if !needGC {
+		log.Infof("raftstore[cell-%d]: raft msg is stale, ignore it, msg=<%+v> current=<%+v>",
+			cellID,
+			msg,
+			currEpoch)
+		return
+	}
+
+	log.Infof("raftstore[cell-%d]: raft msg is stale, tell to gc, msg=<%+v> current=<%+v>",
+		cellID,
+		msg,
+		currEpoch)
+
+	gc := new(mraft.RaftMessage)
+	gc.CellID = cellID
+	gc.FromPeer = toPeer
+	gc.FromPeer = fromPeer
+	gc.CellEpoch = currEpoch
+	gc.IsTombstone = true
+
+	err := s.trans.send(toPeer.StoreID, gc)
+	if err != nil {
+		log.Errorf("raftstore[cell-%d]: raft msg is stale, send gc msg failed, msg=<%+v> current=<%+v> errors:\n %+v",
+			cellID,
+			msg,
+			currEpoch,
+			err)
+	}
 }
 
 // If target peer doesn't exist, create it.
@@ -645,6 +706,84 @@ func (s *Store) handleCellSplitCheck() {
 		}
 
 		pr.sizeDiffHint = 0
+		return true, nil
+	})
+}
+
+func (s *Store) handleRaftGCLog() {
+	s.replicatesMap.foreach(func(pr *PeerReplicate) (bool, error) {
+		if !pr.isLeader() {
+			return true, nil
+		}
+
+		// Leader will replicate the compact log command to followers,
+		// If we use current replicated_index (like 10) as the compact index,
+		// when we replicate this log, the newest replicated_index will be 11,
+		// but we only compact the log to 10, not 11, at that time,
+		// the first index is 10, and replicated_index is 11, with an extra log,
+		// and we will do compact again with compact index 11, in cycles...
+		// So we introduce a threshold, if replicated index - first index > threshold,
+		// we will try to compact log.
+		// raft log entries[..............................................]
+		//                  ^                                       ^
+		//                  |-----------------threshold------------ |
+		//              first_index                         replicated_index
+
+		var replicatedIdx uint64
+		for _, p := range pr.rn.Status().Progress {
+			if replicatedIdx == 0 {
+				replicatedIdx = p.Match
+			}
+
+			if p.Match < replicatedIdx {
+				replicatedIdx = p.Match
+			}
+		}
+
+		// When an election happened or a new peer is added, replicated_idx can be 0.
+		if replicatedIdx > 0 {
+			lastIdx, _ := pr.ps.LastIndex()
+			if lastIdx < replicatedIdx {
+				log.Fatalf("raft-log-gc: expect last index >= replicated index, last=<%d> replicated=<%d>",
+					lastIdx,
+					replicatedIdx)
+			}
+		}
+
+		var compactIdx uint64
+		appliedIdx := pr.ps.getAppliedIndex()
+		firstIdx, _ := pr.ps.FirstIndex()
+
+		if appliedIdx >= firstIdx &&
+			appliedIdx-firstIdx >= s.cfg.RaftLogGCCountLimit {
+			compactIdx = appliedIdx
+		} else if pr.sizeDiffHint >= s.cfg.RaftLogGCSizeLimit {
+			compactIdx = appliedIdx
+		} else if replicatedIdx < firstIdx ||
+			replicatedIdx-firstIdx <= s.cfg.RaftLogGCThreshold {
+			return true, nil
+		}
+
+		if compactIdx == 0 {
+			compactIdx = replicatedIdx
+		}
+
+		// Have no idea why subtract 1 here, but original code did this by magic.
+		if compactIdx == 0 {
+			log.Fatal("raft-log-gc: unexpect compactIdx")
+		}
+
+		compactIdx--
+		if compactIdx < firstIdx {
+			// In case compactIdx == firstIdx before subtraction.
+			return true, nil
+		}
+
+		term, _ := pr.ps.Term(compactIdx)
+
+		req := newCompactLogRequest(compactIdx, term)
+		s.sendAdminRequest(pr.getCell(), pr.peer, req)
+
 		return true, nil
 	})
 }

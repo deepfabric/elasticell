@@ -79,7 +79,17 @@ func (t *transport) doConnection(session goetty.IOSession) error {
 	}
 }
 
-func (t *transport) send(addr string, msg *mraft.RaftMessage) error {
+func (t *transport) getStoreAddr(storeID uint64) (string, error) {
+	// TODO: get store addr from pd
+	return "", nil
+}
+
+func (t *transport) send(storeID uint64, msg *mraft.RaftMessage) error {
+	addr, err := t.getStoreAddr(storeID)
+	if err != nil {
+		return err
+	}
+
 	conn, err := t.getConn(addr)
 	if err != nil {
 		return err

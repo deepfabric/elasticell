@@ -17,14 +17,25 @@ import "time"
 
 // Cfg for raftstore
 type Cfg struct {
-	StoreHeartbeatIntervalMs int      `json:"storeHeartbeatIntervalMs"`
-	CellHeartbeatIntervalMs  int      `json:"cellHeartbeatIntervalMs"`
-	MaxPeerDownSec           int      `json:"maxPeerDownSec"`
-	SplitCellCheckIntervalMs int      `json:"splitCellCheckIntervalMs"`
-	CellCheckSizeDiff        uint64   `json:"cellCheckSizeDiff"`
-	CellMaxSize              uint64   `json:"cellMaxSize"`
-	CellSplitSize            uint64   `json:"cellSplitSize"`
-	Raft                     *RaftCfg `json:"raft"`
+	StoreHeartbeatIntervalMs int `json:"storeHeartbeatIntervalMs"`
+	CellHeartbeatIntervalMs  int `json:"cellHeartbeatIntervalMs"`
+	MaxPeerDownSec           int `json:"maxPeerDownSec"`
+	SplitCellCheckIntervalMs int `json:"splitCellCheckIntervalMs"`
+	RaftGCLogIntervalMs      int `json:"raftGCLogIntervalMs"`
+
+	RaftLogGCCountLimit uint64 `json:"raftLogGCCountLimit"`
+	RaftLogGCSizeLimit  uint64 `json:"raftLogGCSizeLimit"`
+	RaftLogGCThreshold  uint64 `json:"raftLogGCThreshold"`
+
+	CellCheckSizeDiff uint64 `json:"cellCheckSizeDiff"`
+	CellMaxSize       uint64 `json:"cellMaxSize"`
+	CellSplitSize     uint64 `json:"cellSplitSize"`
+
+	Raft *RaftCfg `json:"raft"`
+}
+
+func (c *Cfg) getRaftGCLogDuration() time.Duration {
+	return time.Duration(c.RaftGCLogIntervalMs) * time.Millisecond
 }
 
 func (c *Cfg) getStoreHeartbeatDuration() time.Duration {

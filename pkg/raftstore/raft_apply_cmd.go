@@ -78,7 +78,7 @@ func (d *applyDelegate) doApplyRaftCMD(req *raftcmdpb.RaftCMDRequest, term uint6
 				err)
 		}
 	}
-	// TODO: batch commit, use write batch.
+	// TODO: use write batch
 	d.applyState = ctx.applyState
 	d.term = term
 
@@ -238,7 +238,7 @@ func (d *applyDelegate) doExecSplit(ctx *execContext) (*raftcmdpb.RaftCMDRespons
 	d.cell.Epoch.CellVer++
 	newCell.Epoch.CellVer = d.cell.Epoch.CellVer
 
-	// TODO: batch write
+	// TODO: use write batch
 	err := d.ps.updatePeerState(d.cell, mraft.Normal)
 	if err != nil {
 		err = d.ps.updatePeerState(newCell, mraft.Normal)

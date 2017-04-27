@@ -109,3 +109,12 @@ message SplitResponse {
     optional metapb.Cell left  = 1 [(gogoproto.nullable) = false];
     optional metapb.Cell right = 2 [(gogoproto.nullable) = false];
 }
+
+message CompactLogRequest {
+    optional uint64 compactIndex = 1 [(gogoproto.nullable) = false];
+    optional uint64 compactTerm  = 2 [(gogoproto.nullable) = false];
+}
+
+message CompactLogResponse {
+    
+}

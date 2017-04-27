@@ -82,7 +82,9 @@ func (s *Store) startDestroyJob(cellID uint64) error {
 	return err
 }
 
-func (pr *PeerReplicate) startProposeJob(meta *proposalMeta, isConfChange bool, cmd *cmd) error {
+func (pr *PeerReplicate) startProposeJob(meta *proposalMeta, isConfChange bool) error {
+	cmd := meta.cmd
+
 	pr.ps.applySnapJobLock.Lock()
 	_, err := pr.store.addApplyJob(func() error {
 		return pr.doPropose(meta, isConfChange, cmd)
@@ -330,13 +332,9 @@ func (pr *PeerReplicate) doApplyCommittedEntries(cellID uint64, term uint64, com
 
 	if delegate.isPendingRemove() {
 		delegate.destroy()
-	}
-
-	// TODO: impl handle result
-
-	if delegate.isPendingRemove() {
 		pr.store.delegates.delete(delegate.cell.ID)
 	}
+
 	return nil
 }
 

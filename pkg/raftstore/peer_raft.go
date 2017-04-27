@@ -43,6 +43,7 @@ const (
 )
 
 type proposalMeta struct {
+	cmd  *cmd
 	uuid []byte
 	term uint64
 }
@@ -136,7 +137,12 @@ func (pr *PeerReplicate) handleRaftReadyAppend(ctx *tempRaftContext, rd *raft.Re
 		return
 	}
 
-	// TODO: on_role_changed
+	// If we become leader, send heartbeat to pd
+	if rd.SoftState != nil {
+		if rd.SoftState.RaftState == raft.StateLeader {
+			pr.handleHeartbeat()
+		}
+	}
 
 	// The leader can write to disk and replicate to the followers concurrently
 	// For more details, check raft thesis 10.2.1.
@@ -154,7 +160,7 @@ func (pr *PeerReplicate) handleRaftReadyAppend(ctx *tempRaftContext, rd *raft.Re
 	pr.handleSaveRaftState(ctx)
 	pr.handleSaveApplyState(ctx)
 
-	// TODO: batch write to rocksdb
+	// TODO: use write batch
 }
 
 func (pr *PeerReplicate) handleRaftReadyApply(ctx *tempRaftContext, rd *raft.Ready) {
@@ -238,49 +244,67 @@ func (pr *PeerReplicate) handleSaveApplyState(ctx *tempRaftContext) {
 	}
 }
 
-func (pr *PeerReplicate) propose(meta *proposalMeta, cmd *cmd) {
+func (pr *PeerReplicate) readyToProcessPropose(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			log.Infof("raftstore[cell-%d]: cell propose exit.", pr.cellID)
+			close(pr.proposeC)
+			return
+		case meta := <-pr.proposeC:
+			pr.propose(meta)
+		}
+	}
+}
+
+func (pr *PeerReplicate) notifyPropose(meta *proposalMeta) {
+	pr.proposeC <- meta
+}
+
+func (pr *PeerReplicate) propose(meta *proposalMeta) {
 	if pr.proposals.contains(meta.uuid) {
 		resp := errorOtherCMDResp(fmt.Errorf("duplicated uuid %v", meta.uuid))
-		cmd.resp(resp)
+		meta.cmd.resp(resp)
 		return
 	}
 
 	log.Debugf("raftstore[cell-%d]: propose command, uuid=<%v>", meta.uuid)
 
 	isConfChange := false
-	policy, err := pr.getHandlePolicy(cmd.req)
+	policy, err := pr.getHandlePolicy(meta.cmd.req)
 	if err != nil {
 		resp := errorOtherCMDResp(err)
-		cmd.resp(resp)
+		meta.cmd.resp(resp)
 		return
 	}
 
 	switch policy {
 	case readLocal:
-		pr.execReadLocal(cmd)
+		pr.execReadLocal(meta.cmd)
 		return
 	case readIndex:
-		pr.execReadIndex(cmd)
+		pr.execReadIndex(meta.cmd)
 		return
 	case proposeNormal:
-		pr.proposeNormal(meta, cmd)
+		pr.proposeNormal(meta)
 	case proposeTransferLeader:
 		// TODO: impl transfer leader
 	case proposeChange:
 		isConfChange = true
-		pr.proposeConfChange(meta, cmd)
+		pr.proposeConfChange(meta)
 	}
 
-	err = pr.startProposeJob(meta, isConfChange, cmd)
+	err = pr.startProposeJob(meta, isConfChange)
 	if err != nil {
 		resp := errorOtherCMDResp(err)
-		cmd.resp(resp)
+		meta.cmd.resp(resp)
 		return
 	}
 	pr.proposals.push(meta)
 }
 
-func (pr *PeerReplicate) proposeNormal(meta *proposalMeta, cmd *cmd) {
+func (pr *PeerReplicate) proposeNormal(meta *proposalMeta) {
+	cmd := meta.cmd
 	data := util.MustMarshal(cmd.req)
 
 	size := uint64(len(data))
@@ -301,7 +325,9 @@ func (pr *PeerReplicate) proposeNormal(meta *proposalMeta, cmd *cmd) {
 	}
 }
 
-func (pr *PeerReplicate) proposeConfChange(meta *proposalMeta, cmd *cmd) {
+func (pr *PeerReplicate) proposeConfChange(meta *proposalMeta) {
+	cmd := meta.cmd
+
 	err := pr.checkConfChange(cmd)
 	if err != nil {
 		cmd.respOtherError(err)
@@ -426,15 +452,14 @@ func (pr *PeerReplicate) send(msgs []raftpb.Message) {
 	}
 }
 
-func (pr *PeerReplicate) doSendFromChan(ctx context.Context) {
+func (pr *PeerReplicate) readyToSendRaftMessage(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			log.Infof("raftstore[cell-%d]: server stopped",
+			log.Infof("raftstore[cell-%d]: peer send msg raft stopped",
 				pr.ps.getCell().ID)
 			close(pr.msgC)
 			return
-		// TODO: use queue instead of chan
 		case msg := <-pr.msgC:
 			err := pr.sendRaftMsg(msg)
 			if err != nil {
@@ -483,8 +508,7 @@ func (pr *PeerReplicate) sendRaftMsg(msg raftpb.Message) error {
 	}
 
 	sendMsg.Message = msg
-	// TODO: get to peer addr
-	err := pr.store.trans.send("", &sendMsg)
+	err := pr.store.trans.send(sendMsg.ToPeer.StoreID, &sendMsg)
 	if err != nil {
 		log.Warnf("raftstore[cell-%d]: failed to send msg, from=<%d> to=<%d>",
 			sendMsg.FromPeer.ID,

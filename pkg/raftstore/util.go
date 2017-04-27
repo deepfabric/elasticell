@@ -20,6 +20,8 @@ import (
 	"github.com/deepfabric/elasticell/pkg/pb/errorpb"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
+	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
+	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
 	"github.com/deepfabric/elasticell/pkg/storage"
 	"github.com/deepfabric/elasticell/pkg/util"
 )
@@ -81,9 +83,33 @@ func checkKeyInCell(key []byte, cell *metapb.Cell) *errorpb.Error {
 	}
 }
 
+func newChangePeerRequest(changeType pdpb.ConfChangeType, peer metapb.Peer) *raftcmdpb.AdminRequest {
+	req := new(raftcmdpb.AdminRequest)
+	req.Type = raftcmdpb.ChangePeer
+
+	subReq := new(raftcmdpb.ChangePeerRequest)
+	subReq.ChangeType = changeType
+	subReq.Peer = peer
+	req.Body = util.MustMarshal(subReq)
+
+	return req
+}
+
+func newCompactLogRequest(index, term uint64) *raftcmdpb.AdminRequest {
+	req := new(raftcmdpb.AdminRequest)
+	req.Type = raftcmdpb.CompactLog
+
+	subReq := new(raftcmdpb.CompactLogRequest)
+	subReq.CompactIndex = index
+	subReq.CompactTerm = term
+	req.Body = util.MustMarshal(subReq)
+
+	return req
+}
+
 // SaveFirstCell save first cell with state, raft state and apply state.
 func SaveFirstCell(driver storage.Driver, cell metapb.Cell) error {
-	// TODO: batch write
+	// TODO: use write batch
 
 	// save state
 	err := driver.GetEngine(storage.Meta).Set(getCellStateKey(cell.ID), util.MustMarshal(&mraft.CellLocalState{Cell: cell}))
