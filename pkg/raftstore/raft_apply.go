@@ -67,8 +67,7 @@ type pendingCmd struct {
 }
 
 func (res *asyncApplyResult) hasSplitExecResult() bool {
-	// TODO: impl
-	return false
+	return res.result.splitResult != nil
 }
 
 type applyDelegate struct {
@@ -187,6 +186,11 @@ func (d *applyDelegate) notifyStaleCMD(cmd *pendingCmd) {
 	cmd.cmd.resp(resp)
 }
 
+func (d *applyDelegate) notifyCellRemoved(cmd *pendingCmd) {
+	log.Infof("raftstore-destroy[cell-%d]: cmd is removed, skip. cmd=<%+v>", d.cell.ID, cmd)
+	cmd.cmd.respCellNotFound(d.cell.ID, d.term)
+}
+
 func (d *applyDelegate) applyCommittedEntries(commitedEntries []raftpb.Entry) {
 	if len(commitedEntries) <= 0 {
 		return
@@ -291,7 +295,13 @@ func (d *applyDelegate) applyConfChange(entry *raftpb.Entry) *execResult {
 }
 
 func (d *applyDelegate) destroy() {
-	//TODO: impl
+	for _, cmd := range d.pendingCmds {
+		d.notifyCellRemoved(cmd)
+	}
+
+	if d.pendingChangePeerCMD != nil {
+		d.notifyCellRemoved(d.pendingChangePeerCMD)
+	}
 }
 
 func (d *applyDelegate) setPendingRemove() {

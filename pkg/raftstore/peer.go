@@ -22,6 +22,7 @@ import (
 	"github.com/coreos/etcd/raft/raftpb"
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
+	"github.com/deepfabric/elasticell/pkg/pb/mraft"
 	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
 	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
 	"github.com/deepfabric/elasticell/pkg/util"
@@ -243,6 +244,38 @@ func newChangePeerRequest(changeType pdpb.ConfChangeType, peer metapb.Peer) *raf
 	req.Body = util.MustMarshal(subReq)
 
 	return req
+}
+
+func (pr *PeerReplicate) destroy() error {
+	log.Infof("raftstore-destroy[cell-%d]: begin to destroy",
+		pr.cellID)
+
+	// TODO: batch
+
+	err := pr.ps.clearMeta()
+	if err != nil {
+		return err
+	}
+
+	err = pr.ps.updatePeerState(pr.getCell(), mraft.Tombstone)
+	if err != nil {
+		return err
+	}
+
+	if pr.ps.isInitialized() {
+		err := pr.ps.clearData()
+		if err != nil {
+			log.Errorf("raftstore-destroy[cell-%d]: add clear data job failed, errors:\n %+v",
+				pr.cellID,
+				err)
+			return err
+		}
+	}
+
+	log.Infof("raftstore-destroy[cell-%d]: destroy self complete.",
+		pr.cellID)
+
+	return nil
 }
 
 func (pr *PeerReplicate) getStore() *peerStorage {

@@ -454,6 +454,35 @@ func (ps *peerStorage) clearMeta() error {
 	return nil
 }
 
+/// Delete all data belong to the region.
+/// If return Err, data may get partial deleted.
+func (ps *peerStorage) clearData() error {
+	cell := ps.getCell()
+
+	cellID := cell.ID
+	startKey := encStartKey(&cell)
+	endKey := encEndKey(&cell)
+
+	_, err := ps.store.addSnapJob(func() error {
+		log.Infof("raftstore-destroy[cell-%d]: deleting data, start=<%v> end=<%v>",
+			cellID,
+			startKey,
+			endKey)
+		err := ps.deleteAllInRange(startKey, endKey, nil)
+		if err != nil {
+			log.Errorf("raftstore-destroy[cell-%d]: failed to delete data, start=<%v> end=<%v> errors:\n %+v",
+				cellID,
+				startKey,
+				endKey,
+				err)
+		}
+
+		return err
+	})
+
+	return err
+}
+
 // Delete all data that is not covered by `newCell`.
 func (ps *peerStorage) clearExtraData(newCell metapb.Cell) error {
 	cell := ps.getCell()

@@ -54,10 +54,13 @@ func (m *cellPeersMap) get(key uint64) *PeerReplicate {
 	return v
 }
 
-func (m *cellPeersMap) delete(key uint64) {
+func (m *cellPeersMap) delete(key uint64) *PeerReplicate {
 	m.Lock()
+	v := m.m[key]
 	delete(m.m, key)
 	m.Unlock()
+
+	return v
 }
 
 func (m *cellPeersMap) foreach(fn func(*PeerReplicate) (bool, error)) error {
@@ -144,10 +147,13 @@ func (m *applyDelegateMap) get(key uint64) *applyDelegate {
 	return v
 }
 
-func (m *applyDelegateMap) delete(key uint64) {
+func (m *applyDelegateMap) delete(key uint64) *applyDelegate {
 	m.Lock()
+	v := m.m[key]
 	delete(m.m, key)
 	m.Unlock()
+
+	return v
 }
 
 type peerHeartbeatsMap struct {

@@ -32,7 +32,6 @@ func (s *RedisServer) Start() error {
 
 // Stop is used for stop redis server
 func (s *RedisServer) Stop() error {
-	// TODO: 考虑一致性问题
 	s.s.Stop()
 	return nil
 }

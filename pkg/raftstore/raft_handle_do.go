@@ -24,7 +24,6 @@ import (
 	"github.com/coreos/etcd/raft"
 	"github.com/coreos/etcd/raft/raftpb"
 	"github.com/deepfabric/elasticell/pkg/log"
-	"github.com/deepfabric/elasticell/pkg/pb/errorpb"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
 	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
@@ -247,8 +246,6 @@ func (pr *PeerReplicate) doApplySnap(ctx *tempRaftContext) *applySnapResult {
 
 func (pr *PeerReplicate) applyCommittedEntries(rd *raft.Ready) bool {
 	if !pr.ps.isApplyingSnap() {
-		// TODO: update lease??
-
 		if len(rd.CommittedEntries) > 0 {
 			err := pr.startApplyCommittedEntriesJob(pr.ps.getCell().ID, pr.getCurrentTerm(), rd.CommittedEntries)
 			if err != nil {
@@ -267,15 +264,7 @@ func (pr *PeerReplicate) applyCommittedEntries(rd *raft.Ready) bool {
 func (pr *PeerReplicate) doPropose(meta *proposalMeta, isConfChange bool, cmd *cmd) error {
 	delegate := pr.store.delegates.get(pr.cellID)
 	if delegate == nil {
-		err := new(errorpb.CellNotFound)
-		err.CellID = pr.cellID
-
-		rsp := errorPbResp(&errorpb.Error{
-			Message:      errCellNotFound.Error(),
-			CellNotFound: err,
-		}, meta.uuid, meta.term)
-
-		cmd.resp(rsp)
+		cmd.respCellNotFound(pr.cellID, meta.term)
 		return nil
 	}
 
@@ -339,7 +328,6 @@ func (pr *PeerReplicate) doSplitCheck(epoch metapb.CellEpoch, startKey, endKey [
 }
 
 func (pr *PeerReplicate) doAskSplit(cell metapb.Cell, peer metapb.Peer, splitKey []byte) error {
-	// TODO: ask pd
 	req := &pdpb.AskSplitReq{
 		Cell: cell,
 	}
@@ -441,7 +429,6 @@ func (s *Store) doApplyConfChange(cellID uint64, cp *changePeer) {
 		// We only care remove itself now.
 		if cp.peer.StoreID == pr.store.GetID() {
 			if cp.peer.ID == pr.peer.ID {
-				// TODO: check if async needed?
 				s.destroyPeer(cellID, cp.peer, false)
 			} else {
 				log.Fatalf("raftstore-apply[cell-%d]: trying to remove unknown peer, peer=<%+v>",

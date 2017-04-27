@@ -181,7 +181,6 @@ func (s *Store) cleanup() {
 
 // Start returns the error when start store
 func (s *Store) Start() {
-	// TODO: impl
 	go s.startTransfer()
 	<-s.trans.server.Started()
 
@@ -211,8 +210,8 @@ func (s *Store) startHandleNotifyMsg() {
 					s.onRaftMessage(msg)
 				} else if msg, ok := n.(*cmd); ok {
 					s.onRaftCMD(msg)
-				} else if ret, ok := n.(*splitCheckResult); ok {
-					s.onSplitCheckResult(ret)
+				} else if msg, ok := n.(*splitCheckResult); ok {
+					s.onSplitCheckResult(msg)
 				}
 			}
 		}
@@ -265,12 +264,11 @@ func (s *Store) startCellHeartbeatTask() {
 }
 
 func (s *Store) startGCTask() {
-	// TODO: impl
+	// TODO: impl GC Task
 
 }
 
 func (s *Store) startCellSplitCheckTask() {
-	// TODO: impl
 	s.runner.RunCancelableTask(func(ctx context.Context) {
 		ticker := time.NewTicker(s.cfg.getSplitCellCheckDuration())
 
@@ -418,11 +416,11 @@ func (s *Store) onSplitCheckResult(result *splitCheckResult) {
 }
 
 func (s *Store) handleGCPeerMsg(msg *mraft.RaftMessage) {
-	// TODO: impl
+	// TODO: impl handle gc raft msg
 }
 
 func (s *Store) handleStaleMsg(msg *mraft.RaftMessage, currEpoch metapb.CellEpoch, needGC bool) {
-	// TODO: impl
+	// TODO: impl handle stale msg
 }
 
 // If target peer doesn't exist, create it.
@@ -466,13 +464,11 @@ func (s *Store) tryToCreatePeerReplicate(cellID uint64, msg *mraft.RaftMessage) 
 
 	// If we found stale peer, we will destory it
 	if stalePeer.ID > 0 {
-		// TODO: destroy async
+		s.destroyPeer(cellID, stalePeer, asyncRemove)
 		if asyncRemove {
-			s.destroyPeer(cellID, stalePeer, asyncRemove)
 			return false
 		}
 
-		s.destroyPeer(cellID, stalePeer, false)
 		hasPeer = false
 	}
 
@@ -521,12 +517,38 @@ func (s *Store) tryToCreatePeerReplicate(cellID uint64, msg *mraft.RaftMessage) 
 }
 
 func (s *Store) destroyPeer(cellID uint64, target metapb.Peer, async bool) {
-	log.Infof("raftstore[cell-%d]: destroying stal peer, peer=<%v> async=<%s>",
-		cellID,
-		target,
-		async)
+	if !async {
+		log.Infof("raftstore[cell-%d]: destroying stale peer, peer=<%v>",
+			cellID,
+			target)
 
-	// TODO: impl
+		pr := s.replicatesMap.delete(cellID)
+		if pr == nil {
+			log.Fatalf("raftstore[cell-%d]: destroy cell not exist", cellID)
+		}
+
+		if pr.ps.isApplyingSnap() {
+			log.Fatalf("raftstore[cell-%d]: destroy cell is apply for snapshot", cellID)
+		}
+
+		err := pr.destroy()
+		if err != nil {
+			log.Fatalf("raftstore[cell-%d]: destroy cell failed, errors:\n %+v",
+				cellID,
+				err)
+		}
+
+		if pr.ps.isInitialized() && !s.keyRanges.Remove(pr.getCell()) {
+			log.Fatalf("raftstore[cell-%d]: remove key range  failed",
+				cellID)
+		}
+	} else {
+		log.Infof("raftstore[cell-%d]: asking destroying stale peer, peer=<%v>",
+			cellID,
+			target)
+
+		s.startDestroyJob(cellID)
+	}
 }
 
 func (s *Store) getPeerReplicate(cellID uint64) *PeerReplicate {
@@ -560,7 +582,7 @@ func (s *Store) addNamedJob(worker string, task func() error) (*util.Job, error)
 func (s *Store) handleStoreHeartbeat() error {
 	req := new(pdpb.StoreHeartbeatReq)
 	req.Header.ClusterID = s.clusterID
-	// TODO: impl
+	// TODO: impl collect the store status
 	req.Stats = &pdpb.StoreStats{
 		StoreID:            s.GetID(),
 		Capacity:           0,

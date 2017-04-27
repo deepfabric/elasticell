@@ -82,23 +82,6 @@ func (d *applyDelegate) doApplyRaftCMD(req *raftcmdpb.RaftCMDRequest, term uint6
 	d.applyState = ctx.applyState
 	d.term = term
 
-	// TODO: impl
-	// if let Some(ref exec_result) = exec_result {
-	//         match *exec_result {
-	//             ExecResult::ChangePeer(ref cp) => {
-	//                 self.region = cp.region.clone();
-	//             }
-	//             ExecResult::ComputeHash { .. } |
-	//             ExecResult::VerifyHash { .. } |
-	//             ExecResult::CompactLog { .. } => {}
-	//             ExecResult::SplitRegion { ref left, .. } => {
-	//                 self.region = left.clone();
-	//                 self.metrics.size_diff_hint = 0;
-	//                 self.metrics.delete_keys_hint = 0;
-	//             }
-	//         }
-	//     }
-
 	log.Debugf("raftstore-apply[cell-%d]: applied command, uuid=<%v> index=<%d>",
 		d.cell.ID,
 		req.Header.UUID,

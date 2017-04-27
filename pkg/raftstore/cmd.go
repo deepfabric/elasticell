@@ -110,6 +110,18 @@ func (c *cmd) resp(resp *raftcmdpb.RaftCMDResponse) {
 	}
 }
 
+func (c *cmd) respCellNotFound(cellID uint64, term uint64) {
+	err := new(errorpb.CellNotFound)
+	err.CellID = cellID
+
+	rsp := errorPbResp(&errorpb.Error{
+		Message:      errCellNotFound.Error(),
+		CellNotFound: err,
+	}, c.req.Header.UUID, term)
+
+	c.resp(rsp)
+}
+
 func (c *cmd) respLargeRaftEntrySize(cellID uint64, size uint64, term uint64) {
 	err := &errorpb.RaftEntryTooLarge{
 		CellID:    cellID,

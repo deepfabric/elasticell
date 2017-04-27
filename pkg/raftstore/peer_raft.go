@@ -47,7 +47,7 @@ type proposalMeta struct {
 	term uint64
 }
 
-// TODO: use a batter impl.
+// TODO: use a better impl.
 type proposalQueue struct {
 	queue []*proposalMeta
 	uuids map[string]struct{}
@@ -265,7 +265,7 @@ func (pr *PeerReplicate) propose(meta *proposalMeta, cmd *cmd) {
 	case proposeNormal:
 		pr.proposeNormal(meta, cmd)
 	case proposeTransferLeader:
-		// TODO: impl
+		// TODO: impl transfer leader
 	case proposeChange:
 		isConfChange = true
 		pr.proposeConfChange(meta, cmd)
@@ -421,7 +421,6 @@ func (pr *PeerReplicate) isLeader() bool {
 }
 
 func (pr *PeerReplicate) send(msgs []raftpb.Message) {
-	// TODO: impl use queue instead of chan
 	for _, msg := range msgs {
 		pr.msgC <- msg
 	}

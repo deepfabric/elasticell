@@ -74,6 +74,14 @@ func (pr *PeerReplicate) startApplyCommittedEntriesJob(cellID uint64, term uint6
 	return err
 }
 
+func (s *Store) startDestroyJob(cellID uint64) error {
+	_, err := s.addApplyJob(func() error {
+		return s.doDestroy(cellID)
+	})
+
+	return err
+}
+
 func (pr *PeerReplicate) startProposeJob(meta *proposalMeta, isConfChange bool, cmd *cmd) error {
 	pr.ps.applySnapJobLock.Lock()
 	_, err := pr.store.addApplyJob(func() error {
@@ -152,9 +160,17 @@ func (ps *peerStorage) doDestroyDataJob(cellID uint64, startKey, endKey []byte) 
 		cellID,
 		startKey,
 		endKey)
-	// TODO: imple
 
-	return nil
+	err := ps.deleteAllInRange(startKey, endKey, nil)
+	if err != nil {
+		log.Errorf("raftstore[cell-%d]: failed to delete data, start=<%v> end=<%v> errors:\n %+v",
+			cellID,
+			startKey,
+			endKey,
+			err)
+	}
+
+	return err
 }
 
 func (pr *PeerReplicate) doApplyingSnapshotJob() error {
@@ -284,6 +300,17 @@ func (pr *PeerReplicate) doRegistrationJob(delegate *applyDelegate) error {
 
 		old.term = delegate.term
 		old.clearAllCommandsAsStale()
+	}
+
+	return nil
+}
+
+func (s *Store) doDestroy(cellID uint64) error {
+	d := s.delegates.delete(cellID)
+	if d != nil {
+		d.destroy()
+		// TODO: think send notify, then liner process this and other apply result
+		s.destroyPeer(cellID, metapb.Peer{ID: d.peerID, StoreID: s.GetID()}, false)
 	}
 
 	return nil

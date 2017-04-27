@@ -146,6 +146,6 @@ func (s *Server) initNode() {
 }
 
 func (s *Server) initDriver() (storage.Driver, error) {
-	// TODO: impl
+	// TODO: impl rocksdb driver. use column family
 	return nil, nil
 }
