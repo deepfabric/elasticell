@@ -83,11 +83,8 @@ func (s *Store) startDestroyJob(cellID uint64) error {
 }
 
 func (pr *PeerReplicate) startProposeJob(meta *proposalMeta, isConfChange bool) error {
-	cmd := meta.cmd
-
-	pr.ps.applySnapJobLock.Lock()
 	_, err := pr.store.addApplyJob(func() error {
-		return pr.doPropose(meta, isConfChange, cmd)
+		return pr.doPropose(meta, isConfChange)
 	})
 
 	return err

@@ -95,6 +95,17 @@ func newChangePeerRequest(changeType pdpb.ConfChangeType, peer metapb.Peer) *raf
 	return req
 }
 
+func newTransferLeaderRequest(rsp *pdpb.TransferLeader) *raftcmdpb.AdminRequest {
+	req := new(raftcmdpb.AdminRequest)
+	req.Type = raftcmdpb.TransferLeader
+
+	subReq := new(raftcmdpb.TransferLeaderRequest)
+	subReq.Peer = rsp.Peer
+	req.Body = util.MustMarshal(subReq)
+
+	return req
+}
+
 func newCompactLogRequest(index, term uint64) *raftcmdpb.AdminRequest {
 	req := new(raftcmdpb.AdminRequest)
 	req.Type = raftcmdpb.CompactLog

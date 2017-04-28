@@ -110,6 +110,13 @@ message SplitResponse {
     optional metapb.Cell right = 2 [(gogoproto.nullable) = false];
 }
 
+message TransferLeaderRequest {
+    optional metapb.Peer peer =	1 [(gogoproto.nullable) = false];
+}
+
+message TransferLeaderResponse {
+}
+
 message CompactLogRequest {
     optional uint64 compactIndex = 1 [(gogoproto.nullable) = false];
     optional uint64 compactTerm  = 2 [(gogoproto.nullable) = false];

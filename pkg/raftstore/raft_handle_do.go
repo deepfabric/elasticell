@@ -261,7 +261,9 @@ func (pr *PeerReplicate) applyCommittedEntries(rd *raft.Ready) bool {
 	return false
 }
 
-func (pr *PeerReplicate) doPropose(meta *proposalMeta, isConfChange bool, cmd *cmd) error {
+func (pr *PeerReplicate) doPropose(meta *proposalMeta, isConfChange bool) error {
+	cmd := meta.cmd
+
 	delegate := pr.store.delegates.get(pr.cellID)
 	if delegate == nil {
 		cmd.respCellNotFound(pr.cellID, meta.term)

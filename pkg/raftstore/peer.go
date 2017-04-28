@@ -172,6 +172,14 @@ func (pr *PeerReplicate) doHeartbeat() error {
 
 		adminReq := newChangePeerRequest(rsp.ChangePeer.Type, *rsp.ChangePeer.Peer)
 		pr.store.sendAdminRequest(pr.getCell(), pr.peer, adminReq)
+	} else if rsp.TransferLeader != nil {
+		log.Infof("heartbeat-cell[%d]: try to transfer leader, from=<%v> to=<%+v>",
+			pr.cellID,
+			pr.peer.ID,
+			rsp.TransferLeader.Peer.ID)
+
+		adminReq := newTransferLeaderRequest(rsp.TransferLeader)
+		pr.store.sendAdminRequest(pr.getCell(), pr.peer, adminReq)
 	}
 
 	return nil

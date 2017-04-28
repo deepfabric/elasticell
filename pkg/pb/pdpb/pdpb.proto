@@ -32,6 +32,10 @@ message ChangePeer {
     optional metapb.Peer    peer = 2 [(gogoproto.nullable) = true];
 }
 
+message TransferLeader {
+    optional metapb.Peer peer = 1 [(gogoproto.nullable) = false];
+}
+
 message PeerStats {
     optional metapb.Peer peer        = 1 [(gogoproto.nullable) = false];
     optional uint64      downSeconds = 2 [(gogoproto.nullable) = false];
@@ -153,7 +157,8 @@ message CellHeartbeatReq {
 }
 
 message CellHeartbeatRsp {
-    optional ChangePeer changePeer = 1 [(gogoproto.nullable) = true];
+    optional ChangePeer     changePeer     = 1 [(gogoproto.nullable) = true];
+    optional TransferLeader transferLeader = 2 [(gogoproto.nullable) = true];
 }
 
 message StoreHeartbeatReq {

@@ -21,6 +21,7 @@ import (
 	"github.com/coreos/etcd/raft"
 	"github.com/coreos/etcd/raft/raftpb"
 	"github.com/deepfabric/elasticell/pkg/log"
+	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
 	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
 	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
@@ -40,6 +41,8 @@ const (
 	proposeNormal         = requestPolicy(2)
 	proposeTransferLeader = requestPolicy(3)
 	proposeChange         = requestPolicy(4)
+
+	transferLeaderAllowLogLag = 10
 )
 
 type proposalMeta struct {
@@ -288,7 +291,7 @@ func (pr *PeerReplicate) propose(meta *proposalMeta) {
 	case proposeNormal:
 		pr.proposeNormal(meta)
 	case proposeTransferLeader:
-		// TODO: impl transfer leader
+		pr.proposeTransferLeader(meta)
 	case proposeChange:
 		isConfChange = true
 		pr.proposeConfChange(meta)
@@ -334,11 +337,11 @@ func (pr *PeerReplicate) proposeConfChange(meta *proposalMeta) {
 		return
 	}
 
-	changePeer := new(pdpb.ChangePeer)
+	changePeer := new(raftcmdpb.ChangePeerRequest)
 	util.MustUnmarshal(changePeer, cmd.req.AdminRequest.Body)
 
 	cc := new(raftpb.ConfChange)
-	switch changePeer.Type {
+	switch changePeer.ChangeType {
 	case pdpb.AddNode:
 		cc.Type = raftpb.ConfChangeAddNode
 	case pdpb.RemoveNode:
@@ -349,7 +352,7 @@ func (pr *PeerReplicate) proposeConfChange(meta *proposalMeta) {
 
 	log.Infof("raftstore[cell-%d]: propose conf change, type=<%s> peer=<%d>",
 		pr.cellID,
-		changePeer.Type.String(),
+		changePeer.ChangeType.String(),
 		changePeer.Peer.ID)
 
 	idx := pr.nextProposalIndex()
@@ -362,6 +365,49 @@ func (pr *PeerReplicate) proposeConfChange(meta *proposalMeta) {
 		cmd.respNotLeader(pr.cellID, meta.term, nil)
 		return
 	}
+}
+
+func (pr *PeerReplicate) proposeTransferLeader(meta *proposalMeta) {
+	cmd := meta.cmd
+	req := new(raftcmdpb.TransferLeaderRequest)
+	util.MustUnmarshal(req, cmd.req.AdminRequest.Body)
+
+	if pr.isTransferLeaderAllowed(&req.Peer) {
+		pr.doTransferLeader(&req.Peer)
+	} else {
+		log.Infof("raftstore[cell-%d]: transfer leader ignored directly, req=<%+v>",
+			pr.cellID,
+			req)
+	}
+
+	// transfer leader command doesn't need to replicate log and apply, so we
+	// return immediately. Note that this command may fail, we can view it just as an advice
+	cmd.resp(newAdminRaftCMDResponse(raftcmdpb.TransferLeader, &raftcmdpb.TransferLeaderResponse{}))
+}
+
+func (pr *PeerReplicate) doTransferLeader(peer *metapb.Peer) {
+	log.Infof("raftstore[cell-%d]: transfer leader to %d",
+		pr.cellID,
+		peer.ID)
+	pr.rn.TransferLeadership(context.TODO(), pr.rn.Status().Lead, peer.ID)
+}
+
+func (pr *PeerReplicate) isTransferLeaderAllowed(newLeaderPeer *metapb.Peer) bool {
+	status := pr.rn.Status()
+
+	if _, ok := status.Progress[newLeaderPeer.ID]; !ok {
+		return false
+	}
+
+	for _, p := range status.Progress {
+		if p.State == raft.ProgressStateSnapshot {
+			return false
+		}
+	}
+
+	lastIndex, _ := pr.ps.LastIndex()
+
+	return lastIndex <= status.Progress[newLeaderPeer.ID].Match+transferLeaderAllowLogLag
 }
 
 /// Check whether it's safe to propose the specified conf change request.
