@@ -51,8 +51,8 @@ type Server struct {
 	closed   int64
 
 	// stop fields
-	stopOnce *sync.Once
-	stopWG   *sync.WaitGroup
+	stopOnce sync.Once
+	stopWG   sync.WaitGroup
 	stopC    chan interface{}
 }
 
@@ -61,8 +61,6 @@ func NewServer(cfg *Cfg) *Server {
 	s := new(Server)
 	s.cfg = cfg
 	s.stopC = make(chan interface{})
-	s.stopOnce = new(sync.Once)
-	s.stopWG = new(sync.WaitGroup)
 	s.isLeaderValue = 0
 	s.cluster = newCellCluster(s)
 
@@ -74,10 +72,10 @@ func (s *Server) Start() {
 	s.printStartENV()
 
 	go s.listenToStop()
-
 	go s.startRPC()
 
 	s.startEmbedEtcd()
+
 	s.initCluster()
 
 	s.setServerIsStarted()

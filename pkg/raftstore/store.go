@@ -221,6 +221,7 @@ func (s *Store) startHandleNotifyMsg() {
 func (s *Store) startStoreHeartbeatTask() {
 	s.runner.RunCancelableTask(func(ctx context.Context) {
 		ticker := time.NewTicker(s.cfg.getStoreHeartbeatDuration())
+		defer ticker.Stop()
 
 		var err error
 		var job *util.Job
@@ -250,6 +251,7 @@ func (s *Store) startStoreHeartbeatTask() {
 func (s *Store) startCellHeartbeatTask() {
 	s.runner.RunCancelableTask(func(ctx context.Context) {
 		ticker := time.NewTicker(s.cfg.getCellHeartbeatDuration())
+		defer ticker.Stop()
 
 		for {
 			select {
@@ -266,6 +268,7 @@ func (s *Store) startCellHeartbeatTask() {
 func (s *Store) startGCTask() {
 	s.runner.RunCancelableTask(func(ctx context.Context) {
 		ticker := time.NewTicker(s.cfg.getRaftGCLogDuration())
+		defer ticker.Stop()
 
 		for {
 			select {
@@ -282,6 +285,7 @@ func (s *Store) startGCTask() {
 func (s *Store) startCellSplitCheckTask() {
 	s.runner.RunCancelableTask(func(ctx context.Context) {
 		ticker := time.NewTicker(s.cfg.getSplitCellCheckDuration())
+		defer ticker.Stop()
 
 		for {
 			select {

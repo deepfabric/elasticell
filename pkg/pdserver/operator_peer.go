@@ -21,6 +21,7 @@ import (
 
 // changePeerOperator is sub operator of cellOperator
 type changePeerOperator struct {
+	Name       string          `json:"name"`
 	CellID     uint64          `json:"cellID"`
 	ChangePeer pdpb.ChangePeer `json:"changePeer"`
 }
@@ -33,7 +34,11 @@ func (op *changePeerOperator) GetCellID() uint64 {
 	return op.CellID
 }
 
-func (op *changePeerOperator) Do(cell *cellRuntime) (*pdpb.CellHeartbeatRsp, bool) {
+func (op *changePeerOperator) GetResourceKind() ResourceKind {
+	return cellKind
+}
+
+func (op *changePeerOperator) Do(cell *cellRuntimeInfo) (*pdpb.CellHeartbeatRsp, bool) {
 	// Check if operator is finished.
 	peer := op.ChangePeer.Peer
 

@@ -88,7 +88,7 @@ func (s *Server) cellHeartbeat(req *pdpb.CellHeartbeatReq) (*pdpb.CellHeartbeatR
 		return nil, errRPCReq
 	}
 
-	cr := newCellRuntime(req.Cell, req.Leader)
+	cr := newCellRuntimeInfo(req.Cell, req.Leader)
 	cr.downPeers = req.DownPeers
 	cr.pendingPeers = req.PendingPeers
 
@@ -201,7 +201,7 @@ func newCellCluster(s *Server) *CellCluster {
 	}
 
 	c.coordinator = newCoordinator(s.cfg, c.cache)
-
+	c.coordinator.run()
 	return c
 }
 
@@ -221,7 +221,7 @@ func (c *CellCluster) doBootstrap(store metapb.Store, cell metapb.Cell) (*pdpb.B
 	}, nil
 }
 
-func (c *CellCluster) doCellHeartbeat(cr *cellRuntime) (*pdpb.CellHeartbeatRsp, error) {
+func (c *CellCluster) doCellHeartbeat(cr *cellRuntimeInfo) (*pdpb.CellHeartbeatRsp, error) {
 	err := c.cache.doCellHeartbeat(cr)
 	if err != nil {
 		return nil, err
@@ -265,7 +265,7 @@ func (c *CellCluster) doPutStore(store metapb.Store) error {
 		return fmt.Errorf("invalid for put store: <%+v>", store)
 	}
 
-	err := c.cache.foreachStore(func(s *storeRuntime) (bool, error) {
+	err := c.cache.foreachStore(func(s *storeRuntimeInfo) (bool, error) {
 		if s.isTombstone() {
 			return true, nil
 		}

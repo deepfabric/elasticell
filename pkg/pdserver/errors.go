@@ -18,6 +18,11 @@ import (
 )
 
 var (
+	errSchedulerExisted  = errors.New("scheduler is existed")
+	errSchedulerNotFound = errors.New("scheduler is not found")
+)
+
+var (
 	errEmbedEctdClusterIDNotMatch = errors.New("embed etcd cluster id not match")
 	errRPCReq                     = errors.New("invalid rpc req")
 	errStaleCell                  = errors.New("stale cell epoch")

@@ -13,8 +13,8 @@
 
 package pdserver
 
-func (s *storeRuntime) clone() *storeRuntime {
-	v := new(storeRuntime)
+func (s *storeRuntimeInfo) clone() *storeRuntimeInfo {
+	v := new(storeRuntimeInfo)
 	v.store = s.store
 	return v
 }

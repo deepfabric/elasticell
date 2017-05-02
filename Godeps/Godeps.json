@@ -393,6 +393,11 @@
 			"Rev": "c12348ce28de40eed0136aa2b644d0ee0650e56c"
 		},
 		{
+			"ImportPath": "github.com/montanaflynn/stats",
+			"Comment": "0.2.0-63-g41c34e4",
+			"Rev": "41c34e4914ec3c05d485e564d9028d8861d5d9ad"
+		},
+		{
 			"ImportPath": "github.com/pkg/errors",
 			"Comment": "v0.8.0-3-gbfd5150",
 			"Rev": "bfd5150e4e41705ded2129ec33379de1cb90b513"

@@ -37,7 +37,7 @@ func newReplicaChecker(cfg *Cfg, cache *cache, filters ...Filter) *replicaChecke
 }
 
 // Check return the Operator
-func (r *replicaChecker) Check(target *cellRuntime) Operator {
+func (r *replicaChecker) Check(target *cellRuntimeInfo) Operator {
 	if op := r.checkDownPeer(target); op != nil {
 		return op
 	}
@@ -52,9 +52,10 @@ func (r *replicaChecker) Check(target *cellRuntime) Operator {
 			return nil
 		}
 
-		return newAddPeerAggregationOp(target, *newPeer)
+		return newAddPeerAggregationOp(target, newPeer)
 	}
 
+	// TODO: impl
 	// if len(region.GetPeers()) > r.rep.GetMaxReplicas() {
 	// 	oldPeer, _ := r.selectWorstPeer(region)
 	// 	if oldPeer == nil {
@@ -68,26 +69,26 @@ func (r *replicaChecker) Check(target *cellRuntime) Operator {
 	return nil
 }
 
-func (r *replicaChecker) checkDownPeer(cell *cellRuntime) Operator {
+func (r *replicaChecker) checkDownPeer(cell *cellRuntimeInfo) Operator {
 	// TODO: impl
 
 	return nil
 }
 
-func (r *replicaChecker) checkOfflinePeer(cell *cellRuntime) Operator {
+func (r *replicaChecker) checkOfflinePeer(cell *cellRuntimeInfo) Operator {
 	// TODO: impl
 	return nil
 }
 
 // selectBestPeer returns the best peer in other stores.
-func (r *replicaChecker) selectBestPeer(target *cellRuntime, filters ...Filter) (*meta.Peer, float64) {
+func (r *replicaChecker) selectBestPeer(target *cellRuntimeInfo, filters ...Filter) (*meta.Peer, float64) {
 	// Add some must have filters.
 	filters = append(filters, newStateFilter(r.cfg))
 	filters = append(filters, newStorageThresholdFilter(r.cfg))
 	filters = append(filters, newExcludedFilter(nil, target.getStoreIDs()))
 
 	var (
-		bestStore *storeRuntime
+		bestStore *storeRuntimeInfo
 		bestScore float64
 	)
 
@@ -120,7 +121,7 @@ func (r *replicaChecker) selectBestPeer(target *cellRuntime, filters ...Filter) 
 
 // getDistinctScore returns the score that the other is distinct from the stores.
 // A higher score means the other store is more different from the existed stores.
-func getDistinctScore(cfg *Cfg, stores []*storeRuntime, other *storeRuntime) float64 {
+func getDistinctScore(cfg *Cfg, stores []*storeRuntimeInfo, other *storeRuntimeInfo) float64 {
 	score := float64(0)
 	locationLabels := cfg.getLocationLabels()
 
@@ -154,7 +155,7 @@ func getDistinctScore(cfg *Cfg, stores []*storeRuntime, other *storeRuntime) flo
 // Returns 0 if store A is as good as store B.
 // Returns 1 if store A is better than store B.
 // Returns -1 if store B is better than store A.
-func compareStoreScore(cfg *Cfg, storeA *storeRuntime, scoreA float64, storeB *storeRuntime, scoreB float64) int {
+func compareStoreScore(cfg *Cfg, storeA *storeRuntimeInfo, scoreA float64, storeB *storeRuntimeInfo, scoreB float64) int {
 	// The store with higher score is better.
 	if scoreA > scoreB {
 		return 1

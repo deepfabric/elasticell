@@ -42,7 +42,11 @@ func (op *aggregationOperator) GetCellID() uint64 {
 	return op.CellID
 }
 
-func (op *aggregationOperator) Do(target *cellRuntime) (*pdpb.CellHeartbeatRsp, bool) {
+func (op *aggregationOperator) GetResourceKind() ResourceKind {
+	return op.Ops[0].GetResourceKind()
+}
+
+func (op *aggregationOperator) Do(target *cellRuntimeInfo) (*pdpb.CellHeartbeatRsp, bool) {
 	if time.Since(op.StartAt) > maxOperatorWaitTime {
 		log.Errorf("scheduler: operator timeout, operator=<%s>", op)
 		return nil, true

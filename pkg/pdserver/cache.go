@@ -19,44 +19,12 @@ import (
 	"github.com/deepfabric/elasticell/pkg/log"
 	meta "github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/pdserver/storage"
-	"github.com/deepfabric/elasticell/pkg/util"
 	"github.com/pkg/errors"
 )
 
 const (
 	batchLimit = 10000
 )
-
-type clusterRuntime struct {
-	cluster meta.Cluster
-}
-
-func newClusterRuntime(cluster meta.Cluster) *clusterRuntime {
-	return &clusterRuntime{
-		cluster: cluster,
-	}
-}
-
-type cache struct {
-	sync.RWMutex
-	clusterID uint64
-	cluster   *clusterRuntime
-	sc        *storeCache
-	cc        *cellCache
-	store     *storage.Store
-	allocator *idAllocator
-}
-
-type storeCache struct {
-	stores map[uint64]*storeRuntime
-}
-
-type cellCache struct {
-	tree      *util.CellTree
-	cells     map[uint64]*cellRuntime            // cellID -> cellRuntime
-	leaders   map[uint64]map[uint64]*cellRuntime // storeID -> cellID -> cellRuntime
-	followers map[uint64]map[uint64]*cellRuntime // storeID -> cellID -> cellRuntime
-}
 
 func newCache(clusterID uint64, store *storage.Store, allocator *idAllocator) *cache {
 	c := new(cache)
@@ -69,25 +37,24 @@ func newCache(clusterID uint64, store *storage.Store, allocator *idAllocator) *c
 	return c
 }
 
-func newStoreCache() *storeCache {
-	sc := new(storeCache)
-	sc.stores = make(map[uint64]*storeRuntime)
-
-	return sc
+func newClusterRuntime(cluster meta.Cluster) *clusterRuntime {
+	return &clusterRuntime{
+		cluster: cluster,
+	}
 }
 
-func newCellCache() *cellCache {
-	cc := new(cellCache)
-	cc.tree = util.NewCellTree()
-	cc.cells = make(map[uint64]*cellRuntime)
-	cc.leaders = make(map[uint64]map[uint64]*cellRuntime)
-	cc.followers = make(map[uint64]map[uint64]*cellRuntime)
-
-	return cc
+type clusterRuntime struct {
+	cluster meta.Cluster
 }
 
-func (cc *cellCache) getStoreLeaderCount(storeID uint64) int {
-	return len(cc.leaders[storeID])
+type cache struct {
+	sync.RWMutex
+	clusterID uint64
+	cluster   *clusterRuntime
+	sc        *storeCache
+	cc        *cellCache
+	store     *storage.Store
+	allocator *idAllocator
 }
 
 func (c *cache) allocPeer(storeID uint64) (meta.Peer, error) {
@@ -103,22 +70,22 @@ func (c *cache) allocPeer(storeID uint64) (meta.Peer, error) {
 	return peer, nil
 }
 
-func (c *cache) getStores() []*storeRuntime {
+func (c *cache) getStores() []*storeRuntimeInfo {
 	c.RLock()
 	defer c.RUnlock()
 
-	stores := make([]*storeRuntime, 0, len(c.sc.stores))
+	stores := make([]*storeRuntimeInfo, 0, len(c.sc.stores))
 	for _, store := range c.sc.stores {
 		stores = append(stores, store.clone())
 	}
 	return stores
 }
 
-func (c *cache) getCellStores(cell *cellRuntime) []*storeRuntime {
+func (c *cache) getCellStores(cell *cellRuntimeInfo) []*storeRuntimeInfo {
 	c.RLock()
 	defer c.RUnlock()
 
-	var stores []*storeRuntime
+	var stores []*storeRuntimeInfo
 	for id := range cell.getStoreIDs() {
 		if store := c.doGetStore(id); store != nil {
 			stores = append(stores, store.clone())
@@ -127,7 +94,34 @@ func (c *cache) getCellStores(cell *cellRuntime) []*storeRuntime {
 	return stores
 }
 
-func (c *cache) foreachStore(fn func(*storeRuntime) (bool, error)) error {
+func (c *cache) randFollowerCell(storeID uint64) *cellRuntimeInfo {
+	c.RLock()
+	defer c.RUnlock()
+
+	return c.cc.randFollowerCell(storeID)
+}
+
+func (c *cache) randLeaderCell(storeID uint64) *cellRuntimeInfo {
+	c.RLock()
+	defer c.RUnlock()
+
+	return c.cc.randLeaderCell(storeID)
+}
+
+func (c *cache) getFollowerStores(cell *cellRuntimeInfo) []*storeRuntimeInfo {
+	c.RLock()
+	defer c.RUnlock()
+
+	var stores []*storeRuntimeInfo
+	for id := range cell.getFollowers() {
+		if store := c.sc.stores[id]; store != nil {
+			stores = append(stores, store)
+		}
+	}
+	return stores
+}
+
+func (c *cache) foreachStore(fn func(*storeRuntimeInfo) (bool, error)) error {
 	c.RLock()
 	defer c.RUnlock()
 
@@ -145,7 +139,7 @@ func (c *cache) foreachStore(fn func(*storeRuntime) (bool, error)) error {
 	return nil
 }
 
-func (c *cache) searchCell(startKey []byte) *cellRuntime {
+func (c *cache) searchCell(startKey []byte) *cellRuntimeInfo {
 	cell := c.cc.tree.Search(startKey)
 	if cell.ID == 0 {
 		return nil
@@ -154,15 +148,7 @@ func (c *cache) searchCell(startKey []byte) *cellRuntime {
 	return c.getCell(cell.ID)
 }
 
-func (c *cache) doGetStore(storeID uint64) *storeRuntime {
-	store, ok := c.sc.stores[storeID]
-	if !ok {
-		return nil
-	}
-	return store
-}
-
-func (c *cache) getStore(storeID uint64) *storeRuntime {
+func (c *cache) getStore(storeID uint64) *storeRuntimeInfo {
 	c.RLock()
 	defer c.RUnlock()
 
@@ -180,7 +166,7 @@ func (c *cache) addStore(store meta.Store) {
 	c.sc.stores[store.ID] = newStoreRuntime(store)
 }
 
-func (c *cache) setStore(store *storeRuntime) {
+func (c *cache) setStore(store *storeRuntimeInfo) {
 	c.Lock()
 	defer c.Unlock()
 	c.sc.stores[store.store.ID] = store
@@ -190,24 +176,32 @@ func (c *cache) addCellFromMeta(cell meta.Cell) {
 	c.Lock()
 	defer c.Unlock()
 
-	c.cc.addCell(newCellRuntime(cell, nil))
+	c.cc.addCell(newCellRuntimeInfo(cell, nil))
 }
 
-func (c *cache) addCell(source *cellRuntime) {
+func (c *cache) addCell(source *cellRuntimeInfo) {
 	c.Lock()
 	defer c.Unlock()
 
 	c.cc.addCell(source)
 }
 
-func (c *cache) getCell(id uint64) *cellRuntime {
+func (c *cache) getCell(id uint64) *cellRuntimeInfo {
 	c.RLock()
 	defer c.RUnlock()
 
 	return c.cc.cells[id]
 }
 
-func (c *cache) doCellHeartbeat(source *cellRuntime) error {
+func (c *cache) doGetStore(storeID uint64) *storeRuntimeInfo {
+	store, ok := c.sc.stores[storeID]
+	if !ok {
+		return nil
+	}
+	return store
+}
+
+func (c *cache) doCellHeartbeat(source *cellRuntimeInfo) error {
 	current := c.getCell(source.cell.ID)
 
 	// add new cell
@@ -255,7 +249,7 @@ func (c *cache) doCellHeartbeat(source *cellRuntime) error {
 	return nil
 }
 
-func (c *cache) doSave(source *cellRuntime) error {
+func (c *cache) doSave(source *cellRuntimeInfo) error {
 	err := c.store.SetCellMeta(c.clusterID, source.cell)
 	if err != nil {
 		return err
@@ -264,7 +258,7 @@ func (c *cache) doSave(source *cellRuntime) error {
 	return nil
 }
 
-func (cc *cellCache) addCell(origin *cellRuntime) {
+func (cc *cellCache) addCell(origin *cellRuntimeInfo) {
 	if cell, ok := cc.cells[origin.getID()]; ok {
 		cc.removeCell(cell)
 	}
@@ -284,7 +278,7 @@ func (cc *cellCache) addCell(origin *cellRuntime) {
 			// Add leader peer to leaders.
 			store, ok := cc.leaders[storeID]
 			if !ok {
-				store = make(map[uint64]*cellRuntime)
+				store = make(map[uint64]*cellRuntimeInfo)
 				cc.leaders[storeID] = store
 			}
 			store[origin.getID()] = origin
@@ -292,7 +286,7 @@ func (cc *cellCache) addCell(origin *cellRuntime) {
 			// Add follower peer to followers.
 			store, ok := cc.followers[storeID]
 			if !ok {
-				store = make(map[uint64]*cellRuntime)
+				store = make(map[uint64]*cellRuntimeInfo)
 				cc.followers[storeID] = store
 			}
 			store[origin.getID()] = origin
@@ -300,7 +294,7 @@ func (cc *cellCache) addCell(origin *cellRuntime) {
 	}
 }
 
-func (cc *cellCache) removeCell(origin *cellRuntime) {
+func (cc *cellCache) removeCell(origin *cellRuntimeInfo) {
 	// Remove from tree and cells.
 	cc.tree.Remove(origin.cell)
 	delete(cc.cells, origin.getID())
@@ -310,4 +304,24 @@ func (cc *cellCache) removeCell(origin *cellRuntime) {
 		delete(cc.leaders[peer.StoreID], origin.getID())
 		delete(cc.followers[peer.StoreID], origin.getID())
 	}
+}
+
+func randCell(cells map[uint64]*cellRuntimeInfo) *cellRuntimeInfo {
+	for _, cell := range cells {
+		if cell.leader == nil {
+			log.Fatalf("rand cell without leader: cell=<%+v>", cell)
+		}
+
+		if len(cell.downPeers) > 0 {
+			continue
+		}
+
+		if len(cell.pendingPeers) > 0 {
+			continue
+		}
+
+		return cell.clone()
+	}
+
+	return nil
 }

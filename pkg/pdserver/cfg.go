@@ -42,6 +42,8 @@ type Cfg struct {
 	EmbedEtcd *EmbedEtcdCfg `json:"embedEtcd"`
 	// Replication is the replication configuration
 	Replication *ReplicationCfg `json:"replication"`
+	// Schedule is the Schedule configuration
+	Schedule *ScheduleConfig `json:"schedule"`
 }
 
 // GetCfg get cfg from command

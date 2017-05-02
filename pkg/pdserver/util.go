@@ -15,6 +15,7 @@ package pdserver
 
 import (
 	"io"
+	"time"
 
 	"github.com/coreos/pkg/capnslog"
 )
@@ -23,4 +24,25 @@ import (
 // so we need redirect ectd log to spec.
 func RedirectEmbedEctdLog(w io.Writer) {
 	capnslog.SetFormatter(capnslog.NewPrettyFormatter(w, false))
+}
+
+func minUint64(a, b uint64) uint64 {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func maxUint64(a, b uint64) uint64 {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func minDuration(a, b time.Duration) time.Duration {
+	if a < b {
+		return a
+	}
+	return b
 }

@@ -24,25 +24,49 @@ import (
 // Operator is an interface to scheduler cell
 type Operator interface {
 	GetCellID() uint64
-	Do(cell *cellRuntime) (*pdpb.CellHeartbeatRsp, bool)
+	GetResourceKind() ResourceKind
+	Do(cell *cellRuntimeInfo) (*pdpb.CellHeartbeatRsp, bool)
 }
 
-func newAddPeerAggregationOp(cell *cellRuntime, peer meta.Peer) Operator {
+func newAddPeerAggregationOp(cell *cellRuntimeInfo, peer *meta.Peer) Operator {
 	addPeerOp := newAddPeerOp(cell.getID(), peer)
 	return newAggregationOp(cell, addPeerOp)
 }
 
-func newAddPeerOp(cellID uint64, peer meta.Peer) *changePeerOperator {
+func newTransferLeaderAggregationOp(cell *cellRuntimeInfo, newLeader *meta.Peer) Operator {
+	transferLeader := newTransferLeaderOperator(cell.cell.ID, cell.leader, newLeader)
+	return newAggregationOp(cell, transferLeader)
+}
+
+func newTransferPeerAggregationOp(cell *cellRuntimeInfo, oldPeer, newPeer *meta.Peer) Operator {
+	addPeer := newAddPeerOp(cell.getID(), newPeer)
+	removePeer := newRemovePeerOp(cell.getID(), oldPeer)
+	return newAggregationOp(cell, addPeer, removePeer)
+}
+
+func newAddPeerOp(cellID uint64, peer *meta.Peer) *changePeerOperator {
 	return &changePeerOperator{
+		Name:   "add_peer",
 		CellID: cellID,
 		ChangePeer: pdpb.ChangePeer{
 			Type: pdpb.AddNode,
-			Peer: &peer,
+			Peer: peer,
 		},
 	}
 }
 
-func newAggregationOp(cell *cellRuntime, ops ...Operator) *aggregationOperator {
+func newRemovePeerOp(cellID uint64, peer *meta.Peer) *changePeerOperator {
+	return &changePeerOperator{
+		Name:   "remove_peer",
+		CellID: cellID,
+		ChangePeer: pdpb.ChangePeer{
+			Type: pdpb.RemoveNode,
+			Peer: peer,
+		},
+	}
+}
+
+func newAggregationOp(cell *cellRuntimeInfo, ops ...Operator) *aggregationOperator {
 	if len(ops) == 0 {
 		log.Fatal("scheduler: create new cell aggregation operator use empty opts")
 	}
