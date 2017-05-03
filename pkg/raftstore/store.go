@@ -50,6 +50,7 @@ type Store struct {
 
 	id        uint64
 	clusterID uint64
+	startAt   uint32
 	meta      metapb.Store
 
 	pdClient *pd.Client
@@ -72,6 +73,7 @@ func NewStore(clusterID uint64, pdClient *pd.Client, meta metapb.Store, engine s
 	s.clusterID = clusterID
 	s.id = meta.ID
 	s.meta = meta
+	s.startAt = uint32(time.Now().Unix())
 	s.engine = engine
 	s.cfg = cfg
 	s.pdClient = pdClient
@@ -645,24 +647,36 @@ func (s *Store) addNamedJob(worker string, task func() error) (*util.Job, error)
 }
 
 func (s *Store) handleStoreHeartbeat() error {
+	// TODO: impl sending and receiving snao count collect
+	var sendingSnapCount, reveivingSnapCount, applySnapCount uint32
+
+	stats, err := util.DiskStats(s.cfg.StoreDataPath)
+	if err != nil {
+		return err
+	}
+
+	applySnapCount, err = s.getApplySnapshotCount()
+	if err != nil {
+		return err
+	}
+
 	req := new(pdpb.StoreHeartbeatReq)
 	req.Header.ClusterID = s.clusterID
-	// TODO: impl collect the store status
 	req.Stats = &pdpb.StoreStats{
 		StoreID:            s.GetID(),
-		Capacity:           0,
-		Available:          0,
+		StartTime:          s.startAt,
+		Capacity:           stats.Total,
+		Available:          stats.Free,
+		UsedSize:           stats.Used,
 		CellCount:          s.replicatesMap.size(),
-		SendingSnapCount:   0,
-		ReceivingSnapCount: 0,
-		StartTime:          0,
-		ApplyingSnapCount:  0,
+		SendingSnapCount:   sendingSnapCount,
+		ReceivingSnapCount: reveivingSnapCount,
+		ApplyingSnapCount:  applySnapCount,
 		IsBusy:             false,
-		UsedSize:           0,
 		BytesWritten:       0,
 	}
 
-	_, err := s.pdClient.StoreHeartbeat(context.TODO(), req)
+	_, err = s.pdClient.StoreHeartbeat(context.TODO(), req)
 	if err != nil {
 		log.Errorf("heartbeat-store[%d]: heartbeat failed, errors:\n +%v",
 			s.id,
@@ -670,6 +684,18 @@ func (s *Store) handleStoreHeartbeat() error {
 	}
 
 	return err
+}
+
+func (s *Store) getApplySnapshotCount() (uint32, error) {
+	var cnt uint32
+	err := s.replicatesMap.foreach(func(pr *PeerReplicate) (bool, error) {
+		if pr.ps.isApplyingSnap() {
+			cnt++
+		}
+		return true, nil
+	})
+
+	return cnt, err
 }
 
 func (s *Store) handleCellHeartbeat() {

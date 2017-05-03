@@ -41,7 +41,6 @@ func (s *balanceCellScheduler) Prepare(cache *cache) error { return nil }
 func (s *balanceCellScheduler) Cleanup(cache *cache) {}
 
 func (s *balanceCellScheduler) Schedule(cache *cache) Operator {
-	// TODO: impl
 	// Select a peer from the store with most cells.
 	cell, oldPeer := scheduleRemovePeer(cache, s.selector)
 	if cell == nil {

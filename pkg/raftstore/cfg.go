@@ -17,6 +17,8 @@ import "time"
 
 // Cfg for raftstore
 type Cfg struct {
+	StoreDataPath string `json:"storeDataPath"`
+
 	StoreHeartbeatIntervalMs int `json:"storeHeartbeatIntervalMs"`
 	CellHeartbeatIntervalMs  int `json:"cellHeartbeatIntervalMs"`
 	MaxPeerDownSec           int `json:"maxPeerDownSec"`

@@ -14,17 +14,14 @@
 package util
 
 import (
-	"fmt"
-
 	"github.com/shirou/gopsutil/disk"
 )
 
-// TotalDisk returns the disk total size
-func TotalDisk(path string) uint64 {
-	d, err := disk.Usage(path)
+// DiskStats returns the disk usage stats
+func DiskStats(path string) (*disk.UsageStat, error) {
+	stats, err := disk.Usage(path)
 	if err != nil {
-		fmt.Println(err)
-		return 0
+		return nil, err
 	}
-	return d.Total
+	return stats, nil
 }
