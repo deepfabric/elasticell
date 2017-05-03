@@ -42,6 +42,8 @@ const (
 type transport struct {
 	sync.RWMutex
 
+	store *Store
+
 	server  *goetty.Server
 	handler func(interface{})
 	client  *pd.Client
@@ -50,10 +52,10 @@ type transport struct {
 	addrs map[uint64]string
 }
 
-func newTransport(cfg *Cfg, client *pd.Client, handler func(interface{})) *transport {
-	addr := cfg.StoreAddr
-	if cfg.StoreAdvertiseAddr != "" {
-		addr = cfg.StoreAdvertiseAddr
+func newTransport(store *Store, client *pd.Client, handler func(interface{})) *transport {
+	addr := store.cfg.StoreAddr
+	if store.cfg.StoreAdvertiseAddr != "" {
+		addr = store.cfg.StoreAdvertiseAddr
 	}
 
 	return &transport{
@@ -116,6 +118,11 @@ func (t *transport) getStoreAddr(storeID uint64) (string, error) {
 }
 
 func (t *transport) send(storeID uint64, msg *mraft.RaftMessage) error {
+	if storeID == t.store.id {
+		t.store.notify(msg)
+		return nil
+	}
+
 	addr, err := t.getStoreAddr(storeID)
 	if err != nil {
 		return err

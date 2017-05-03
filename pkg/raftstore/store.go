@@ -78,7 +78,7 @@ func NewStore(clusterID uint64, pdClient *pd.Client, meta metapb.Store, engine s
 	s.cfg = cfg
 	s.pdClient = pdClient
 
-	s.trans = newTransport(s.cfg, pdClient, s.notify)
+	s.trans = newTransport(s, pdClient, s.notify)
 	s.notifyChan = make(chan interface{}, defaultNotifyChanSize)
 
 	s.keyRanges = util.NewCellTree()
