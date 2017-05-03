@@ -16,6 +16,7 @@ service PDService {
     rpc IsClusterBootstrap (IsClusterBootstrapReq) returns (IsClusterBootstrapRsp) {}
     rpc BootstrapCluster (BootstrapClusterReq) returns (BootstrapClusterRsp) {}
     rpc PutStore(PutStoreReq) returns (PutStoreRsp) {}
+    rpc GetStore(GetStoreReq) returns (GetStoreRsp) {}
     rpc CellHeartbeat (CellHeartbeatReq) returns (CellHeartbeatRsp) {}
     rpc StoreHeartbeat (StoreHeartbeatReq) returns (StoreHeartbeatRsp) {}
     rpc AskSplit (AskSplitReq) returns (AskSplitRsp) {}
@@ -98,6 +99,18 @@ message PutStoreReq {
 
 message PutStoreRsp {
     optional ResponseHeader header = 1 [(gogoproto.nullable) = false];
+}
+
+message GetStoreReq {
+    optional string        from    = 1 [(gogoproto.nullable) = false];
+    optional uint64        id      = 2 [(gogoproto.nullable) = false, (gogoproto.customname) = "ID"];
+    optional RequestHeader header  = 3 [(gogoproto.nullable) = false];
+    optional uint64        storeID = 4 [(gogoproto.nullable) = false];
+}
+
+message GetStoreRsp {
+    optional ResponseHeader header = 1 [(gogoproto.nullable) = false];
+    optional metapb.Store   store  = 2 [(gogoproto.nullable) = false];
 }
 
 message GetClusterIDReq {

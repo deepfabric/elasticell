@@ -69,9 +69,23 @@ func (s *Server) putStore(req *pdpb.PutStoreReq) (*pdpb.PutStoreRsp, error) {
 
 	log.Info("cell-cluster: put store ok, store=<%+v>", req.Store)
 
-	rsp := &pdpb.PutStoreRsp{}
-	req.Header.ClusterID = s.GetClusterID()
-	return rsp, nil
+	return &pdpb.PutStoreRsp{}, nil
+}
+
+func (s *Server) getStore(req *pdpb.GetStoreReq) (*pdpb.GetStoreRsp, error) {
+	c := s.GetCellCluster()
+	if c == nil {
+		return nil, errNotBootstrapped
+	}
+
+	store := c.cache.getStore(req.StoreID)
+	if store == nil {
+		return nil, errStoreNotFound
+	}
+
+	return &pdpb.GetStoreRsp{
+		Store: store.store,
+	}, nil
 }
 
 func (s *Server) cellHeartbeat(req *pdpb.CellHeartbeatReq) (*pdpb.CellHeartbeatRsp, error) {

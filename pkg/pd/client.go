@@ -249,6 +249,24 @@ func (c *Client) PutStore(ctx context.Context, req *pdpb.PutStoreReq) (*pdpb.Put
 	return rsp.(*pdpb.PutStoreRsp), nil
 }
 
+// GetStore returns get store response
+func (c *Client) GetStore(ctx context.Context, req *pdpb.GetStoreReq) (*pdpb.GetStoreRsp, error) {
+	rsp, err := c.proxyRPC(ctx,
+		req,
+		func() {
+			req.From = c.name
+			req.ID = c.seq
+		},
+		func() (interface{}, error) {
+			return c.pd.GetStore(ctx, req, grpc.FailFast(true))
+		})
+	if err != nil {
+		return nil, err
+	}
+
+	return rsp.(*pdpb.GetStoreRsp), nil
+}
+
 // CellHeartbeat returns cell heartbeat response
 func (c *Client) CellHeartbeat(ctx context.Context, req *pdpb.CellHeartbeatReq) (*pdpb.CellHeartbeatRsp, error) {
 	rsp, err := c.proxyRPC(ctx,

@@ -28,4 +28,5 @@ var (
 	errStaleCell                  = errors.New("stale cell epoch")
 	errNotBootstrapped            = errors.New("cluster not bootstrapped")
 	errTombstoneStore             = errors.New("store is tombstone")
+	errStoreNotFound              = errors.New("store is not found")
 )

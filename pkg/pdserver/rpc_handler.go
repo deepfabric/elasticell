@@ -165,6 +165,24 @@ func (h *RPCHandler) PutStore(c context.Context, req *pdpb.PutStoreReq) (*pdpb.P
 	return rsp.(*pdpb.PutStoreRsp), nil
 }
 
+// GetStore get store info
+func (h *RPCHandler) GetStore(c context.Context, req *pdpb.GetStoreReq) (*pdpb.GetStoreRsp, error) {
+	doFun := func() (interface{}, error) {
+		return h.server.getStore(req)
+	}
+
+	forwardFun := func(proxy *pd.Client) (interface{}, error) {
+		return proxy.GetStore(c, req)
+	}
+
+	rsp, err := h.doHandle("GetStore", req, forwardFun, doFun)
+	if err != nil {
+		return nil, err
+	}
+
+	return rsp.(*pdpb.GetStoreRsp), nil
+}
+
 // CellHeartbeat returns cell heartbeat response
 func (h *RPCHandler) CellHeartbeat(c context.Context, req *pdpb.CellHeartbeatReq) (*pdpb.CellHeartbeatRsp, error) {
 	doFun := func() (interface{}, error) {

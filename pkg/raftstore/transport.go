@@ -14,14 +14,16 @@
 package raftstore
 
 import (
-	"sync"
-
 	"errors"
+	"sync"
 	"time"
 
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
+	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
+	"github.com/deepfabric/elasticell/pkg/pd"
 	"github.com/fagongzi/goetty"
+	"golang.org/x/net/context"
 )
 
 var (
@@ -42,11 +44,13 @@ type transport struct {
 
 	server  *goetty.Server
 	handler func(interface{})
+	client  *pd.Client
 
 	conns map[string]*goetty.Connector
+	addrs map[uint64]string
 }
 
-func newTransport(cfg *RaftCfg, handler func(interface{})) *transport {
+func newTransport(cfg *RaftCfg, client *pd.Client, handler func(interface{})) *transport {
 	addr := cfg.PeerAddr
 	if cfg.PeerAdvertiseAddr != "" {
 		addr = cfg.PeerAdvertiseAddr
@@ -54,8 +58,10 @@ func newTransport(cfg *RaftCfg, handler func(interface{})) *transport {
 
 	return &transport{
 		server:  goetty.NewServer(addr, decoder, encoder, goetty.NewUUIDV4IdGenerator()),
-		conns:   make(map[string]*goetty.Connector, 32),
+		conns:   make(map[string]*goetty.Connector),
+		addrs:   make(map[uint64]string),
 		handler: handler,
+		client:  client,
 	}
 }
 
@@ -80,8 +86,33 @@ func (t *transport) doConnection(session goetty.IOSession) error {
 }
 
 func (t *transport) getStoreAddr(storeID uint64) (string, error) {
-	// TODO: get store addr from pd
-	return "", nil
+	t.RLock()
+	addr, ok := t.addrs[storeID]
+	t.RUnlock()
+
+	if !ok {
+		t.Lock()
+		addr, ok = t.addrs[storeID]
+		if ok {
+			t.Unlock()
+			return addr, nil
+		}
+
+		rsp, err := t.client.GetStore(context.TODO(), &pdpb.GetStoreReq{
+			StoreID: storeID,
+		})
+
+		if err != nil {
+			t.Unlock()
+			return "", err
+		}
+
+		addr = rsp.Store.Address
+		t.addrs[storeID] = addr
+		t.Unlock()
+	}
+
+	return addr, nil
 }
 
 func (t *transport) send(storeID uint64, msg *mraft.RaftMessage) error {
