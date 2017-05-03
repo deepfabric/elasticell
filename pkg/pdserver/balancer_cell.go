@@ -48,7 +48,7 @@ func (s *balanceCellScheduler) Schedule(cache *cache) Operator {
 	}
 
 	// We don't schedule cell with abnormal number of replicas.
-	if len(cell.getPeers()) != int(s.cfg.getMaxReplicas()) {
+	if len(cell.getPeers()) != int(s.cfg.Schedule.MaxReplicas) {
 		return nil
 	}
 

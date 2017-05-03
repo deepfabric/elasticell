@@ -19,18 +19,25 @@ import (
 
 // ScheduleConfig is the schedule configuration.
 type ScheduleConfig struct {
+	// MaxReplicas is the number of replicas for each cell.
+	MaxReplicas uint32 `json:"maxReplicas"`
+	// The label keys specified the location of a store.
+	// The placement priorities is implied by the order of label keys.
+	// For example, ["zone", "rack"] means that we should place replicas to
+	// different zones first, then to different racks if we don't have enough zones.
+	LocationLabels []string `json:"locationLabels"`
 	// If the snapshot count of one store is greater than this value,
-	// it will never be used as a source or target store.
-	MaxSnapshotCount uint64 `json:"max-snapshot-count"`
+	// it will never be used as a source or targCet store.
+	MaxSnapshotCount uint64 `json:"maxSnapshotCount"`
 	// MaxStoreDownTime is the max duration after which
 	// a store will be considered to be down if it hasn't reported heartbeats.
-	MaxStoreDownTimeMs int `json:"max-store-down-time"`
+	MaxStoreDownTimeMs int `json:"maxStoreDownTimeMs"`
 	// LeaderScheduleLimit is the max coexist leader schedules.
-	LeaderScheduleLimit uint64 `json:"leader-schedule-limit"`
+	LeaderScheduleLimit uint64 `json:"leaderScheduleLimit"`
 	// CellScheduleLimit is the max coexist cell schedules.
-	CellScheduleLimit uint64 `json:"cell-schedule-limit"`
+	CellScheduleLimit uint64 `json:"cellScheduleLimit"`
 	// ReplicaScheduleLimit is the max coexist replica schedules.
-	ReplicaScheduleLimit uint64 `json:"replica-schedule-limit"`
+	ReplicaScheduleLimit uint64 `json:"replicaScheduleLimit"`
 }
 
 func (c *ScheduleConfig) getMaxStoreDownTimeDuration() time.Duration {

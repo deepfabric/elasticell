@@ -78,7 +78,7 @@ func NewStore(clusterID uint64, pdClient *pd.Client, meta metapb.Store, engine s
 	s.cfg = cfg
 	s.pdClient = pdClient
 
-	s.trans = newTransport(s.cfg.Raft, pdClient, s.notify)
+	s.trans = newTransport(s.cfg, pdClient, s.notify)
 	s.notifyChan = make(chan interface{}, defaultNotifyChanSize)
 
 	s.keyRanges = util.NewCellTree()
@@ -647,7 +647,7 @@ func (s *Store) addNamedJob(worker string, task func() error) (*util.Job, error)
 }
 
 func (s *Store) handleStoreHeartbeat() error {
-	// TODO: impl sending and receiving snao count collect
+	// TODO: impl sending and receiving snap count collect
 	var sendingSnapCount, reveivingSnapCount, applySnapCount uint32
 
 	stats, err := util.DiskStats(s.cfg.StoreDataPath)

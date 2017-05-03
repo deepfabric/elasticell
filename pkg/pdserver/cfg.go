@@ -32,16 +32,12 @@ var (
 type Cfg struct {
 	Name    string `json:"name"`
 	DataDir string `json:"dataDir"`
-
 	// for leader election
 	LeaseSecsTTL int64 `json:"leaseSecsTTL"`
 	// RPCAddr rpc addr
 	RPCAddr string `json:"rpcAddr"`
-
 	// EmbedEtcd is the embed ectd configuration
 	EmbedEtcd *EmbedEtcdCfg `json:"embedEtcd"`
-	// Replication is the replication configuration
-	Replication *ReplicationCfg `json:"replication"`
 	// Schedule is the Schedule configuration
 	Schedule *ScheduleConfig `json:"schedule"`
 }

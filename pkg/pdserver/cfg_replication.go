@@ -31,19 +31,9 @@ type ReplicationCfg struct {
 	LocationLabels []string `json:"location-labels"`
 }
 
-func (c *Cfg) getMaxReplicas() uint32 {
-	c.Replication.RLock()
-	defer c.Replication.RUnlock()
-
-	return c.Replication.MaxReplicas
-}
-
 func (c *Cfg) getLocationLabels() []string {
-	c.Replication.RLock()
-	defer c.Replication.RUnlock()
-
 	var value []string
-	for _, v := range c.Replication.LocationLabels {
+	for _, v := range c.Schedule.LocationLabels {
 		value = append(value, v)
 	}
 

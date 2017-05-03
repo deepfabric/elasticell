@@ -219,7 +219,6 @@ func (pr *PeerReplicate) doApplySnap(ctx *tempRaftContext) *applySnapResult {
 
 	// cleanup data before apply snap job
 	if pr.ps.isInitialized() {
-		// TODO: why??
 		err := pr.ps.clearExtraData(pr.ps.getCell())
 		if err != nil {
 			// No need panic here, when applying snapshot, the deletion will be tried

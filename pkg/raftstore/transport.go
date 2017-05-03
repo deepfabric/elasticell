@@ -50,10 +50,10 @@ type transport struct {
 	addrs map[uint64]string
 }
 
-func newTransport(cfg *RaftCfg, client *pd.Client, handler func(interface{})) *transport {
-	addr := cfg.PeerAddr
-	if cfg.PeerAdvertiseAddr != "" {
-		addr = cfg.PeerAdvertiseAddr
+func newTransport(cfg *Cfg, client *pd.Client, handler func(interface{})) *transport {
+	addr := cfg.StoreAddr
+	if cfg.StoreAdvertiseAddr != "" {
+		addr = cfg.StoreAdvertiseAddr
 	}
 
 	return &transport{

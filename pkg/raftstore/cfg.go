@@ -17,13 +17,14 @@ import "time"
 
 // Cfg for raftstore
 type Cfg struct {
-	StoreDataPath string `json:"storeDataPath"`
-
-	StoreHeartbeatIntervalMs int `json:"storeHeartbeatIntervalMs"`
-	CellHeartbeatIntervalMs  int `json:"cellHeartbeatIntervalMs"`
-	MaxPeerDownSec           int `json:"maxPeerDownSec"`
-	SplitCellCheckIntervalMs int `json:"splitCellCheckIntervalMs"`
-	RaftGCLogIntervalMs      int `json:"raftGCLogIntervalMs"`
+	StoreAddr                string `json:"storeAddr"`
+	StoreAdvertiseAddr       string `json:"storeAdvertiseAddr"`
+	StoreDataPath            string `json:"storeDataPath"`
+	StoreHeartbeatIntervalMs int    `json:"storeHeartbeatIntervalMs"`
+	CellHeartbeatIntervalMs  int    `json:"cellHeartbeatIntervalMs"`
+	MaxPeerDownSec           int    `json:"maxPeerDownSec"`
+	SplitCellCheckIntervalMs int    `json:"splitCellCheckIntervalMs"`
+	RaftGCLogIntervalMs      int    `json:"raftGCLogIntervalMs"`
 
 	RaftLogGCCountLimit uint64 `json:"raftLogGCCountLimit"`
 	RaftLogGCSizeLimit  uint64 `json:"raftLogGCSizeLimit"`
@@ -58,13 +59,10 @@ func (c *Cfg) getSplitCellCheckDuration() time.Duration {
 
 // RaftCfg is the cfg for raft
 type RaftCfg struct {
-	PeerAddr          string
-	PeerAdvertiseAddr string
-	ElectionTick      int
-	HeartbeatTick     int
-	MaxSizePerMsg     uint64
-	MaxSizePerEntry   uint64
-	MaxInflightMsgs   int
-	SnapDir           string
-	BaseTick          int
+	ElectionTick    int    `json:"electionTick"`
+	HeartbeatTick   int    `json:"heartbeatTick"`
+	MaxSizePerMsg   uint64 `json:"maxSizePerMsg"`
+	MaxSizePerEntry uint64 `json:"maxSizePerEntry"`
+	MaxInflightMsgs int    `json:"maxInflightMsgs"`
+	BaseTick        int    `json:"baseTick"`
 }

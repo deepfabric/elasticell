@@ -20,10 +20,8 @@ import (
 
 // Cfg node cfg
 type Cfg struct {
-	ClusterID          uint64         `json:"clusterID"`
-	StoreAddr          string         `json:"storeAddr"`
-	StoreAdvertiseAddr string         `json:"storeAdvertiseAddr"`
-	StoreLables        []metapb.Label `json:"labels, omitempty"`
+	ClusterID   uint64         `json:"clusterID"`
+	StoreLables []metapb.Label `json:"labels, omitempty"`
 
 	PDEndpoints []string       `json:"pdRPCAddr"`
 	RaftStore   *raftstore.Cfg `json:"raftStore"`

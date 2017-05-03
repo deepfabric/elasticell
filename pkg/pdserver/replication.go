@@ -48,7 +48,7 @@ func (r *replicaChecker) Check(target *cellRuntimeInfo) Operator {
 
 	currReplicasCount := uint32(len(target.getPeers()))
 
-	if currReplicasCount < r.cfg.getMaxReplicas() {
+	if currReplicasCount < r.cfg.Schedule.MaxReplicas {
 		newPeer, _ := r.selectBestPeer(target, r.filters...)
 		if newPeer == nil {
 			return nil
@@ -57,7 +57,7 @@ func (r *replicaChecker) Check(target *cellRuntimeInfo) Operator {
 		return newAddPeerAggregationOp(target, newPeer)
 	}
 
-	if currReplicasCount > r.cfg.getMaxReplicas() {
+	if currReplicasCount > r.cfg.Schedule.MaxReplicas {
 		oldPeer, _ := r.selectWorstPeer(target)
 		if oldPeer == nil {
 			return nil

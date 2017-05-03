@@ -222,7 +222,7 @@ func newCellCluster(s *Server) *CellCluster {
 func (c *CellCluster) doBootstrap(store metapb.Store, cell metapb.Cell) (*pdpb.BootstrapClusterRsp, error) {
 	cluster := metapb.Cluster{
 		ID:          c.s.GetClusterID(),
-		MaxReplicas: c.s.cfg.getMaxReplicas(),
+		MaxReplicas: c.s.cfg.Schedule.MaxReplicas,
 	}
 
 	ok, err := c.s.store.SetClusterBootstrapped(c.s.GetClusterID(), cluster, store, cell)
@@ -305,7 +305,7 @@ func (c *CellCluster) doPutStore(store metapb.Store) error {
 		old.store.Lables = store.Lables
 	}
 
-	for _, k := range c.s.cfg.Replication.LocationLabels {
+	for _, k := range c.s.cfg.Schedule.LocationLabels {
 		if v := old.getLabelValue(k); len(v) == 0 {
 			return fmt.Errorf("missing location label %q in store %+v", k, old)
 		}

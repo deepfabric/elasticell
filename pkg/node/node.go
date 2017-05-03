@@ -107,7 +107,7 @@ func (n *Node) closePDClient() {
 }
 
 func (n *Node) initPDClient() error {
-	c, err := pd.NewClient(n.cfg.StoreAddr, n.cfg.PDEndpoints...)
+	c, err := pd.NewClient(n.cfg.RaftStore.StoreAddr, n.cfg.PDEndpoints...)
 	if err != nil {
 		return errors.Wrap(err, "")
 	}
@@ -137,9 +137,9 @@ func (n *Node) getAllocID() (uint64, error) {
 }
 
 func newStore(cfg *Cfg) metapb.Store {
-	addr := cfg.StoreAddr
-	if cfg.StoreAdvertiseAddr != "" {
-		addr = cfg.StoreAdvertiseAddr
+	addr := cfg.RaftStore.StoreAddr
+	if cfg.RaftStore.StoreAdvertiseAddr != "" {
+		addr = cfg.RaftStore.StoreAdvertiseAddr
 	}
 
 	return metapb.Store{

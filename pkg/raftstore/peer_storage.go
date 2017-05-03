@@ -115,7 +115,7 @@ func (ps *peerStorage) initSnap() {
 }
 
 func (ps *peerStorage) getSnapDir() string {
-	return fmt.Sprintf("%s/%d", ps.store.cfg.Raft.SnapDir, ps.getCell().ID)
+	return fmt.Sprintf("%s/snap/%d", ps.store.cfg.StoreDataPath, ps.getCell().ID)
 }
 
 func (ps *peerStorage) initRaftState() error {
