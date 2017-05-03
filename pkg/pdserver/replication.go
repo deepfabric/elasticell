@@ -70,13 +70,39 @@ func (r *replicaChecker) Check(target *cellRuntimeInfo) Operator {
 }
 
 func (r *replicaChecker) checkDownPeer(cell *cellRuntimeInfo) Operator {
-	// TODO: impl
+	for _, stats := range cell.downPeers {
+		peer := stats.Peer
+		store := r.cache.getStore(peer.StoreID)
+		if nil != store && store.downTime() < r.cfg.Schedule.getMaxStoreDownTimeDuration() {
+			continue
+		}
+
+		if nil != store && stats.DownSeconds < uint64(r.cfg.Schedule.getMaxStoreDownTimeDuration().Seconds()) {
+			continue
+		}
+
+		return newRemovePeerOp(cell.getID(), &peer)
+	}
 
 	return nil
 }
 
 func (r *replicaChecker) checkOfflinePeer(cell *cellRuntimeInfo) Operator {
-	// TODO: impl
+	for _, peer := range cell.cell.Peers {
+		store := r.cache.getStore(peer.ID)
+
+		if store != nil && store.isUp() {
+			continue
+		}
+
+		newPeer, _ := r.selectBestPeer(cell)
+		if newPeer == nil {
+			return nil
+		}
+
+		return newTransferPeerAggregationOp(cell, peer, newPeer)
+	}
+
 	return nil
 }
 
