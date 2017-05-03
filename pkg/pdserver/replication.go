@@ -46,7 +46,9 @@ func (r *replicaChecker) Check(target *cellRuntimeInfo) Operator {
 		return op
 	}
 
-	if uint32(len(target.getPeers())) < r.cfg.getMaxReplicas() {
+	currReplicasCount := uint32(len(target.getPeers()))
+
+	if currReplicasCount < r.cfg.getMaxReplicas() {
 		newPeer, _ := r.selectBestPeer(target, r.filters...)
 		if newPeer == nil {
 			return nil
@@ -55,18 +57,16 @@ func (r *replicaChecker) Check(target *cellRuntimeInfo) Operator {
 		return newAddPeerAggregationOp(target, newPeer)
 	}
 
-	// TODO: impl
-	// if len(region.GetPeers()) > r.rep.GetMaxReplicas() {
-	// 	oldPeer, _ := r.selectWorstPeer(region)
-	// 	if oldPeer == nil {
-	// 		return nil
-	// 	}
-	// 	return newRemovePeer(region, oldPeer)
-	// }
+	if currReplicasCount > r.cfg.getMaxReplicas() {
+		oldPeer, _ := r.selectWorstPeer(target)
+		if oldPeer == nil {
+			return nil
+		}
 
-	// return r.checkBestReplacement(region)
+		return newRemovePeerOp(target.getID(), oldPeer)
+	}
 
-	return nil
+	return r.checkBestReplacement(target)
 }
 
 func (r *replicaChecker) checkDownPeer(cell *cellRuntimeInfo) Operator {
@@ -106,6 +106,34 @@ func (r *replicaChecker) checkOfflinePeer(cell *cellRuntimeInfo) Operator {
 	return nil
 }
 
+// selectWorstPeer returns the worst peer in the cell.
+func (r *replicaChecker) selectWorstPeer(cell *cellRuntimeInfo, filters ...Filter) (*meta.Peer, float64) {
+	var (
+		worstStore *storeRuntimeInfo
+		worstScore float64
+	)
+
+	// Select the store with lowest distinct score.
+	// If the scores are the same, select the store with maximal cell score.
+	stores := r.cache.getCellStores(cell)
+	for _, store := range stores {
+		if filterSource(store, filters) {
+			continue
+		}
+		score := r.cfg.getDistinctScore(stores, store)
+		if worstStore == nil || compareStoreScore(r.cfg, store, score, worstStore, worstScore) < 0 {
+			worstStore = store
+			worstScore = score
+		}
+	}
+
+	if worstStore == nil || filterSource(worstStore, r.filters) {
+		return nil, 0
+	}
+
+	return cell.getStorePeer(worstStore.getID()), worstScore
+}
+
 // selectBestPeer returns the best peer in other stores.
 func (r *replicaChecker) selectBestPeer(target *cellRuntimeInfo, filters ...Filter) (*meta.Peer, float64) {
 	// Add some must have filters.
@@ -143,6 +171,32 @@ func (r *replicaChecker) selectBestPeer(target *cellRuntimeInfo, filters ...Filt
 		return nil, 0
 	}
 	return &newPeer, bestScore
+}
+
+func (r *replicaChecker) checkBestReplacement(cell *cellRuntimeInfo) Operator {
+	oldPeer, oldScore := r.selectWorstPeer(cell)
+	if oldPeer == nil {
+		return nil
+	}
+	newPeer, newScore := r.selectBestReplacement(cell, oldPeer)
+	if newPeer == nil {
+		return nil
+	}
+	// Make sure the new peer is better than the old peer.
+	if newScore <= oldScore {
+		return nil
+	}
+	return newTransferPeerAggregationOp(cell, oldPeer, newPeer)
+}
+
+// selectBestReplacement returns the best peer to replace the cell peer.
+func (r *replicaChecker) selectBestReplacement(cell *cellRuntimeInfo, peer *meta.Peer) (*meta.Peer, float64) {
+	// selectBestReplacement returns the best peer to replace the cell peer.
+	// Get a new cell without the peer we are going to replace.
+	newCell := cell.clone()
+	newCell.removeStorePeer(peer.StoreID)
+
+	return r.selectBestPeer(newCell, newExcludedFilter(nil, cell.getStoreIDs()))
 }
 
 // getDistinctScore returns the score that the other is distinct from the stores.

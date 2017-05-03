@@ -109,6 +109,17 @@ func (cc *cellRuntimeInfo) getStorePeer(storeID uint64) *metapb.Peer {
 	return nil
 }
 
+func (cc *cellRuntimeInfo) removeStorePeer(storeID uint64) {
+	var peers []*metapb.Peer
+	for _, peer := range cc.getPeers() {
+		if peer.StoreID != storeID {
+			peers = append(peers, peer)
+		}
+	}
+
+	cc.cell.Peers = peers
+}
+
 func (cc *cellRuntimeInfo) getPendingPeer(peerID uint64) *metapb.Peer {
 	for _, peer := range cc.pendingPeers {
 		if peer.ID == peerID {
