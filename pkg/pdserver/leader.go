@@ -36,10 +36,14 @@ func (s *Server) startLeaderLoop() {
 
 		leader, err := s.store.GetCurrentLeader()
 		if err != nil {
-			log.Errorf("leader-loop: get current leader failure, errors:\n %+v",
-				err)
-			time.Sleep(loopInterval)
-			continue
+			if !s.callStop {
+				log.Errorf("leader-loop: get current leader failure, errors:\n %+v",
+					err)
+				time.Sleep(loopInterval)
+				continue
+			} else {
+				return
+			}
 		}
 
 		if leader != nil {

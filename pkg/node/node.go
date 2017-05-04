@@ -65,7 +65,7 @@ func (n *Node) Start() {
 	bootstrapped := n.checkClusterBootstrapped()
 	storeID := n.checkStore()
 
-	if storeID == 0 {
+	if storeID == pd.ZeroID {
 		storeID = n.bootstrapStore()
 	} else if !bootstrapped {
 		log.Fatalf(`bootstrap: store is not empty, but the cluster is not bootstrapped,
@@ -146,6 +146,5 @@ func newStore(cfg *Cfg) metapb.Store {
 		Address: addr,
 		Lables:  cfg.StoreLables,
 		State:   metapb.UP,
-		// Metric:  n.getCurrentStoreMetrics(),
 	}
 }

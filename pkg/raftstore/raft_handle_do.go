@@ -28,6 +28,7 @@ import (
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
 	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
 	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
+	"github.com/deepfabric/elasticell/pkg/pd"
 	"github.com/deepfabric/elasticell/pkg/util"
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
@@ -402,7 +403,7 @@ func (s *Store) doApplyConfChange(cellID uint64, cp *changePeer) {
 	}
 
 	pr.rn.ApplyConfChange(cp.confChange)
-	if cp.confChange.NodeID == 0 {
+	if cp.confChange.NodeID == pd.ZeroID {
 		// Apply failed, skip.
 		return
 	}

@@ -24,6 +24,7 @@ import (
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
 	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
+	"github.com/deepfabric/elasticell/pkg/pd"
 	"github.com/deepfabric/elasticell/pkg/util"
 	"golang.org/x/net/context"
 )
@@ -85,7 +86,7 @@ func doReplicate(store *Store, cellID, peerID uint64) (*PeerReplicate, error) {
 }
 
 func newPeerReplicate(store *Store, cell *metapb.Cell, peerID uint64) (*PeerReplicate, error) {
-	if peerID == 0 {
+	if peerID == pd.ZeroID {
 		return nil, fmt.Errorf("invalid peer id: %d", peerID)
 	}
 

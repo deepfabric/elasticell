@@ -14,6 +14,7 @@
 package pdserver
 
 import (
+	"bytes"
 	"fmt"
 	"io/ioutil"
 	"sync"
@@ -23,32 +24,97 @@ import (
 	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
 )
 
-const (
-	addrClient = "http://127.0.0.1:10000"
-	addrPeer   = "http://127.0.0.1:10001"
-	addrGRPC   = "127.0.0.1:10002"
+var (
+	testPort        = 10000
+	baseAddrPattern = "127.0.0.1:%d"
+	httpAddrPattern = "http://127.0.0.1:%d"
+	testNamePattern = "test-pd-%d"
 )
 
-// NewTestSingleServer returns a test single server
-func NewTestSingleServer() *Server {
-	return NewServer(NewTestSingleConfig())
+func getTestPort() int {
+	testPort++
+	return testPort
 }
 
-// NewTestSingleConfig returns a test single server config
-func NewTestSingleConfig() *Cfg {
+func genBaseAddr() string {
+	return fmt.Sprintf(baseAddrPattern, getTestPort())
+}
+
+func genHTTPAddr() string {
+	return fmt.Sprintf(httpAddrPattern, getTestPort())
+}
+
+func getTestName(index int) string {
+	return fmt.Sprintf(testNamePattern, index)
+}
+
+func newTestSingleServer() *Server {
+	name := "test-single-pd"
+	addrPeer := genHTTPAddr()
+	addrClient := genHTTPAddr()
+	addrRPC := genBaseAddr()
+	return NewServer(newTestConfig(name,
+		addrClient,
+		addrPeer,
+		addrRPC,
+		fmt.Sprintf("%s=%s", name, addrPeer)))
+}
+
+func newTestMultiServers(count int) []*Server {
+	var servers []*Server
+	var names []string
+	var addrClients []string
+	var addrPeers []string
+	var addrRPCs []string
+
+	buf := bytes.NewBufferString("")
+
+	for index := 0; index < count; index++ {
+		name := getTestName(index)
+		addrPeer := genHTTPAddr()
+		addrClient := genHTTPAddr()
+		addrRPC := genBaseAddr()
+
+		names = append(names, name)
+		addrClients = append(addrClients, addrClient)
+		addrPeers = append(addrPeers, addrPeer)
+		addrRPCs = append(addrRPCs, addrRPC)
+
+		buf.WriteString(fmt.Sprintf("%s=%s", name, addrPeer))
+		if index < count-1 {
+			buf.WriteString(",")
+		}
+	}
+
+	initCluster := string(buf.Bytes())
+
+	for index := 0; index < count; index++ {
+		cfg := newTestConfig(names[index],
+			addrClients[index],
+			addrPeers[index],
+			addrRPCs[index],
+			initCluster)
+
+		servers = append(servers, NewServer(cfg))
+	}
+
+	return servers
+}
+
+func newTestConfig(name, addrClient, addrPeer, addrRPC, initCluster string) *Cfg {
 	cfg := &Cfg{
 		EmbedEtcd: &EmbedEtcdCfg{},
 		Schedule:  &ScheduleCfg{},
 	}
 
-	cfg.Name = "test_pd"
+	cfg.Name = name
 	cfg.DataDir, _ = ioutil.TempDir("/tmp", cfg.Name)
 	cfg.LeaseSecsTTL = 1
-	cfg.RPCAddr = addrGRPC
+	cfg.RPCAddr = addrRPC
 
 	cfg.EmbedEtcd.ClientUrls = addrClient
 	cfg.EmbedEtcd.PeerUrls = addrPeer
-	cfg.EmbedEtcd.InitialCluster = fmt.Sprintf("test_pd=%s", cfg.EmbedEtcd.PeerUrls)
+	cfg.EmbedEtcd.InitialCluster = initCluster
 	cfg.EmbedEtcd.InitialClusterState = "new"
 
 	cfg.Schedule.MaxReplicas = 3

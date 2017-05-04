@@ -25,6 +25,7 @@ import (
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
 	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
 	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
+	"github.com/deepfabric/elasticell/pkg/pd"
 	"github.com/deepfabric/elasticell/pkg/util"
 	"golang.org/x/net/context"
 )
@@ -525,7 +526,7 @@ func (pr *PeerReplicate) sendRaftMsg(msg raftpb.Message) error {
 
 	sendMsg.FromPeer = pr.peer
 	sendMsg.ToPeer, _ = pr.store.peerCache.get(msg.To)
-	if sendMsg.ToPeer.ID == 0 {
+	if sendMsg.ToPeer.ID == pd.ZeroID {
 		return fmt.Errorf("can not found peer<%d>", msg.To)
 	}
 

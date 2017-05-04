@@ -125,7 +125,7 @@ func newHealthFilter(cfg *Cfg) *healthFilter {
 }
 
 func (f *healthFilter) filter(store *storeRuntimeInfo) bool {
-	if store.status.stats.IsBusy {
+	if store.status == nil || store.status.stats.IsBusy {
 		return true
 	}
 

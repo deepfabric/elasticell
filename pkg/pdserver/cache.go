@@ -18,6 +18,7 @@ import (
 
 	"github.com/deepfabric/elasticell/pkg/log"
 	meta "github.com/deepfabric/elasticell/pkg/pb/metapb"
+	"github.com/deepfabric/elasticell/pkg/pd"
 	"github.com/pkg/errors"
 )
 
@@ -140,7 +141,7 @@ func (c *cache) foreachStore(fn func(*storeRuntimeInfo) (bool, error)) error {
 
 func (c *cache) searchCell(startKey []byte) *cellRuntimeInfo {
 	cell := c.cc.tree.Search(startKey)
-	if cell.ID == 0 {
+	if cell.ID == pd.ZeroID {
 		return nil
 	}
 
@@ -266,7 +267,7 @@ func (cc *cellCache) addCell(origin *cellRuntimeInfo) {
 	cc.tree.Update(origin.cell)
 	cc.cells[origin.getID()] = origin
 
-	if origin.leader.ID <= 0 {
+	if origin.leader == nil || origin.leader.ID == pd.ZeroID {
 		return
 	}
 

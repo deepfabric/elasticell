@@ -9,6 +9,7 @@ import (
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
+	"github.com/deepfabric/elasticell/pkg/pd"
 	"github.com/pkg/errors"
 )
 
@@ -98,7 +99,7 @@ func (s *Server) cellHeartbeat(req *pdpb.CellHeartbeatReq) (*pdpb.CellHeartbeatR
 		return nil, errRPCReq
 	}
 
-	if req.Cell.ID == 0 {
+	if req.Cell.ID == pd.ZeroID {
 		return nil, errRPCReq
 	}
 
@@ -158,28 +159,24 @@ func (s *Server) checkForBootstrap(req *pdpb.BootstrapClusterReq) (metapb.Store,
 	clusterID := s.GetClusterID()
 
 	store := req.GetStore()
-	if store.ID == 0 {
+	if store.ID == pd.ZeroID {
 		return metapb.Store{}, metapb.Cell{}, errors.New("invalid zero store id for bootstrap cluster")
 	}
 
 	cell := req.GetCell()
-	if cell.ID == 0 {
+	if cell.ID == pd.ZeroID {
 		return metapb.Store{}, metapb.Cell{}, errors.New("invalid zero cell id for bootstrap cluster")
 	} else if len(cell.Peers) == 0 || len(cell.Peers) != 1 {
 		return metapb.Store{}, metapb.Cell{}, errors.Errorf("invalid first cell peer count must be 1, count=<%d> clusterID=<%d>",
 			len(cell.Peers),
 			clusterID)
-	} else if cell.Peers[0].ID == 0 {
+	} else if cell.Peers[0].ID == pd.ZeroID {
 		return metapb.Store{}, metapb.Cell{}, errors.New("invalid zero peer id for bootstrap cluster")
 	} else if cell.Peers[0].StoreID != store.ID {
 		return metapb.Store{}, metapb.Cell{}, errors.Errorf("invalid cell store id for bootstrap cluster, cell=<%d> expect=<%d> clusterID=<%d>",
 			cell.Peers[0].StoreID,
 			store.ID,
 			clusterID)
-	} else if cell.Peers[0].ID != cell.ID {
-		return metapb.Store{}, metapb.Cell{}, errors.Errorf("first cell peer must be self, self=<%d> peer=<%d>",
-			cell.ID,
-			cell.Peers[0].ID)
 	}
 
 	return store, cell, nil
@@ -275,7 +272,7 @@ func (c *CellCluster) doPutStore(store metapb.Store) error {
 	c.mux.Lock()
 	defer c.mux.Unlock()
 
-	if store.ID == 0 {
+	if store.ID == pd.ZeroID {
 		return fmt.Errorf("invalid for put store: <%+v>", store)
 	}
 

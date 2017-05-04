@@ -67,7 +67,7 @@ func (s *storeRuntimeInfo) isTombstone() bool {
 }
 
 func (s *storeRuntimeInfo) isBlocked() bool {
-	return s.status.blocked
+	return s.status == nil || s.status.blocked
 }
 
 func (s *storeRuntimeInfo) downTime() time.Duration {

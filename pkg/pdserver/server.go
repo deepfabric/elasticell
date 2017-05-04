@@ -127,7 +127,7 @@ func (s *Server) initCluster() {
 
 	log.Infof("bootstrap: get cluster id, clusterID=<%d>", clusterID)
 
-	if clusterID == 0 {
+	if clusterID == pd.ZeroID {
 		clusterID, err = s.store.CreateFirstClusterID()
 		if err != nil {
 			log.Fatalf("bootstrap: create first cluster id failure, errors:\n %+v", err)
