@@ -26,7 +26,7 @@ import (
 )
 
 // GetCurrentLeader return current leader
-func (s *Store) GetCurrentLeader() (*pdpb.Leader, error) {
+func (s *pdStore) GetCurrentLeader() (*pdpb.Leader, error) {
 	resp, err := s.getValue(pdLeaderPath)
 	if err != nil {
 		return nil, errors.Wrap(err, "")
@@ -46,7 +46,7 @@ func (s *Store) GetCurrentLeader() (*pdpb.Leader, error) {
 }
 
 // ResignLeader delete leader itself and let others start a new election again.
-func (s *Store) ResignLeader(leaderSignature string) error {
+func (s *pdStore) ResignLeader(leaderSignature string) error {
 	resp, err := s.leaderTxn(leaderSignature).Then(clientv3.OpDelete(pdLeaderPath)).Commit()
 	if err != nil {
 		return errors.Wrap(err, "")
@@ -62,7 +62,7 @@ func (s *Store) ResignLeader(leaderSignature string) error {
 // WatchLeader watch leader,
 // this funcation will return unitl the leader's lease is timeout
 // or server closed
-func (s *Store) WatchLeader() {
+func (s *pdStore) WatchLeader() {
 	watcher := clientv3.NewWatcher(s.client)
 	defer watcher.Close()
 
@@ -92,7 +92,7 @@ func (s *Store) WatchLeader() {
 
 // CampaignLeader is for leader election
 // if we are win the leader election, the enableLeaderFun will call
-func (s *Store) CampaignLeader(leaderSignature string, leaderLeaseTTL int64, enableLeaderFun func()) error {
+func (s *pdStore) CampaignLeader(leaderSignature string, leaderLeaseTTL int64, enableLeaderFun func()) error {
 	lessor := clientv3.NewLease(s.client)
 	defer lessor.Close()
 
@@ -144,14 +144,14 @@ func (s *Store) CampaignLeader(leaderSignature string, leaderLeaseTTL int64, ena
 
 // txn returns an etcd client transaction wrapper.
 // The wrapper will set a request timeout to the context and log slow transactions.
-func (s *Store) txn() clientv3.Txn {
+func (s *pdStore) txn() clientv3.Txn {
 	return newSlowLogTxn(s.client)
 }
 
-func (s *Store) leaderTxn(leaderSignature string, cs ...clientv3.Cmp) clientv3.Txn {
+func (s *pdStore) leaderTxn(leaderSignature string, cs ...clientv3.Cmp) clientv3.Txn {
 	return newSlowLogTxn(s.client).If(append(cs, s.leaderCmp(leaderSignature))...)
 }
 
-func (s *Store) leaderCmp(leaderSignature string) clientv3.Cmp {
+func (s *pdStore) leaderCmp(leaderSignature string) clientv3.Cmp {
 	return clientv3.Compare(clientv3.Value(pdLeaderPath), "=", leaderSignature)
 }

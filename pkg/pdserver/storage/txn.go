@@ -3,11 +3,10 @@ package storage
 import (
 	"time"
 
-	context "golang.org/x/net/context"
-
 	"github.com/coreos/etcd/clientv3"
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/pkg/errors"
+	"golang.org/x/net/context"
 )
 
 // slowLogTxn wraps etcd transaction and log slow one.

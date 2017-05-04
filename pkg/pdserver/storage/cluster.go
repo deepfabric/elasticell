@@ -33,7 +33,7 @@ var (
 )
 
 // GetCurrentClusterMembers returns members in current etcd cluster
-func (s *Store) GetCurrentClusterMembers() (*clientv3.MemberListResponse, error) {
+func (s *pdStore) GetCurrentClusterMembers() (*clientv3.MemberListResponse, error) {
 	ctx, cancel := context.WithTimeout(s.client.Ctx(), DefaultRequestTimeout)
 	members, err := s.client.MemberList(ctx)
 	cancel()
@@ -43,7 +43,7 @@ func (s *Store) GetCurrentClusterMembers() (*clientv3.MemberListResponse, error)
 
 // GetClusterID returns current cluster id
 // if cluster is not init, return 0
-func (s *Store) GetClusterID() (uint64, error) {
+func (s *pdStore) GetClusterID() (uint64, error) {
 	resp, err := s.get(pdClusterIDPath, clientv3.WithFirstCreate()...)
 
 	if len(resp.Kvs) == 0 {
@@ -70,7 +70,7 @@ func (s *Store) GetClusterID() (uint64, error) {
 // More than one pd instance do this operation at the first time,
 // only one can succ,
 // others will get the committed id.
-func (s *Store) CreateFirstClusterID() (uint64, error) {
+func (s *pdStore) CreateFirstClusterID() (uint64, error) {
 	ctx, cancel := context.WithTimeout(s.client.Ctx(), DefaultTimeout)
 	defer cancel()
 
@@ -108,7 +108,7 @@ func (s *Store) CreateFirstClusterID() (uint64, error) {
 }
 
 // SetClusterBootstrapped set cluster bootstrapped flag, only one can succ.
-func (s *Store) SetClusterBootstrapped(clusterID uint64, cluster metapb.Cluster, store metapb.Store, cell metapb.Cell) (bool, error) {
+func (s *pdStore) SetClusterBootstrapped(clusterID uint64, cluster metapb.Cluster, store metapb.Store, cell metapb.Cell) (bool, error) {
 	ctx, cancel := context.WithTimeout(s.client.Ctx(), DefaultTimeout)
 	defer cancel()
 
@@ -156,7 +156,7 @@ func (s *Store) SetClusterBootstrapped(clusterID uint64, cluster metapb.Cluster,
 }
 
 // LoadClusterMeta returns cluster meta info
-func (s *Store) LoadClusterMeta(clusterID uint64) (*metapb.Cluster, error) {
+func (s *pdStore) LoadClusterMeta(clusterID uint64) (*metapb.Cluster, error) {
 	key := s.getClusterMetaKey(clusterID)
 
 	data, err := s.getValue(key)
@@ -175,7 +175,7 @@ func (s *Store) LoadClusterMeta(clusterID uint64) (*metapb.Cluster, error) {
 
 // LoadStoreMeta returns load error,
 // do funcation will call on each loaded store meta info
-func (s *Store) LoadStoreMeta(clusterID uint64, limit int64, do func(metapb.Store)) error {
+func (s *pdStore) LoadStoreMeta(clusterID uint64, limit int64, do func(metapb.Store)) error {
 	startID := uint64(0)
 	endStore := s.getStoreMetaKey(clusterID, endID)
 	withRange := clientv3.WithRange(endStore)
@@ -210,7 +210,7 @@ func (s *Store) LoadStoreMeta(clusterID uint64, limit int64, do func(metapb.Stor
 
 // LoadCellMeta returns load error,
 // do funcation will call on each loaded cell meta info
-func (s *Store) LoadCellMeta(clusterID uint64, limit int64, do func(metapb.Cell)) error {
+func (s *pdStore) LoadCellMeta(clusterID uint64, limit int64, do func(metapb.Cell)) error {
 	startID := uint64(0)
 	endCellKey := s.getCellMetaKey(clusterID, endID)
 	withRange := clientv3.WithRange(endCellKey)
@@ -245,7 +245,7 @@ func (s *Store) LoadCellMeta(clusterID uint64, limit int64, do func(metapb.Cell)
 }
 
 // SetStoreMeta returns nil if store is add or update succ
-func (s *Store) SetStoreMeta(clusterID uint64, store metapb.Store) error {
+func (s *pdStore) SetStoreMeta(clusterID uint64, store metapb.Store) error {
 	key := s.getStoreMetaKey(clusterID, store.ID)
 	meta, err := store.Marshal()
 	if err != nil {
@@ -256,7 +256,7 @@ func (s *Store) SetStoreMeta(clusterID uint64, store metapb.Store) error {
 }
 
 // SetCellMeta returns nil if cell is add or update succ
-func (s *Store) SetCellMeta(clusterID uint64, cell metapb.Cell) error {
+func (s *pdStore) SetCellMeta(clusterID uint64, cell metapb.Cell) error {
 	cellKey := s.getCellMetaKey(clusterID, cell.ID)
 	meta, err := cell.Marshal()
 	if err != nil {
@@ -266,16 +266,16 @@ func (s *Store) SetCellMeta(clusterID uint64, cell metapb.Cell) error {
 	return s.save(cellKey, string(meta))
 }
 
-func (s *Store) getClusterMetaKey(clusterID uint64) string {
+func (s *pdStore) getClusterMetaKey(clusterID uint64) string {
 	return fmt.Sprintf("%s/%d", pdClusterRootPath, clusterID)
 }
 
-func (s *Store) getStoreMetaKey(clusterID, storeID uint64) string {
+func (s *pdStore) getStoreMetaKey(clusterID, storeID uint64) string {
 	baseKey := s.getClusterMetaKey(clusterID)
 	return fmt.Sprintf("%s/stores/%020d", baseKey, storeID)
 }
 
-func (s *Store) getCellMetaKey(clusterID, cellID uint64) string {
+func (s *pdStore) getCellMetaKey(clusterID, cellID uint64) string {
 	baseKey := s.getClusterMetaKey(clusterID)
 	return fmt.Sprintf("%s/cells/%020d", baseKey, cellID)
 }

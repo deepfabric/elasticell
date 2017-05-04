@@ -22,7 +22,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-func (s *Store) getValue(key string, opts ...clientv3.OpOption) ([]byte, error) {
+func (s *pdStore) getValue(key string, opts ...clientv3.OpOption) ([]byte, error) {
 	resp, err := s.get(key, opts...)
 	if err != nil {
 		return nil, errors.Wrap(err, "")
@@ -37,7 +37,7 @@ func (s *Store) getValue(key string, opts ...clientv3.OpOption) ([]byte, error) 
 	return resp.Kvs[0].Value, nil
 }
 
-func (s *Store) get(key string, opts ...clientv3.OpOption) (*clientv3.GetResponse, error) {
+func (s *pdStore) get(key string, opts ...clientv3.OpOption) (*clientv3.GetResponse, error) {
 	ctx, cancel := context.WithTimeout(s.client.Ctx(), DefaultRequestTimeout)
 	defer cancel()
 
@@ -59,7 +59,7 @@ func (s *Store) get(key string, opts ...clientv3.OpOption) (*clientv3.GetRespons
 	return resp, nil
 }
 
-func (s *Store) save(key, value string) error {
+func (s *pdStore) save(key, value string) error {
 	resp, err := s.txn().Then(clientv3.OpPut(key, value)).Commit()
 	if err != nil {
 		return errors.Wrap(err, "")

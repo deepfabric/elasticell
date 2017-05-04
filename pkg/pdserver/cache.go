@@ -26,7 +26,7 @@ const (
 	batchLimit = 10000
 )
 
-func newCache(clusterID uint64, store *storage.Store, allocator *idAllocator) *cache {
+func newCache(clusterID uint64, store storage.Store, allocator *idAllocator) *cache {
 	c := new(cache)
 	c.clusterID = clusterID
 	c.sc = newStoreCache()
@@ -53,7 +53,7 @@ type cache struct {
 	cluster   *clusterRuntime
 	sc        *storeCache
 	cc        *cellCache
-	store     *storage.Store
+	store     storage.Store
 	allocator *idAllocator
 }
 

@@ -39,7 +39,7 @@ type Cfg struct {
 	// EmbedEtcd is the embed ectd configuration
 	EmbedEtcd *EmbedEtcdCfg `json:"embedEtcd"`
 	// Schedule is the Schedule configuration
-	Schedule *ScheduleConfig `json:"schedule"`
+	Schedule *ScheduleCfg `json:"schedule"`
 }
 
 // GetCfg get cfg from command

@@ -35,7 +35,7 @@ type Server struct {
 	// rpc fields
 	rpcServer *grpc.Server
 
-	store *storage.Store
+	store storage.Store
 
 	// cluster fields
 	isLeaderValue   int64
@@ -140,7 +140,9 @@ func (s *Server) initCluster() {
 
 	s.clusterID = clusterID
 
-	s.idAlloc = newIDAllocator(s)
+	s.idAlloc = newIDAllocator(s.store, func() string {
+		return s.leaderSignature
+	})
 }
 
 func (s *Server) isClosed() bool {

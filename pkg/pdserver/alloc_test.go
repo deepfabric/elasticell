@@ -14,35 +14,29 @@
 package pdserver
 
 import (
-	"io"
+	"testing"
+
 	"time"
 
-	"github.com/coreos/pkg/capnslog"
+	. "github.com/pingcap/check"
 )
 
-// RedirectEmbedEctdLog because of our used embed ectd,
-// so we need redirect ectd log to spec.
-func RedirectEmbedEctdLog(w io.Writer) {
-	capnslog.SetFormatter(capnslog.NewPrettyFormatter(w, false))
-}
+func Test(t *testing.T) { TestingT(t) }
 
-func minUint64(a, b uint64) uint64 {
-	if a < b {
-		return a
-	}
-	return b
-}
+type testAllocSuite struct{}
 
-func maxUint64(a, b uint64) uint64 {
-	if a > b {
-		return a
-	}
-	return b
-}
+var _ = Suite(&testAllocSuite{})
 
-func minDuration(a, b time.Duration) time.Duration {
-	if a < b {
-		return a
-	}
-	return b
+func (s *testAllocSuite) TestAlloc(c *C) {
+	svr := NewTestSingleServer()
+	svr.Start()
+	defer svr.Stop()
+
+	time.Sleep(time.Second * 1)
+
+	alloc := svr.idAlloc
+
+	id, err := alloc.newID()
+	c.Assert(err, IsNil)
+	c.Assert(id, Equals, uint64(1))
 }

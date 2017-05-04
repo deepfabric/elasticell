@@ -17,8 +17,8 @@ import (
 	"time"
 )
 
-// ScheduleConfig is the schedule configuration.
-type ScheduleConfig struct {
+// ScheduleCfg is the schedule configuration.
+type ScheduleCfg struct {
 	// MaxReplicas is the number of replicas for each cell.
 	MaxReplicas uint32 `json:"maxReplicas"`
 	// The label keys specified the location of a store.
@@ -40,6 +40,6 @@ type ScheduleConfig struct {
 	ReplicaScheduleLimit uint64 `json:"replicaScheduleLimit"`
 }
 
-func (c *ScheduleConfig) getMaxStoreDownTimeDuration() time.Duration {
+func (c *ScheduleCfg) getMaxStoreDownTimeDuration() time.Duration {
 	return time.Duration(c.MaxStoreDownTimeMs) * time.Millisecond
 }

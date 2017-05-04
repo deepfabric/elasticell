@@ -19,7 +19,7 @@ import (
 )
 
 // GetID returns current id
-func (s *Store) GetID() (uint64, error) {
+func (s *pdStore) GetID() (uint64, error) {
 	resp, err := s.getValue(pdIDPath)
 	if err != nil {
 		return 0, err
@@ -33,7 +33,7 @@ func (s *Store) GetID() (uint64, error) {
 }
 
 // CreateID create id alloc info.
-func (s *Store) CreateID(leaderSignature string, value uint64) error {
+func (s *pdStore) CreateID(leaderSignature string, value uint64) error {
 	cmp := clientv3.Compare(clientv3.CreateRevision(pdIDPath), "=", 0)
 	op := clientv3.OpPut(pdIDPath, string(util.Uint64ToBytes(value)))
 	resp, err := s.leaderTxn(leaderSignature, cmp).Then(op).Commit()
@@ -50,7 +50,7 @@ func (s *Store) CreateID(leaderSignature string, value uint64) error {
 }
 
 // UpdateID update id for alloc.
-func (s *Store) UpdateID(leaderSignature string, old, value uint64) error {
+func (s *pdStore) UpdateID(leaderSignature string, old, value uint64) error {
 	cmp := clientv3.Compare(clientv3.Value(pdIDPath), "=", string(util.Uint64ToBytes(old)))
 	op := clientv3.OpPut(pdIDPath, string(util.Uint64ToBytes(value)))
 	resp, err := s.leaderTxn(leaderSignature, cmp).Then(op).Commit()

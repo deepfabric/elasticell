@@ -19,6 +19,8 @@ import (
 	"github.com/coreos/etcd/clientv3"
 	"github.com/coreos/etcd/embed"
 	"github.com/deepfabric/elasticell/pkg/log"
+	"github.com/deepfabric/elasticell/pkg/pb/metapb"
+	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
 	"github.com/pkg/errors"
 )
 
@@ -38,19 +40,56 @@ const (
 	pdClusterRootPath  = "/pd/cluster"
 )
 
+// ClusterStore is the store interface for cluster info
+type ClusterStore interface {
+	GetCurrentClusterMembers() (*clientv3.MemberListResponse, error)
+	GetClusterID() (uint64, error)
+	CreateFirstClusterID() (uint64, error)
+	SetClusterBootstrapped(clusterID uint64, cluster metapb.Cluster, store metapb.Store, cell metapb.Cell) (bool, error)
+	LoadClusterMeta(clusterID uint64) (*metapb.Cluster, error)
+	LoadStoreMeta(clusterID uint64, limit int64, do func(metapb.Store)) error
+	LoadCellMeta(clusterID uint64, limit int64, do func(metapb.Cell)) error
+	SetStoreMeta(clusterID uint64, store metapb.Store) error
+	SetCellMeta(clusterID uint64, cell metapb.Cell) error
+}
+
+// LeaderStore is the store interface for leader info
+type LeaderStore interface {
+	CampaignLeader(leaderSignature string, leaderLeaseTTL int64, enableLeaderFun func()) error
+	WatchLeader()
+	ResignLeader(leaderSignature string) error
+	GetCurrentLeader() (*pdpb.Leader, error)
+}
+
+// IDStore is the store interface for id info
+type IDStore interface {
+	GetID() (uint64, error)
+	CreateID(leaderSignature string, value uint64) error
+	UpdateID(leaderSignature string, old, value uint64) error
+}
+
+// Store is the store interface for all pd store info
+type Store interface {
+	ClusterStore
+	IDStore
+	LeaderStore
+
+	Close() error
+}
+
 // Store used for  metedata
-type Store struct {
+type pdStore struct {
 	client *clientv3.Client
 }
 
 // NewStore create a store
-func NewStore(cfg *embed.Config) (*Store, error) {
+func NewStore(cfg *embed.Config) (Store, error) {
 	c, err := initEctdClient(cfg)
 	if err != nil {
 		return nil, err
 	}
 
-	s := new(Store)
+	s := new(pdStore)
 	s.client = c
 	return s, nil
 }
@@ -72,7 +111,7 @@ func initEctdClient(cfg *embed.Config) (*clientv3.Client, error) {
 }
 
 // Close close ectd client
-func (s *Store) Close() error {
+func (s *pdStore) Close() error {
 	if s.client != nil {
 		return s.client.Close()
 	}
