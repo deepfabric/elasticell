@@ -16,7 +16,6 @@ package pdserver
 import (
 	"sync"
 
-	"github.com/deepfabric/elasticell/pkg/pdserver/storage"
 	"github.com/pkg/errors"
 )
 
@@ -26,13 +25,13 @@ const (
 
 type idAllocator struct {
 	mu                sync.Mutex
-	store             storage.Store
+	store             Store
 	leaderSignatureFn func() string
 	base              uint64
 	end               uint64
 }
 
-func newIDAllocator(store storage.Store, leaderSignatureFn func() string) *idAllocator {
+func newIDAllocator(store Store, leaderSignatureFn func() string) *idAllocator {
 	return &idAllocator{
 		mu:                sync.Mutex{},
 		store:             store,

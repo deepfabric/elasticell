@@ -21,7 +21,6 @@ import (
 	"github.com/coreos/etcd/clientv3"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
-	"github.com/deepfabric/elasticell/pkg/pdserver/storage"
 )
 
 const (
@@ -64,7 +63,7 @@ func NewTestSingleConfig() *Cfg {
 }
 
 // NewMockStore returns a mock store
-func NewMockStore() storage.Store {
+func NewMockStore() Store {
 	return &mockStore{}
 }
 

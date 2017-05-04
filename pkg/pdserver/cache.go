@@ -18,7 +18,6 @@ import (
 
 	"github.com/deepfabric/elasticell/pkg/log"
 	meta "github.com/deepfabric/elasticell/pkg/pb/metapb"
-	"github.com/deepfabric/elasticell/pkg/pdserver/storage"
 	"github.com/pkg/errors"
 )
 
@@ -26,7 +25,7 @@ const (
 	batchLimit = 10000
 )
 
-func newCache(clusterID uint64, store storage.Store, allocator *idAllocator) *cache {
+func newCache(clusterID uint64, store Store, allocator *idAllocator) *cache {
 	c := new(cache)
 	c.clusterID = clusterID
 	c.sc = newStoreCache()
@@ -53,7 +52,7 @@ type cache struct {
 	cluster   *clusterRuntime
 	sc        *storeCache
 	cc        *cellCache
-	store     storage.Store
+	store     Store
 	allocator *idAllocator
 }
 

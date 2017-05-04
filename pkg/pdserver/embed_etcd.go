@@ -18,14 +18,12 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-
 	"time"
 
 	"github.com/coreos/etcd/embed"
 	"github.com/coreos/etcd/etcdserver"
 	"github.com/coreos/etcd/pkg/types"
 	"github.com/deepfabric/elasticell/pkg/log"
-	"github.com/deepfabric/elasticell/pkg/pdserver/storage"
 	"github.com/pkg/errors"
 )
 
@@ -71,7 +69,7 @@ func (s *Server) doAfterEmbedEtcdServerReady(cfg *embed.Config) {
 }
 
 func (s *Server) initStore(cfg *embed.Config) {
-	store, err := storage.NewStore(cfg)
+	store, err := NewStore(cfg)
 	if err != nil {
 		log.Fatalf("bootstrap: init store failure, cfg=<%v>, errors:\n %+v",
 			cfg,

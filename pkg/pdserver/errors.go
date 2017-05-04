@@ -18,6 +18,9 @@ import (
 )
 
 var (
+	errMaybeNotLeader = errors.New("may be not leader")
+	errTxnFailed      = errors.New("failed to commit transaction")
+
 	errSchedulerExisted  = errors.New("scheduler is existed")
 	errSchedulerNotFound = errors.New("scheduler is not found")
 )

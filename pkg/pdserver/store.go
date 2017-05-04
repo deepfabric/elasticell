@@ -11,9 +11,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package storage
+package pdserver
 
 import (
+	"context"
 	"time"
 
 	"github.com/coreos/etcd/clientv3"
@@ -114,6 +115,56 @@ func initEctdClient(cfg *embed.Config) (*clientv3.Client, error) {
 func (s *pdStore) Close() error {
 	if s.client != nil {
 		return s.client.Close()
+	}
+
+	return nil
+}
+
+func (s *pdStore) getValue(key string, opts ...clientv3.OpOption) ([]byte, error) {
+	resp, err := s.get(key, opts...)
+	if err != nil {
+		return nil, errors.Wrap(err, "")
+	}
+
+	if n := len(resp.Kvs); n == 0 {
+		return nil, nil
+	} else if n > 1 {
+		return nil, errors.Errorf("invalid get value resp %v, must only one", resp.Kvs)
+	}
+
+	return resp.Kvs[0].Value, nil
+}
+
+func (s *pdStore) get(key string, opts ...clientv3.OpOption) (*clientv3.GetResponse, error) {
+	ctx, cancel := context.WithTimeout(s.client.Ctx(), DefaultRequestTimeout)
+	defer cancel()
+
+	start := time.Now()
+	resp, err := clientv3.NewKV(s.client).Get(ctx, key, opts...)
+	if err != nil {
+		log.Errorf("embed-ectd: read option failure, key=<%s>, errors:\n %+v",
+			key,
+			err)
+		return resp, errors.Wrap(err, "")
+	}
+
+	if cost := time.Since(start); cost > DefaultSlowRequestTime {
+		log.Warnf("embed-ectd: read option is too slow, key=<%s>, cost=<%d>",
+			key,
+			cost)
+	}
+
+	return resp, nil
+}
+
+func (s *pdStore) save(key, value string) error {
+	resp, err := s.txn().Then(clientv3.OpPut(key, value)).Commit()
+	if err != nil {
+		return errors.Wrap(err, "")
+	}
+
+	if !resp.Succeeded {
+		return errors.Wrap(errTxnFailed, "")
 	}
 
 	return nil

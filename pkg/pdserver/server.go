@@ -20,7 +20,6 @@ import (
 	"github.com/coreos/etcd/embed"
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pd"
-	"github.com/deepfabric/elasticell/pkg/pdserver/storage"
 	"google.golang.org/grpc"
 )
 
@@ -35,7 +34,7 @@ type Server struct {
 	// rpc fields
 	rpcServer *grpc.Server
 
-	store storage.Store
+	store Store
 
 	// cluster fields
 	isLeaderValue   int64

@@ -11,13 +11,31 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package storage
+package pdserver
 
 import (
-	"errors"
+	"testing"
+	"time"
+
+	. "github.com/pingcap/check"
 )
 
-var (
-	errMaybeNotLeader = errors.New("may be not leader")
-	errTxnFailed      = errors.New("failed to commit transaction")
-)
+var _testSingleSvr *Server
+
+func startTestSingleServer() {
+	_testSingleSvr = NewTestSingleServer()
+	_testSingleSvr.Start()
+	time.Sleep(time.Second * 1)
+}
+
+func stopTestSingleServer() {
+	if _testSingleSvr != nil {
+		_testSingleSvr.Stop()
+	}
+}
+
+func TestServer(t *testing.T) {
+	startTestSingleServer()
+	defer stopTestSingleServer()
+	TestingT(t)
+}

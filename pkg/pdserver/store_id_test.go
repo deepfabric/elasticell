@@ -17,12 +17,22 @@ import (
 	. "github.com/pingcap/check"
 )
 
-type testAllocSuite struct{}
+var _ = Suite(&testIDStoreSuite{})
 
-var _ = Suite(&testAllocSuite{})
+type testIDStoreSuite struct {
+	store IDStore
+}
 
-func (s *testAllocSuite) TestAlloc(c *C) {
-	alloc := _testSingleSvr.idAlloc
-	_, err := alloc.newID()
+func (s *testIDStoreSuite) SetUpSuite(c *C) {
+	s.store = _testSingleSvr.store
+}
+
+func (s *testIDStoreSuite) TearDownSuite(c *C) {
+
+}
+
+func (s *testIDStoreSuite) TestGet(c *C) {
+	id, err := s.store.GetID()
 	c.Assert(err, IsNil)
+	c.Assert(id, Greater, uint64(0))
 }
