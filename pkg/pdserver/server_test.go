@@ -17,7 +17,6 @@ import (
 	"context"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
@@ -28,9 +27,8 @@ import (
 var _testSingleSvr *Server
 
 func startTestSingleServer() {
-	_testSingleSvr = newTestSingleServer()
+	_testSingleSvr = NewTestSingleServer()
 	_testSingleSvr.Start()
-	time.Sleep(time.Second * 1)
 }
 
 func stopTestSingleServer() {
@@ -53,13 +51,28 @@ type testServerSuite struct {
 	client  *pd.Client
 }
 
-func (s *testServerSuite) SetUpSuite(c *C) {
-	s.count = 3
-	s.servers = newTestMultiServers(s.count)
+func (s *testServerSuite) stopMultiPDServers(c *C) {
+	if s.client != nil {
+		s.client.Close()
+		s.client = nil
+	}
 
+	if s.servers != nil {
+		for _, s := range s.servers {
+			s.Stop()
+		}
+
+		s.servers = nil
+	}
+}
+
+func (s *testServerSuite) restartMultiPDServer(c *C, count int) {
+	s.stopMultiPDServers(c)
+
+	s.servers = NewTestMultiServers(count)
 	var addrs []string
 	var wg sync.WaitGroup
-	for index := 0; index < s.count; index++ {
+	for index := 0; index < count; index++ {
 		addrs = append(addrs, s.servers[index].cfg.RPCAddr)
 		wg.Add(1)
 		go func(index int) {
@@ -69,44 +82,25 @@ func (s *testServerSuite) SetUpSuite(c *C) {
 	}
 
 	wg.Wait()
-	time.Sleep(time.Second * 5)
 
 	var err error
 	s.client, err = pd.NewClient("test-pd-cli", addrs...)
 	c.Assert(err, IsNil)
 }
 
+func (s *testServerSuite) SetUpSuite(c *C) {
+
+}
+
 func (s *testServerSuite) TearDownSuite(c *C) {
-	if s.client != nil {
-		s.client.Close()
-	}
-
-	var wg sync.WaitGroup
-	for index := 0; index < s.count; index++ {
-		wg.Add(1)
-		go func(index int) {
-			defer wg.Done()
-			s.servers[index].Stop()
-		}(index)
-	}
-	wg.Wait()
+	s.stopMultiPDServers(c)
 }
 
-func (s *testServerSuite) TestServerLeaderCount(c *C) {
-	leaderCount := 0
-
-	for _, svr := range s.servers {
-		if svr.IsLeader() {
-			leaderCount++
-		}
-	}
-
-	c.Assert(leaderCount, Equals, 1)
-}
-
-func (s *testServerSuite) TestServerBootstrap(c *C) {
+func (s *testServerSuite) bootstrapCluster() (*pdpb.BootstrapClusterRsp, error) {
 	rsp, err := s.client.AllocID(context.TODO(), &pdpb.AllocIDReq{})
-	c.Assert(err, IsNil)
+	if err != nil {
+		return nil, err
+	}
 
 	var lables []metapb.Label
 	lables = append(lables, metapb.Label{
@@ -122,23 +116,39 @@ func (s *testServerSuite) TestServerBootstrap(c *C) {
 	}
 
 	rsp, err = s.client.AllocID(context.TODO(), &pdpb.AllocIDReq{})
-	c.Assert(err, IsNil)
+	if err != nil {
+		return nil, err
+	}
+
 	peer := metapb.Peer{
 		ID:      rsp.ID,
 		StoreID: store.ID,
 	}
 
 	rsp, err = s.client.AllocID(context.TODO(), &pdpb.AllocIDReq{})
-	c.Assert(err, IsNil)
+	if err != nil {
+		return nil, err
+	}
+
 	cell := metapb.Cell{
 		ID:    rsp.ID,
 		Peers: []*metapb.Peer{&peer},
 	}
 
-	brsp, err := s.client.BootstrapCluster(context.TODO(), &pdpb.BootstrapClusterReq{
+	return s.client.BootstrapCluster(context.TODO(), &pdpb.BootstrapClusterReq{
 		Store: store,
 		Cell:  cell,
 	})
+}
+
+func (s *testServerSuite) TestServerBootstrap(c *C) {
+	s.restartMultiPDServer(c, 3)
+	rsp, err := s.bootstrapCluster()
+
 	c.Assert(err, IsNil)
-	c.Assert(brsp.AlreadyBootstrapped, IsFalse)
+	c.Assert(rsp.AlreadyBootstrapped, IsFalse)
+
+	rsp, err = s.bootstrapCluster()
+	c.Assert(err, IsNil)
+	c.Assert(rsp.AlreadyBootstrapped, IsTrue)
 }

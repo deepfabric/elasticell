@@ -17,11 +17,6 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
-	"sync"
-
-	"github.com/coreos/etcd/clientv3"
-	"github.com/deepfabric/elasticell/pkg/pb/metapb"
-	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
 )
 
 var (
@@ -48,7 +43,8 @@ func getTestName(index int) string {
 	return fmt.Sprintf(testNamePattern, index)
 }
 
-func newTestSingleServer() *Server {
+// NewTestSingleServer returns a single pd server
+func NewTestSingleServer() *Server {
 	name := "test-single-pd"
 	addrPeer := genHTTPAddr()
 	addrClient := genHTTPAddr()
@@ -60,7 +56,8 @@ func newTestSingleServer() *Server {
 		fmt.Sprintf("%s=%s", name, addrPeer)))
 }
 
-func newTestMultiServers(count int) []*Server {
+// NewTestMultiServers returns multi pd server
+func NewTestMultiServers(count int) []*Server {
 	var servers []*Server
 	var names []string
 	var addrClients []string
@@ -126,89 +123,4 @@ func newTestConfig(name, addrClient, addrPeer, addrRPC, initCluster string) *Cfg
 	cfg.Schedule.ReplicaScheduleLimit = 16
 
 	return cfg
-}
-
-// NewMockStore returns a mock store
-func NewMockStore() Store {
-	return &mockStore{}
-}
-
-type mockStore struct {
-	sync.RWMutex
-
-	id uint64
-}
-
-func (s *mockStore) GetCurrentClusterMembers() (*clientv3.MemberListResponse, error) {
-	return nil, nil
-}
-
-func (s *mockStore) GetClusterID() (uint64, error) {
-	return 0, nil
-}
-
-func (s *mockStore) CreateFirstClusterID() (uint64, error) {
-	return 0, nil
-}
-
-func (s *mockStore) SetClusterBootstrapped(clusterID uint64, cluster metapb.Cluster, store metapb.Store, cell metapb.Cell) (bool, error) {
-	return false, nil
-}
-
-func (s *mockStore) LoadClusterMeta(clusterID uint64) (*metapb.Cluster, error) {
-	return nil, nil
-}
-
-func (s *mockStore) LoadStoreMeta(clusterID uint64, limit int64, do func(metapb.Store)) error {
-	return nil
-}
-
-func (s *mockStore) LoadCellMeta(clusterID uint64, limit int64, do func(metapb.Cell)) error {
-	return nil
-}
-
-func (s *mockStore) SetStoreMeta(clusterID uint64, store metapb.Store) error {
-	return nil
-}
-
-func (s *mockStore) SetCellMeta(clusterID uint64, cell metapb.Cell) error {
-	return nil
-}
-
-func (s *mockStore) CampaignLeader(leaderSignature string, leaderLeaseTTL int64, enableLeaderFun func()) error {
-	return nil
-}
-
-func (s *mockStore) WatchLeader() {
-
-}
-
-func (s *mockStore) ResignLeader(leaderSignature string) error {
-	return nil
-}
-
-func (s *mockStore) GetCurrentLeader() (*pdpb.Leader, error) {
-	return nil, nil
-}
-
-func (s *mockStore) GetID() (uint64, error) {
-	s.Lock()
-	defer s.Unlock()
-
-	v := s.id
-	s.id++
-
-	return v, nil
-}
-
-func (s *mockStore) CreateID(leaderSignature string, value uint64) error {
-	return nil
-}
-
-func (s *mockStore) UpdateID(leaderSignature string, old, value uint64) error {
-	return nil
-}
-
-func (s *mockStore) Close() error {
-	return nil
 }

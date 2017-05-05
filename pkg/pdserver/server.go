@@ -53,6 +53,8 @@ type Server struct {
 	stopOnce sync.Once
 	stopWG   sync.WaitGroup
 	stopC    chan interface{}
+
+	complete chan struct{}
 }
 
 // NewServer create a pd server
@@ -62,6 +64,7 @@ func NewServer(cfg *Cfg) *Server {
 	s.stopC = make(chan interface{})
 	s.isLeaderValue = 0
 	s.cluster = newCellCluster(s)
+	s.complete = make(chan struct{})
 
 	return s
 }
@@ -79,6 +82,10 @@ func (s *Server) Start() {
 
 	s.setServerIsStarted()
 	go s.startLeaderLoop()
+
+	<-s.complete
+	close(s.complete)
+	s.complete = nil
 }
 
 // Stop the server
@@ -101,6 +108,12 @@ func (s *Server) doStop() {
 		s.closeEmbedEtcd()
 		s.setServerIsStopped()
 	})
+}
+
+func (s *Server) notifyElectionComplete() {
+	if s.complete != nil {
+		s.complete <- struct{}{}
+	}
 }
 
 func (s *Server) printStartENV() {

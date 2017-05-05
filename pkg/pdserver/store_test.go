@@ -10,5 +10,12 @@
 // distributed under the License is distributed on an "AS IS" BASIS,
 // See the License for the specific language governing permissions and
 // limitations under the License.
+package pdserver
 
-package storage
+import (
+	. "github.com/pingcap/check"
+)
+
+var _ = Suite(&testIDStoreSuite{})
+var _ = Suite(&testLeaderStoreSuite{})
+var _ = Suite(&testClusterStoreSuite{})

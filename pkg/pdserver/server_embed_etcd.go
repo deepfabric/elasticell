@@ -20,15 +20,22 @@ import (
 	"strings"
 	"time"
 
+	"github.com/coreos/etcd/clientv3"
 	"github.com/coreos/etcd/embed"
 	"github.com/coreos/etcd/etcdserver"
 	"github.com/coreos/etcd/pkg/types"
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/pkg/errors"
+	"golang.org/x/net/context"
 )
 
 // unixToHTTP replace unix scheme with http.
 var unixToHTTP = strings.NewReplacer("unix://", "http://", "unixs://", "http://")
+
+var (
+	maxCheckEtcdRunningCount = 60 * 10
+	checkEtcdRunningDelay    = 1 * time.Second
+)
 
 func (s *Server) startEmbedEtcd() {
 	log.Info("bootstrap: start embed ectd server")
@@ -66,6 +73,54 @@ func (s *Server) doAfterEmbedEtcdServerReady(cfg *embed.Config) {
 
 	s.initStore(cfg)
 	s.updateAdvertisePeerUrls()
+
+	if err := s.waitEtcdStart(cfg); err != nil {
+		// See https://github.com/coreos/etcd/issues/6067
+		// Here may return "not capable" error because we don't start
+		// all etcds in initial_cluster at same time, so here just log
+		// an error.
+		// Note that pd can not work correctly if we don't start all etcds.
+		log.Errorf("bootstrap: etcd start failed, err %v", err)
+	}
+}
+
+func (s *Server) waitEtcdStart(cfg *embed.Config) error {
+	var err error
+	for i := 0; i < maxCheckEtcdRunningCount; i++ {
+		// etcd may not start ok, we should wait and check again
+		_, err = s.endpointStatus(cfg)
+		if err == nil {
+			return nil
+		}
+
+		time.Sleep(checkEtcdRunningDelay)
+		continue
+	}
+
+	return err
+}
+
+// endpointStatus checks whether current etcd is running.
+func (s *Server) endpointStatus(cfg *embed.Config) (*clientv3.StatusResponse, error) {
+	c := s.store.RawClient()
+	endpoint := []string{cfg.LCUrls[0].String()}[0]
+
+	m := clientv3.NewMaintenance(c)
+
+	start := time.Now()
+	ctx, cancel := context.WithTimeout(c.Ctx(), DefaultRequestTimeout)
+	resp, err := m.Status(ctx, endpoint)
+	cancel()
+
+	if cost := time.Since(start); cost > DefaultSlowRequestTime {
+		log.Warnf("bootstrap: check etcd status failed, endpoint=<%s> resp=<%+v> cost<%s> errors:\n %+v",
+			endpoint,
+			resp,
+			cost,
+			err)
+	}
+
+	return resp, errors.Wrapf(err, "")
 }
 
 func (s *Server) initStore(cfg *embed.Config) {

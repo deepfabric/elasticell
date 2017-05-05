@@ -19,8 +19,6 @@ import (
 	. "github.com/pingcap/check"
 )
 
-var _ = Suite(&testClusterStoreSuite{})
-
 type testClusterStoreSuite struct {
 	store ClusterStore
 }

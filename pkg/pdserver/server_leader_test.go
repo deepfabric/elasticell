@@ -10,27 +10,38 @@
 // distributed under the License is distributed on an "AS IS" BASIS,
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package pdserver
 
 import (
 	. "github.com/pingcap/check"
 )
 
-type testIDStoreSuite struct {
-	store IDStore
+func (s *testServerSuite) getLeaderCount() int {
+	leaderCount := 0
+
+	for _, svr := range s.servers {
+		if svr.IsLeader() {
+			leaderCount++
+		}
+	}
+
+	return leaderCount
 }
 
-func (s *testIDStoreSuite) SetUpSuite(c *C) {
-	s.store = _testSingleSvr.store
-}
+func (s *testServerSuite) TestServerLeaderCount(c *C) {
+	s.restartMultiPDServer(c, 3)
 
-func (s *testIDStoreSuite) TearDownSuite(c *C) {
+	leaderCount := s.getLeaderCount()
+	c.Assert(leaderCount, Equals, 1)
 
-}
+	// for index := 0; index < 3; index++ {
+	// 	leaderCount = s.getLeaderCount()
+	// 	if leaderCount > 0 {
+	// 		break
+	// 	}
 
-func (s *testIDStoreSuite) TestGet(c *C) {
-	id, err := s.store.GetID()
-	c.Assert(err, IsNil)
-	c.Assert(id, Greater, uint64(0))
+	// 	time.Sleep(time.Second)
+	// }
+
+	// c.Assert(leaderCount, Equals, 1)
 }

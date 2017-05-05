@@ -63,6 +63,7 @@ func (s *Server) startLeaderLoop() {
 				log.Infof("leader-loop: we are not leader, watch the leader, leader=<%v>",
 					leader)
 				s.resetLeaderRPCProxy(leader)
+				s.notifyElectionComplete()
 				s.store.WatchLeader()
 				log.Infof("leader-loop: leader changed, try to campaign leader, leader=<%v>", leader)
 			}
@@ -79,6 +80,8 @@ func (s *Server) startLeaderLoop() {
 }
 
 func (s *Server) enableLeader() {
+	s.notifyElectionComplete()
+
 	// now, we are leader
 	atomic.StoreInt64(&s.isLeaderValue, 1)
 	log.Infof("leader-loop: PD cluster leader is ready, leader=<%s>", s.cfg.Name)

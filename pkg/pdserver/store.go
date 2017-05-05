@@ -56,9 +56,16 @@ type ClusterStore interface {
 
 // LeaderStore is the store interface for leader info
 type LeaderStore interface {
+	// CampaignLeader is for leader election
+	// if we are win the leader election, the enableLeaderFun will call
 	CampaignLeader(leaderSignature string, leaderLeaseTTL int64, enableLeaderFun func()) error
+	// WatchLeader watch leader,
+	// this funcation will return unitl the leader's lease is timeout
+	// or server closed
 	WatchLeader()
+	// ResignLeader delete leader itself and let others start a new election again.
 	ResignLeader(leaderSignature string) error
+	// GetCurrentLeader return current leader
 	GetCurrentLeader() (*pdpb.Leader, error)
 }
 
@@ -76,6 +83,7 @@ type Store interface {
 	LeaderStore
 
 	Close() error
+	RawClient() *clientv3.Client
 }
 
 // Store used for  metedata
@@ -118,6 +126,56 @@ func (s *pdStore) Close() error {
 	}
 
 	return nil
+}
+
+// RawClient return raw etcd client
+func (s *pdStore) RawClient() *clientv3.Client {
+	return s.client
+}
+
+// slowLogTxn wraps etcd transaction and log slow one.
+type slowLogTxn struct {
+	clientv3.Txn
+	cancel context.CancelFunc
+}
+
+func newSlowLogTxn(client *clientv3.Client) clientv3.Txn {
+	ctx, cancel := context.WithTimeout(client.Ctx(), DefaultRequestTimeout)
+	return &slowLogTxn{
+		Txn:    client.Txn(ctx),
+		cancel: cancel,
+	}
+}
+
+func (t *slowLogTxn) If(cs ...clientv3.Cmp) clientv3.Txn {
+	return &slowLogTxn{
+		Txn:    t.Txn.If(cs...),
+		cancel: t.cancel,
+	}
+}
+
+func (t *slowLogTxn) Then(ops ...clientv3.Op) clientv3.Txn {
+	return &slowLogTxn{
+		Txn:    t.Txn.Then(ops...),
+		cancel: t.cancel,
+	}
+}
+
+// Commit implements Txn Commit interface.
+func (t *slowLogTxn) Commit() (*clientv3.TxnResponse, error) {
+	start := time.Now()
+	resp, err := t.Txn.Commit()
+	t.cancel()
+
+	cost := time.Now().Sub(start)
+	if cost > DefaultSlowRequestTime {
+		log.Warn("embed-ectd: txn runs too slow, resp=<%v> cost=<%s> errors:\n %+v",
+			resp,
+			cost,
+			err)
+	}
+
+	return resp, errors.Wrap(err, "")
 }
 
 func (s *pdStore) getValue(key string, opts ...clientv3.OpOption) ([]byte, error) {
