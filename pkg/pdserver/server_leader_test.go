@@ -33,15 +33,4 @@ func (s *testServerSuite) TestServerLeaderCount(c *C) {
 
 	leaderCount := s.getLeaderCount()
 	c.Assert(leaderCount, Equals, 1)
-
-	// for index := 0; index < 3; index++ {
-	// 	leaderCount = s.getLeaderCount()
-	// 	if leaderCount > 0 {
-	// 		break
-	// 	}
-
-	// 	time.Sleep(time.Second)
-	// }
-
-	// c.Assert(leaderCount, Equals, 1)
 }
