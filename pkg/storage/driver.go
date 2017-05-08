@@ -47,4 +47,5 @@ type Engine interface {
 	// Scan scans the range and execute the handler fun.
 	// returns false means end the scan.
 	Scan(startKey []byte, endKey []byte, handler func(key, value []byte) (bool, error)) error
+	CompactRange(startKey []byte, endKey []byte) error
 }

@@ -40,6 +40,7 @@ const (
 	snapWorker             = "snap-work"
 	pdWorker               = "pd-work"
 	splitWorker            = "split-work"
+	compactWorker          = "compact-worker"
 	defaultWorkerQueueSize = 64
 	defaultNotifyChanSize  = 1024
 )
@@ -91,6 +92,7 @@ func NewStore(clusterID uint64, pdClient *pd.Client, meta metapb.Store, engine s
 	s.runner.AddNamedWorker(applyWorker, defaultWorkerQueueSize)
 	s.runner.AddNamedWorker(pdWorker, defaultWorkerQueueSize)
 	s.runner.AddNamedWorker(splitWorker, defaultWorkerQueueSize)
+	s.runner.AddNamedWorker(compactWorker, defaultWorkerQueueSize)
 
 	s.init()
 
@@ -191,6 +193,7 @@ func (s *Store) Start() {
 	s.startCellHeartbeatTask()
 	s.startGCTask()
 	s.startCellSplitCheckTask()
+	s.startCompactTask()
 }
 
 func (s *Store) startTransfer() {
@@ -262,6 +265,23 @@ func (s *Store) startCellHeartbeatTask() {
 				return
 			case <-ticker.C:
 				s.handleCellHeartbeat()
+			}
+		}
+	})
+}
+
+func (s *Store) startCompactTask() {
+	s.runner.RunCancelableTask(func(ctx context.Context) {
+		ticker := time.NewTicker(s.cfg.getCellCompactCheckIntervalDuration())
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				log.Infof("stop: cell compect check job stopped")
+				return
+			case <-ticker.C:
+				s.handleCellCompactCheck()
 			}
 		}
 	})
@@ -630,6 +650,10 @@ func (s *Store) addPDJob(task func() error) (*util.Job, error) {
 	return s.addNamedJob(pdWorker, task)
 }
 
+func (s *Store) addCompactJob(task func() error) (*util.Job, error) {
+	return s.addNamedJob(compactWorker, task)
+}
+
 func (s *Store) addSnapJob(task func() error) (*util.Job, error) {
 	return s.addNamedJob(snapWorker, task)
 }
@@ -706,6 +730,24 @@ func (s *Store) handleCellHeartbeat() {
 	for _, p := range s.replicatesMap.values() {
 		p.handleHeartbeat()
 	}
+}
+
+func (s *Store) handleCellCompactCheck() {
+	s.replicatesMap.foreach(func(pr *PeerReplicate) (bool, error) {
+		if pr.deleteKeysHint >= s.cfg.CellCompactDeleteKeysCount {
+			_, err := s.addCompactJob(pr.doCompact)
+			if err != nil {
+				log.Errorf("compact: add compact job failed, errors:\n %+v", err)
+			} else {
+				pr.deleteKeysHint = 0
+			}
+
+			// Compact only 1 cell each check in case compact task accumulates.
+			return false, nil
+		}
+
+		return true, nil
+	})
 }
 
 func (s *Store) handleCellSplitCheck() {
