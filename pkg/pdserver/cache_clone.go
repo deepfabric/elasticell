@@ -13,8 +13,22 @@
 
 package pdserver
 
+import (
+	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
+)
+
 func (s *storeRuntimeInfo) clone() *storeRuntimeInfo {
 	v := new(storeRuntimeInfo)
 	v.store = s.store
+
+	if s.status != nil {
+		v.status = new(StoreStatus)
+		v.status.stats = new(pdpb.StoreStats)
+		*v.status.stats = *s.status.stats
+		v.status.blocked = s.status.blocked
+		v.status.LastHeartbeatTS = s.status.LastHeartbeatTS
+		v.status.LeaderCount = s.status.LeaderCount
+	}
+
 	return v
 }
