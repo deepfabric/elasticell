@@ -15,6 +15,7 @@ package raftstore
 
 import (
 	"bytes"
+	"errors"
 
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
@@ -48,6 +49,7 @@ func (d *applyDelegate) doApplyRaftCMD(req *raftcmdpb.RaftCMDRequest, term uint6
 			d.cell.ID)
 	}
 
+	var err error
 	var resp *raftcmdpb.RaftCMDResponse
 	var result *execResult
 	ctx := &execContext{
@@ -62,7 +64,10 @@ func (d *applyDelegate) doApplyRaftCMD(req *raftcmdpb.RaftCMDRequest, term uint6
 	} else {
 		// TODO: use write batch
 		if req.AdminRequest != nil {
-			resp, result = d.execAdminRequest(ctx)
+			resp, result, err = d.execAdminRequest(ctx)
+			if err != nil {
+				resp = errorStaleEpochResp(req.Header.UUID, d.term, d.cell)
+			}
 		} else {
 			resp = d.execWriteRequest(ctx)
 		}
@@ -98,19 +103,21 @@ func (d *applyDelegate) doApplyRaftCMD(req *raftcmdpb.RaftCMDRequest, term uint6
 	return result
 }
 
-func (d *applyDelegate) execAdminRequest(ctx *execContext) (*raftcmdpb.RaftCMDResponse, *execResult) {
+func (d *applyDelegate) execAdminRequest(ctx *execContext) (*raftcmdpb.RaftCMDResponse, *execResult, error) {
 	cmdType := ctx.req.AdminRequest.Type
 	switch cmdType {
 	case raftcmdpb.ChangePeer:
 		return d.doExecChangePeer(ctx)
 	case raftcmdpb.Split:
 		return d.doExecSplit(ctx)
+	case raftcmdpb.RaftLogGC:
+		return d.doExecRaftGC(ctx)
 	}
 
-	return nil, nil
+	return nil, nil, nil
 }
 
-func (d *applyDelegate) doExecChangePeer(ctx *execContext) (*raftcmdpb.RaftCMDResponse, *execResult) {
+func (d *applyDelegate) doExecChangePeer(ctx *execContext) (*raftcmdpb.RaftCMDResponse, *execResult, error) {
 	req := new(raftcmdpb.ChangePeerRequest)
 	util.MustUnmarshal(req, ctx.req.AdminRequest.Body)
 
@@ -124,7 +131,7 @@ func (d *applyDelegate) doExecChangePeer(ctx *execContext) (*raftcmdpb.RaftCMDRe
 	switch req.ChangeType {
 	case pdpb.AddNode:
 		if exists != nil {
-			return nil, nil
+			return nil, nil, nil
 		}
 
 		d.cell.Peers = append(d.cell.Peers, &req.Peer)
@@ -133,7 +140,7 @@ func (d *applyDelegate) doExecChangePeer(ctx *execContext) (*raftcmdpb.RaftCMDRe
 			req.Peer)
 	case pdpb.RemoveNode:
 		if exists == nil {
-			return nil, nil
+			return nil, nil, nil
 		}
 
 		// Remove ourself, we will destroy all cell data later.
@@ -176,17 +183,17 @@ func (d *applyDelegate) doExecChangePeer(ctx *execContext) (*raftcmdpb.RaftCMDRe
 		},
 	}
 
-	return resp, result
+	return resp, result, nil
 }
 
-func (d *applyDelegate) doExecSplit(ctx *execContext) (*raftcmdpb.RaftCMDResponse, *execResult) {
+func (d *applyDelegate) doExecSplit(ctx *execContext) (*raftcmdpb.RaftCMDResponse, *execResult, error) {
 	req := new(raftcmdpb.SplitRequest)
 	util.MustUnmarshal(req, ctx.req.AdminRequest.Body)
 
 	if len(req.SplitKey) == 0 {
 		log.Errorf("raftstore-apply[cell-%d]: missing split key",
 			d.cell.ID)
-		return nil, nil
+		return nil, nil, errors.New("missing split key")
 	}
 
 	// splitKey < cell.Startkey
@@ -195,7 +202,7 @@ func (d *applyDelegate) doExecSplit(ctx *execContext) (*raftcmdpb.RaftCMDRespons
 			d.cell.ID,
 			req.SplitKey,
 			d.cell.Start)
-		return nil, nil
+		return nil, nil, nil
 	}
 
 	perr := checkKeyInCell(req.SplitKey, &d.cell)
@@ -203,7 +210,7 @@ func (d *applyDelegate) doExecSplit(ctx *execContext) (*raftcmdpb.RaftCMDRespons
 		log.Errorf("raftstore-apply[cell-%d]: split key not in cell, errors:\n %+v",
 			d.cell.ID,
 			perr)
-		return nil, nil
+		return nil, nil, nil
 	}
 
 	if len(req.NewPeerIDs) != len(d.cell.Peers) {
@@ -212,7 +219,7 @@ func (d *applyDelegate) doExecSplit(ctx *execContext) (*raftcmdpb.RaftCMDRespons
 			len(req.NewPeerIDs),
 			len(d.cell.Peers))
 
-		return nil, nil
+		return nil, nil, nil
 	}
 
 	log.Infof("raftstore-apply[cell-%d]: split, splitKey=<%+v> cell=<%+v>",
@@ -268,7 +275,47 @@ func (d *applyDelegate) doExecSplit(ctx *execContext) (*raftcmdpb.RaftCMDRespons
 		},
 	}
 
-	return rsp, result
+	return rsp, result, nil
+}
+
+func (d *applyDelegate) doExecRaftGC(ctx *execContext) (*raftcmdpb.RaftCMDResponse, *execResult, error) {
+	req := new(raftcmdpb.RaftLogGCRequest)
+	util.MustUnmarshal(req, ctx.req.AdminRequest.Body)
+
+	compactIndex := req.CompactIndex
+	firstIndex := ctx.applyState.TruncatedState.Index + 1
+
+	if compactIndex <= firstIndex {
+		log.Debugf("raftstore-apply[cell-%d]: no need to compact, compactIndex=<%d> firstIndex=<%d>",
+			d.cell.ID,
+			compactIndex,
+			firstIndex)
+		return nil, nil, nil
+	}
+
+	compactTerm := req.CompactTerm
+	if compactTerm == 0 {
+		log.Debugf("raftstore-apply[cell-%d]: compact term missing, skip, req=<%+v>",
+			d.cell.ID,
+			req)
+		return nil, nil, errors.New("command format is outdated, please upgrade leader")
+	}
+
+	err := compactRaftLog(d.cell.ID, &ctx.applyState, compactIndex, compactTerm)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	rsp := newAdminRaftCMDResponse(raftcmdpb.RaftLogGC, &raftcmdpb.RaftLogGCResponse{})
+	result := &execResult{
+		adminType: raftcmdpb.RaftLogGC,
+		raftGCResult: &raftGCResult{
+			state:      ctx.applyState.TruncatedState,
+			firstIndex: firstIndex,
+		},
+	}
+
+	return rsp, result, nil
 }
 
 func (d *applyDelegate) execWriteRequest(ctx *execContext) *raftcmdpb.RaftCMDResponse {

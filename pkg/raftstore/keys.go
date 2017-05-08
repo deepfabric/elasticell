@@ -176,6 +176,15 @@ func getRaftLogKey(cellID uint64, logIndex uint64) []byte {
 	return getCellIDKey(cellID, raftLogSuffix, 8, logIndex)
 }
 
+func getRaftLogIndex(key []byte) (uint64, error) {
+	expectKeyLen := len(cellRaftPrefixKey) + 8*2 + 1
+	if len(key) != expectKeyLen {
+		return 0, fmt.Errorf("key<%v> is not a valid raft log key", key)
+	}
+
+	return binary.BigEndian.Uint64(key[len(cellRaftPrefixKey)+9:]), nil
+}
+
 func getCellIDKey(cellID uint64, suffix byte, extraCap int, extra uint64) []byte {
 	buf := goetty.NewByteBuf(len(cellRaftPrefixKey) + 9 + extraCap)
 	buf.Write(cellRaftPrefixKey)

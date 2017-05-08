@@ -23,7 +23,7 @@ enum AdminCmdType {
     InvalidAdmin   = 0;
     ChangePeer     = 1;
     Split          = 2;
-    CompactLog     = 3;
+    RaftLogGC      = 3;
     TransferLeader = 4;
     ComputeHash    = 5;
     VerifyHash     = 6;
@@ -117,11 +117,11 @@ message TransferLeaderRequest {
 message TransferLeaderResponse {
 }
 
-message CompactLogRequest {
+message RaftLogGCRequest {
     optional uint64 compactIndex = 1 [(gogoproto.nullable) = false];
     optional uint64 compactTerm  = 2 [(gogoproto.nullable) = false];
 }
 
-message CompactLogResponse {
+message RaftLogGCResponse {
     
 }

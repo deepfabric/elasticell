@@ -168,6 +168,11 @@ func (pr *PeerReplicate) handleRaftReadyAppend(ctx *tempRaftContext, rd *raft.Re
 }
 
 func (pr *PeerReplicate) handleRaftReadyApply(ctx *tempRaftContext, rd *raft.Ready) {
+	if ctx.snapCell != nil {
+		// When apply snapshot, there is no log applied and not compacted yet.
+		pr.raftLogSizeHint = 0
+	}
+
 	result := pr.doApplySnap(ctx)
 
 	if !pr.isLeader() {

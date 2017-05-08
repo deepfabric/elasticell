@@ -33,9 +33,16 @@ var (
 	Data = Kind(DataKV | DataHash | DataSet | DataZSet | DataList)
 )
 
+// WriteBatch batch operation
+type WriteBatch interface {
+	Delete(kind Kind, key []byte) error
+}
+
 // Driver is def storage interface
 type Driver interface {
 	GetEngine(kind Kind) Engine
+	NewWriteBatch() WriteBatch
+	Write(wb WriteBatch) error
 }
 
 // Engine is the data storage engine
@@ -48,4 +55,6 @@ type Engine interface {
 	// returns false means end the scan.
 	Scan(startKey []byte, endKey []byte, handler func(key, value []byte) (bool, error)) error
 	CompactRange(startKey []byte, endKey []byte) error
+	// Seek the first key >= given key, if no found, return None.
+	Seek(key []byte) ([]byte, []byte, error)
 }

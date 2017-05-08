@@ -53,10 +53,11 @@ type PeerReplicate struct {
 
 	lastHBJob *util.Job
 
-	writtenKeys    uint64
-	writtenBytes   uint64
-	sizeDiffHint   uint64
-	deleteKeysHint uint64
+	writtenKeys     uint64
+	writtenBytes    uint64
+	sizeDiffHint    uint64
+	raftLogSizeHint uint64
+	deleteKeysHint  uint64
 }
 
 func createPeerReplicate(store *Store, cell *metapb.Cell) (*PeerReplicate, error) {

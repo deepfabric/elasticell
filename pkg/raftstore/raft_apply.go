@@ -55,10 +55,16 @@ type splitResult struct {
 	right metapb.Cell
 }
 
+type raftGCResult struct {
+	state      mraft.RaftTruncatedState
+	firstIndex uint64
+}
+
 type execResult struct {
-	adminType   raftcmdpb.AdminCmdType
-	changePeer  *changePeer
-	splitResult *splitResult
+	adminType    raftcmdpb.AdminCmdType
+	changePeer   *changePeer
+	splitResult  *splitResult
+	raftGCResult *raftGCResult
 }
 
 type pendingCmd struct {

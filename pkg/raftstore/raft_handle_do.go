@@ -245,8 +245,16 @@ func (pr *PeerReplicate) doApplySnap(ctx *tempRaftContext) *applySnapResult {
 }
 
 func (pr *PeerReplicate) applyCommittedEntries(rd *raft.Ready) bool {
-	if !pr.ps.isApplyingSnap() {
+	if pr.ps.isApplyingSnap() {
+		pr.ps.lastReadyIndex = pr.ps.getTruncatedIndex()
+	} else {
+		for _, entry := range rd.CommittedEntries {
+			pr.raftLogSizeHint += uint64(len(entry.Data))
+		}
+
 		if len(rd.CommittedEntries) > 0 {
+			pr.ps.lastReadyIndex = rd.CommittedEntries[len(rd.CommittedEntries)-1].Index
+
 			err := pr.startApplyCommittedEntriesJob(pr.ps.getCell().ID, pr.getCurrentTerm(), rd.CommittedEntries)
 			if err != nil {
 				log.Fatalf("raftstore[cell-%d]: add apply committed entries job failed, errors:\n %+v",
@@ -392,6 +400,8 @@ func (s *Store) doPostApplyResult(result *asyncApplyResult) {
 		s.doApplyConfChange(result.cellID, result.result.changePeer)
 	case raftcmdpb.Split:
 		s.doApplySplit(result.cellID, result.result.splitResult)
+	case raftcmdpb.RaftLogGC:
+		s.doApplyRaftLogGC(result.cellID, result.result.raftGCResult)
 	}
 }
 
@@ -523,6 +533,25 @@ func (s *Store) doApplySplit(cellID uint64, result *splitResult) {
 	newPR.sizeDiffHint = s.cfg.CellCheckSizeDiff
 	newPR.startRegistrationJob()
 	s.replicatesMap.put(newPR.cellID, newPR)
+}
+
+func (s *Store) doApplyRaftLogGC(cellID uint64, result *raftGCResult) {
+	pr := s.replicatesMap.get(cellID)
+	if pr != nil {
+		total := pr.ps.lastReadyIndex - result.firstIndex
+		remain := pr.ps.lastReadyIndex - result.state.Index - 1
+		pr.raftLogSizeHint = pr.raftLogSizeHint * remain / total
+
+		startIndex := pr.ps.lastCompactIndex
+		endIndex := result.state.Index + 1
+		pr.ps.lastCompactIndex = endIndex
+		err := pr.startRaftLogGCJob(cellID, startIndex, endIndex)
+		if err != nil {
+			log.Errorf("raftstore-compact[cell-%d]: add raft gc job failed, errors:\n %+v",
+			cellID,
+			err)
+		}
+	}
 }
 
 func (pr *PeerReplicate) doApplyReads(rd *raft.Ready) {

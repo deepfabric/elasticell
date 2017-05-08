@@ -22,6 +22,7 @@ import (
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
 	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
+	"github.com/deepfabric/elasticell/pkg/storage"
 )
 
 func (pr *PeerReplicate) startApplyingSnapJob() {
@@ -69,6 +70,14 @@ func (pr *PeerReplicate) startRegistrationJob() {
 func (pr *PeerReplicate) startApplyCommittedEntriesJob(cellID uint64, term uint64, commitedEntries []raftpb.Entry) error {
 	_, err := pr.store.addApplyJob(func() error {
 		return pr.doApplyCommittedEntries(cellID, term, commitedEntries)
+	})
+
+	return err
+}
+
+func (pr *PeerReplicate) startRaftLogGCJob(cellID, startIndex, endIndex uint64) error {
+	_, err := pr.store.addRaftLogGCJob(func() error {
+		return pr.doRaftLogGC(cellID, startIndex, endIndex)
 	})
 
 	return err
@@ -333,6 +342,50 @@ func (pr *PeerReplicate) doApplyCommittedEntries(cellID uint64, term uint64, com
 	}
 
 	return nil
+}
+
+func (pr *PeerReplicate) doRaftLogGC(cellID, startIndex, endIndex uint64) error {
+	firstIndex := startIndex
+
+	if firstIndex == 0 {
+		startKey := getRaftLogKey(cellID, 0)
+		firstIndex = endIndex
+		key, _, err := pr.store.engine.GetEngine(storage.Meta).Seek(startKey)
+		if err != nil {
+			return err
+		}
+
+		if key != nil {
+			firstIndex, err = getRaftLogIndex(key)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	if firstIndex >= endIndex {
+		log.Infof("raftstore-compact[cell-%d]: no need to gc raft log",
+			cellID)
+		return nil
+	}
+
+	wb := pr.store.engine.NewWriteBatch()
+	for index := firstIndex; index < endIndex; index++ {
+		key := getRaftLogKey(cellID, index)
+		err := wb.Delete(storage.Meta, key)
+		if err != nil {
+			return err
+		}
+	}
+
+	err := pr.store.engine.Write(wb)
+	if err != nil {
+		log.Infof("raftstore-compact[cell-%d]: raft log gc complete, entriesCount=<%d>",
+			cellID,
+			(endIndex - startIndex))
+	}
+
+	return err
 }
 
 func (ps *peerStorage) isApplyingSnap() bool {

@@ -108,9 +108,9 @@ func newTransferLeaderRequest(rsp *pdpb.TransferLeader) *raftcmdpb.AdminRequest 
 
 func newCompactLogRequest(index, term uint64) *raftcmdpb.AdminRequest {
 	req := new(raftcmdpb.AdminRequest)
-	req.Type = raftcmdpb.CompactLog
+	req.Type = raftcmdpb.RaftLogGC
 
-	subReq := new(raftcmdpb.CompactLogRequest)
+	subReq := new(raftcmdpb.RaftLogGCRequest)
 	subReq.CompactIndex = index
 	subReq.CompactTerm = term
 	req.Body = util.MustMarshal(subReq)

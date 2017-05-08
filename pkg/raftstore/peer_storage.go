@@ -63,6 +63,8 @@ type peerStorage struct {
 	cell             metapb.Cell
 	lastTerm         uint64
 	appliedIndexTerm uint64
+	lastReadyIndex   uint64
+	lastCompactIndex uint64
 	snapshortter     *snap.Snapshotter
 	raftState        mraft.RaftLocalState
 	applyState       mraft.RaftApplyState
@@ -96,6 +98,7 @@ func newPeerStorage(store *Store, cell metapb.Cell) (*peerStorage, error) {
 		return nil, err
 	}
 
+	s.lastReadyIndex = s.getAppliedIndex()
 	s.pendingReads = new(readIndexQueue)
 
 	return s, nil
@@ -547,5 +550,22 @@ func (ps *peerStorage) deleteAllInRange(start, end []byte, job *util.Job) error 
 	}
 
 	// TODO: impl
+	return nil
+}
+
+func compactRaftLog(cellID uint64, state *mraft.RaftApplyState, compactIndex, compactTerm uint64) error {
+	log.Infof("raftstore-compact[cell-%d]: compact log entries to index, index=<%d>",
+		cellID,
+		compactIndex)
+	if compactIndex <= state.TruncatedState.Index {
+		return errors.New("try to truncate compacted entries")
+	} else if compactIndex > state.AppliedIndex {
+		return fmt.Errorf("compact index %d > applied index %d", compactIndex, state.AppliedIndex)
+	}
+
+	// we don't actually delete the logs now, we add an async task to do it.
+	state.TruncatedState.Index = compactIndex
+	state.TruncatedState.Term = compactTerm
+
 	return nil
 }

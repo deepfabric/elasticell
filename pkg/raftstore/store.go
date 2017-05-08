@@ -41,6 +41,7 @@ const (
 	pdWorker               = "pd-work"
 	splitWorker            = "split-work"
 	compactWorker          = "compact-worker"
+	raftGCWorker           = "raft-gc-worker"
 	defaultWorkerQueueSize = 64
 	defaultNotifyChanSize  = 1024
 )
@@ -652,6 +653,10 @@ func (s *Store) addPDJob(task func() error) (*util.Job, error) {
 
 func (s *Store) addCompactJob(task func() error) (*util.Job, error) {
 	return s.addNamedJob(compactWorker, task)
+}
+
+func (s *Store) addRaftLogGCJob(task func() error) (*util.Job, error) {
+	return s.addNamedJob(raftGCWorker, task)
 }
 
 func (s *Store) addSnapJob(task func() error) (*util.Job, error) {
