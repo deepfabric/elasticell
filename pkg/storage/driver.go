@@ -36,6 +36,7 @@ var (
 // WriteBatch batch operation
 type WriteBatch interface {
 	Delete(kind Kind, key []byte) error
+	Set(kind Kind, key []byte, value []byte) error
 }
 
 // Driver is def storage interface

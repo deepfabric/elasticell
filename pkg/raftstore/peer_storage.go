@@ -27,6 +27,7 @@ import (
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
+	"github.com/deepfabric/elasticell/pkg/storage"
 	"github.com/deepfabric/elasticell/pkg/util"
 	"github.com/pkg/errors"
 )
@@ -410,7 +411,7 @@ func (ps *peerStorage) unmarshal(v []byte, expectIndex uint64) (*raftpb.Entry, e
 	return e, nil
 }
 
-func (ps *peerStorage) clearMeta() error {
+func (ps *peerStorage) clearMeta(wb storage.WriteBatch) error {
 	metaCount := 0
 	raftCount := 0
 
@@ -419,7 +420,7 @@ func (ps *peerStorage) clearMeta() error {
 	metaEnd := getCellMetaPrefix(ps.getCell().ID + 1)
 
 	err := ps.store.getMetaEngine().Scan(metaStart, metaEnd, func(key, value []byte) (bool, error) {
-		err := ps.store.getMetaEngine().Delete(key)
+		err := wb.Delete(storage.Meta, key)
 		if err != nil {
 			return false, errors.Wrapf(err, "")
 		}
@@ -436,7 +437,7 @@ func (ps *peerStorage) clearMeta() error {
 	raftEnd := getCellRaftPrefix(ps.getCell().ID + 1)
 
 	err = ps.store.getMetaEngine().Scan(raftStart, raftEnd, func(key, value []byte) (bool, error) {
-		err := ps.store.getMetaEngine().Delete(key)
+		err := wb.Delete(storage.Meta, key)
 		if err != nil {
 			return false, errors.Wrapf(err, "")
 		}
@@ -515,16 +516,21 @@ func (ps *peerStorage) clearExtraData(newCell metapb.Cell) error {
 	return nil
 }
 
-func (ps *peerStorage) updatePeerState(cell metapb.Cell, state mraft.PeerState) error {
+func (ps *peerStorage) updatePeerState(cell metapb.Cell, state mraft.PeerState, wb storage.WriteBatch) error {
 	cellState := mraft.CellLocalState{}
 	cellState.State = state
 	cellState.Cell = cell
 
 	data, _ := cellState.Marshal()
+
+	if wb != nil {
+		return wb.Set(storage.Meta, getCellStateKey(cell.ID), data)
+	}
+
 	return ps.store.getMetaEngine().Set(getCellStateKey(cell.ID), data)
 }
 
-func (ps *peerStorage) writeInitialState(cellID uint64) error {
+func (ps *peerStorage) writeInitialState(cellID uint64, wb storage.WriteBatch) error {
 	raftState := new(mraft.RaftLocalState)
 	raftState.LastIndex = raftInitLogIndex
 	raftState.HardState.Term = raftInitLogTerm
@@ -535,12 +541,12 @@ func (ps *peerStorage) writeInitialState(cellID uint64) error {
 	applyState.TruncatedState.Index = raftInitLogIndex
 	applyState.TruncatedState.Term = raftInitLogTerm
 
-	err := ps.store.getMetaEngine().Set(getRaftStateKey(cellID), util.MustMarshal(raftState))
+	err := wb.Set(storage.Meta, getRaftStateKey(cellID), util.MustMarshal(raftState))
 	if err != nil {
 		return err
 	}
 
-	return ps.store.getMetaEngine().Set(getApplyStateKey(cellID), util.MustMarshal(applyState))
+	return wb.Set(storage.Meta, getApplyStateKey(cellID), util.MustMarshal(applyState))
 }
 
 func (ps *peerStorage) deleteAllInRange(start, end []byte, job *util.Job) error {

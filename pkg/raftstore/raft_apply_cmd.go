@@ -22,10 +22,12 @@ import (
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
 	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
 	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
+	"github.com/deepfabric/elasticell/pkg/storage"
 	"github.com/deepfabric/elasticell/pkg/util"
 )
 
 type execContext struct {
+	wb         storage.WriteBatch
 	applyState mraft.RaftApplyState
 	req        *raftcmdpb.RaftCMDRequest
 	index      uint64
@@ -62,7 +64,6 @@ func (d *applyDelegate) doApplyRaftCMD(req *raftcmdpb.RaftCMDRequest, term uint6
 	if !d.checkEpoch(req) {
 		resp = errorStaleEpochResp(req.Header.UUID, d.term, d.cell)
 	} else {
-		// TODO: use write batch
 		if req.AdminRequest != nil {
 			resp, result, err = d.execAdminRequest(ctx)
 			if err != nil {
@@ -75,15 +76,21 @@ func (d *applyDelegate) doApplyRaftCMD(req *raftcmdpb.RaftCMDRequest, term uint6
 
 	ctx.applyState.AppliedIndex = index
 	if !d.isPendingRemove() {
-		// TODO: use write batch
-		err := d.store.getMetaEngine().Set(getApplyStateKey(d.cell.ID), util.MustMarshal(&ctx.applyState))
+		err := ctx.wb.Set(storage.Meta, getApplyStateKey(d.cell.ID), util.MustMarshal(&ctx.applyState))
 		if err != nil {
 			log.Fatalf("raftstore-apply[cell-%d]: save apply context failed, errors:\n %+v",
 				d.cell.ID,
 				err)
 		}
 	}
-	// TODO: use write batch
+
+	err = d.store.engine.Write(ctx.wb)
+	if err != nil {
+		log.Fatalf("raftstore-apply[cell-%d]: commit apply result failed, errors:\n %+v",
+			d.cell.ID,
+			err)
+	}
+
 	d.applyState = ctx.applyState
 	d.term = term
 
@@ -161,7 +168,7 @@ func (d *applyDelegate) doExecChangePeer(ctx *execContext) (*raftcmdpb.RaftCMDRe
 		state = mraft.Tombstone
 	}
 
-	err := d.ps.updatePeerState(d.cell, state)
+	err := d.ps.updatePeerState(d.cell, state, ctx.wb)
 	if err != nil {
 		log.Fatalf("raftstore-apply[cell-%d]: update cell state failed, errors:\n %+v",
 			d.cell.ID,
@@ -245,14 +252,13 @@ func (d *applyDelegate) doExecSplit(ctx *execContext) (*raftcmdpb.RaftCMDRespons
 	d.cell.Epoch.CellVer++
 	newCell.Epoch.CellVer = d.cell.Epoch.CellVer
 
-	// TODO: use write batch
-	err := d.ps.updatePeerState(d.cell, mraft.Normal)
+	err := d.ps.updatePeerState(d.cell, mraft.Normal, ctx.wb)
 	if err != nil {
-		err = d.ps.updatePeerState(newCell, mraft.Normal)
+		err = d.ps.updatePeerState(newCell, mraft.Normal, ctx.wb)
 	}
 
 	if err != nil {
-		err = d.ps.writeInitialState(newCell.ID)
+		err = d.ps.writeInitialState(newCell.ID, ctx.wb)
 	}
 
 	if err != nil {

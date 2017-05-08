@@ -161,10 +161,17 @@ func (pr *PeerReplicate) handleRaftReadyAppend(ctx *tempRaftContext, rd *raft.Re
 		ctx.raftState.HardState = rd.HardState
 	}
 
+	ctx.wb = pr.store.engine.NewWriteBatch()
+
 	pr.handleSaveRaftState(ctx)
 	pr.handleSaveApplyState(ctx)
 
-	// TODO: use write batch
+	err := pr.store.engine.Write(ctx.wb)
+	if err != nil {
+		log.Fatalf("raftstore[cell-%d]: handle raft ready failure, errors\n %+v",
+			pr.getCell().ID,
+			err)
+	}
 }
 
 func (pr *PeerReplicate) handleRaftReadyApply(ctx *tempRaftContext, rd *raft.Ready) {

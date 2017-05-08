@@ -260,14 +260,19 @@ func (pr *PeerReplicate) destroy() error {
 	log.Infof("raftstore-destroy[cell-%d]: begin to destroy",
 		pr.cellID)
 
-	// TODO: use write batch
+	wb := pr.store.engine.NewWriteBatch()
 
-	err := pr.ps.clearMeta()
+	err := pr.ps.clearMeta(wb)
 	if err != nil {
 		return err
 	}
 
-	err = pr.ps.updatePeerState(pr.getCell(), mraft.Tombstone)
+	err = pr.ps.updatePeerState(pr.getCell(), mraft.Tombstone, wb)
+	if err != nil {
+		return err
+	}
+
+	err = pr.store.engine.Write(wb)
 	if err != nil {
 		return err
 	}

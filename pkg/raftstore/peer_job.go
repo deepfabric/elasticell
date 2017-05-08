@@ -207,7 +207,7 @@ func (pr *PeerReplicate) doApplyingSnapshotJob() error {
 	}
 
 	// TODO: decode snapshot and set to local rocksdb.
-	err = pr.ps.updatePeerState(pr.ps.getCell(), mraft.Normal)
+	err = pr.ps.updatePeerState(pr.ps.getCell(), mraft.Normal, nil)
 	if err != nil {
 		log.Errorf("raftstore[cell-%d]: apply snap update peer state failed, errors:\n %+v",
 			pr.cellID,

@@ -120,10 +120,10 @@ func newCompactLogRequest(index, term uint64) *raftcmdpb.AdminRequest {
 
 // SaveFirstCell save first cell with state, raft state and apply state.
 func SaveFirstCell(driver storage.Driver, cell metapb.Cell) error {
-	// TODO: use write batch
+	wb := driver.NewWriteBatch()
 
 	// save state
-	err := driver.GetEngine(storage.Meta).Set(getCellStateKey(cell.ID), util.MustMarshal(&mraft.CellLocalState{Cell: cell}))
+	err := wb.Set(storage.Meta, getCellStateKey(cell.ID), util.MustMarshal(&mraft.CellLocalState{Cell: cell}))
 	if err != nil {
 		return err
 	}
@@ -134,7 +134,8 @@ func SaveFirstCell(driver storage.Driver, cell metapb.Cell) error {
 		Term:   raftInitLogTerm,
 		Commit: raftInitLogIndex,
 	}
-	err = driver.GetEngine(storage.Meta).Set(getRaftStateKey(cell.ID), util.MustMarshal(raftState))
+
+	err = wb.Set(storage.Meta, getRaftStateKey(cell.ID), util.MustMarshal(raftState))
 	if err != nil {
 		return err
 	}
@@ -145,10 +146,10 @@ func SaveFirstCell(driver storage.Driver, cell metapb.Cell) error {
 		Term:  raftInitLogTerm,
 		Index: raftInitLogIndex,
 	}
-	err = driver.GetEngine(storage.Meta).Set(getApplyStateKey(cell.ID), util.MustMarshal(applyState))
+	err = wb.Set(storage.Meta, getApplyStateKey(cell.ID), util.MustMarshal(applyState))
 	if err != nil {
 		return err
 	}
 
-	return nil
+	return driver.Write(wb)
 }

@@ -29,6 +29,7 @@ import (
 	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
 	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
 	"github.com/deepfabric/elasticell/pkg/pd"
+	"github.com/deepfabric/elasticell/pkg/storage"
 	"github.com/deepfabric/elasticell/pkg/util"
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
@@ -39,6 +40,7 @@ type tempRaftContext struct {
 	applyState mraft.RaftApplyState
 	lastTerm   uint64
 	snapCell   *metapb.Cell
+	wb         storage.WriteBatch
 }
 
 type applySnapResult struct {
@@ -98,7 +100,7 @@ func (ps *peerStorage) doAppendSnapshot(ctx *tempRaftContext, snap raftpb.Snapsh
 	}
 
 	if ps.isInitialized() {
-		err := ps.clearMeta()
+		err := ps.clearMeta(ctx.wb)
 		if err != nil {
 			log.Errorf("raftstore[cell-%d]: clear meta failed, errors:\n %+v",
 				ps.getCell().ID,
@@ -107,7 +109,7 @@ func (ps *peerStorage) doAppendSnapshot(ctx *tempRaftContext, snap raftpb.Snapsh
 		}
 	}
 
-	err := ps.updatePeerState(ps.getCell(), mraft.Applying)
+	err := ps.updatePeerState(ps.getCell(), mraft.Applying, ctx.wb)
 	if err != nil {
 		log.Errorf("raftstore[cell-%d]: write peer state failed, errors:\n %+v",
 			ps.getCell().ID,
@@ -187,7 +189,7 @@ func (ps *peerStorage) doAppendEntries(ctx *tempRaftContext, entries []raftpb.En
 
 func (pr *PeerReplicate) doSaveRaftState(ctx *tempRaftContext) error {
 	data, _ := ctx.raftState.Marshal()
-	err := pr.store.getMetaEngine().Set(getRaftStateKey(pr.ps.getCell().ID), data)
+	err := ctx.wb.Set(storage.Meta, getRaftStateKey(pr.ps.getCell().ID), data)
 	if err != nil {
 		log.Errorf("raftstore[cell-%d]: save temp raft state failure, errors:\n %+v",
 			pr.ps.getCell().ID,
@@ -198,7 +200,7 @@ func (pr *PeerReplicate) doSaveRaftState(ctx *tempRaftContext) error {
 }
 
 func (pr *PeerReplicate) doSaveApplyState(ctx *tempRaftContext) error {
-	err := pr.store.getMetaEngine().Set(getApplyStateKey(pr.ps.getCell().ID), util.MustMarshal(&ctx.applyState))
+	err := ctx.wb.Set(storage.Meta, getApplyStateKey(pr.ps.getCell().ID), util.MustMarshal(&ctx.applyState))
 	if err != nil {
 		log.Errorf("raftstore[cell-%d]: save temp apply state failure, errors:\n %+v",
 			pr.ps.getCell().ID,
@@ -548,8 +550,8 @@ func (s *Store) doApplyRaftLogGC(cellID uint64, result *raftGCResult) {
 		err := pr.startRaftLogGCJob(cellID, startIndex, endIndex)
 		if err != nil {
 			log.Errorf("raftstore-compact[cell-%d]: add raft gc job failed, errors:\n %+v",
-			cellID,
-			err)
+				cellID,
+				err)
 		}
 	}
 }
