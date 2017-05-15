@@ -38,7 +38,7 @@ func main() {
 		syscall.SIGTERM,
 		syscall.SIGQUIT)
 
-	s.Start()
+	go s.Start()
 
 	sig := <-sc
 	s.Stop()

@@ -12,11 +12,28 @@ option (gogoproto.unmarshaler_all) = true;
 option (gogoproto.goproto_enum_prefix_all) = false;
 
 enum CMDType {
-    Invalid = 0;
-    Get     = 1;
-    Put     = 3;
-    Delete  = 4;
-    Snap    = 5;
+    Invalid  = 0;
+    Snap     = 1;
+
+    // common
+    Keys     = 100;
+    Del      = 101;
+
+    // kv 
+    Set      = 200;
+    Get      = 201;
+    MSet     = 202;
+    MGet     = 203;
+    Incrby   = 204;
+    Decrby   = 205;
+    GetSet   = 206;
+    Append   = 207;
+    Setnx    = 208;
+    StrLen   = 209;
+    Incr     = 210;
+    Decr     = 211;
+    SetRange = 212;
+    MSetNX   = 213;
 }
 
 enum AdminCmdType {
@@ -58,16 +75,6 @@ message RaftCMDResponse {
     optional RaftResponseHeader header        = 1 [(gogoproto.nullable) = true];
     repeated Response           responses     = 2 [(gogoproto.nullable) = true];
     optional AdminResponse      adminResponse = 3 [(gogoproto.nullable) = true];
-}
-
-message Request {
-    optional CMDType type = 1 [(gogoproto.nullable) = false];;
-    optional bytes   body = 2;
-}
-
-message Response {
-    optional CMDType type = 1 [(gogoproto.nullable) = false];;
-    optional bytes   body = 2;
 }
 
 // admin request
@@ -124,4 +131,34 @@ message RaftLogGCRequest {
 
 message RaftLogGCResponse {
     
+}
+
+// redis command
+
+message FVPair {
+    optional bytes field = 1;
+    optional bytes value = 2;
+}
+
+message ScorePair {
+    optional int64 score  = 1 [(gogoproto.nullable) = false];
+    optional bytes member = 2;
+}
+
+message Request {
+    optional CMDType type = 1 [(gogoproto.nullable) = false];
+    repeated bytes   cmd  = 2;
+}
+
+message Response {
+    optional CMDType   type                 = 1 [(gogoproto.nullable) = false];
+    optional bytes     errorResult          = 2;
+    optional bytes     statusResult         = 3;
+    optional int64     integerResult        = 4;
+    optional bytes     bulkResult           = 5;
+    optional bool      hasEmptyBulkResult   = 6;
+    repeated bytes     sliceArrayResult     = 7;
+    repeated FVPair    fvPairArrayResult    = 8;
+    repeated ScorePair scorePairArrayResult = 9;
+    optional bool      withscores           = 10;
 }

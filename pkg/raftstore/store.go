@@ -25,6 +25,7 @@ import (
 	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
 	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
 	"github.com/deepfabric/elasticell/pkg/pd"
+	"github.com/deepfabric/elasticell/pkg/redis"
 	"github.com/deepfabric/elasticell/pkg/storage"
 	"github.com/deepfabric/elasticell/pkg/util"
 	"github.com/deepfabric/elasticell/pkg/util/uuid"
@@ -337,6 +338,48 @@ func (s *Store) GetID() uint64 {
 // GetMeta returns store meta
 func (s *Store) GetMeta() metapb.Store {
 	return s.meta
+}
+
+func (s *Store) getTargetCell(key []byte) (*PeerReplicate, error) {
+	cell := s.keyRanges.Search(key)
+	if cell.ID == pd.ZeroID {
+		return nil, errKeyNotInStore
+	}
+
+	pr := s.replicatesMap.get(cell.ID)
+	if pr == nil {
+		return nil, errKeyNotInStore
+	}
+
+	return pr, nil
+}
+
+// OnRedisCommand process redis command
+func (s *Store) OnRedisCommand(cmdType raftcmdpb.CMDType, cmd redis.Command, cb func(*raftcmdpb.RaftCMDResponse)) error {
+	key := cmd.Args()[0]
+	pr, err := s.getTargetCell(key)
+	if err != nil {
+		return err
+	}
+
+	cell := pr.getCell()
+
+	req := new(raftcmdpb.RaftCMDRequest)
+	req.Header = &raftcmdpb.RaftRequestHeader{
+		CellId:     cell.ID,
+		Peer:       pr.getPeer(),
+		ReadQuorum: true, // TODO: configuration
+		UUID:       uuid.NewV4().Bytes(),
+		CellEpoch:  cell.Epoch,
+	}
+
+	req.Requests = append(req.Requests, &raftcmdpb.Request{
+		Type: cmdType,
+		Cmd:  cmd,
+	})
+
+	s.notify(newCMD(req, cb))
+	return nil
 }
 
 func (s *Store) notify(msg interface{}) {
@@ -879,14 +922,14 @@ func (s *Store) sendAdminRequest(cell metapb.Cell, peer metapb.Peer, adminReq *r
 	s.notify(cmd)
 }
 
-func (s *Store) getEngine(kind storage.Kind) storage.Engine {
-	return s.engine.GetEngine(kind)
-}
-
 func (s *Store) getMetaEngine() storage.Engine {
-	return s.getEngine(storage.Meta)
+	return s.engine.GetEngine()
 }
 
-func (s *Store) getDataEngine() storage.Engine {
-	return s.getEngine(storage.Data)
+func (s *Store) getDataEngine() storage.DataEngine {
+	return s.engine.GetDataEngine()
+}
+
+func (s *Store) getKVEngine() storage.KVEngine {
+	return s.engine.GetKVEngine()
 }

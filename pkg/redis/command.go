@@ -14,37 +14,44 @@
 package redis
 
 import (
+	"strings"
+
 	"github.com/deepfabric/elasticell/pkg/util"
 )
 
 const (
-	Del      = "del"
 	Set      = "set"
-	SetNX    = "setnx"
-	MSet     = "mset"
-	MSetNX   = "msetnx"
-	Append   = "append"
-	StrLen   = "strlen"
-	SetRange = "setrange"
-	Decr     = "decr"
-	DecrBy   = "decrby"
-	Incr     = "incr"
-	IncrBy   = "incrby"
 	Get      = "get"
-	GetSet   = "getset"
 	MGet     = "mget"
+	MSet     = "mset"
+	Keys     = "keys"
+	IncrBy   = "incrby"
+	DecrBy   = "decrby"
+	GetSet   = "getset"
+	Append   = "append"
+	SetNX    = "setnx"
+	StrLen   = "strlen"
+	Del      = "del"
+	Decr     = "decr"
+	Incr     = "incr"
+	SetRange = "setrange"
+	MSetNX   = "msetnx"
 )
 
 // Command redis command
-type Command struct {
-	Cmd  string
-	Args [][]byte
+type Command [][]byte
+
+// Cmd returns redis command
+func (c Command) Cmd() []byte {
+	return c[0]
 }
 
-// NewCommand create a new command
-func NewCommand(data [][]byte) *Command {
-	return &Command{
-		Cmd:  util.SliceToString(data[0]),
-		Args: data[1:],
-	}
+// CmdString returns redis command use lower string
+func (c Command) CmdString() string {
+	return strings.ToLower(util.SliceToString(c[0]))
+}
+
+// Args returns redis command args
+func (c Command) Args() [][]byte {
+	return c[1:]
 }

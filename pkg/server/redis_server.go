@@ -14,15 +14,21 @@
 package server
 
 import (
-	"fmt"
+	"strings"
 
+	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
+	"github.com/deepfabric/elasticell/pkg/raftstore"
 	"github.com/deepfabric/elasticell/pkg/redis"
+	"github.com/deepfabric/elasticell/pkg/util"
 	"github.com/fagongzi/goetty"
 )
 
 // RedisServer is provide a redis like server
 type RedisServer struct {
-	s *goetty.Server
+	store       *raftstore.Store
+	s           *goetty.Server
+	typeMapping map[string]raftcmdpb.CMDType
+	handlers    map[raftcmdpb.CMDType]func(raftcmdpb.CMDType, redis.Command, *session) error
 }
 
 // Start used for start the redis server
@@ -36,22 +42,68 @@ func (s *RedisServer) Stop() error {
 	return nil
 }
 
+func (s *RedisServer) init() {
+	s.handlers = make(map[raftcmdpb.CMDType]func(raftcmdpb.CMDType, redis.Command, *session) error)
+	s.typeMapping = make(map[string]raftcmdpb.CMDType)
+
+	for k, v := range raftcmdpb.AdminCmdType_value {
+		s.typeMapping[strings.ToLower(k)] = raftcmdpb.CMDType(v)
+	}
+
+	// server
+	s.handlers[raftcmdpb.Del] = s.onDel
+
+	// kv
+	s.handlers[raftcmdpb.Set] = s.onSet
+	s.handlers[raftcmdpb.Get] = s.onGet
+	s.handlers[raftcmdpb.Incrby] = s.onIncrBy
+	s.handlers[raftcmdpb.Incr] = s.onIncr
+	s.handlers[raftcmdpb.Decrby] = s.onDecrby
+	s.handlers[raftcmdpb.Decr] = s.onDecr
+	s.handlers[raftcmdpb.GetSet] = s.onGetSet
+	s.handlers[raftcmdpb.Append] = s.onAppend
+	s.handlers[raftcmdpb.Setnx] = s.onSetNX
+	s.handlers[raftcmdpb.StrLen] = s.onStrLen
+}
+
 func (s *RedisServer) doConnection(session goetty.IOSession) error {
+	// every client has 2 goroutines, read and write
+	rs := newSession(session)
+	go rs.writeLoop()
+	defer rs.close()
+
 	for {
 		req, err := session.Read()
 		if err != nil {
 			return err
 		}
 
-		cmd, _ := req.(*redis.Command)
-		fmt.Printf("cmd: %s", cmd.Cmd)
-		for _, arg := range cmd.Args {
-			fmt.Printf(" %s", string(arg))
+		err = s.onRedisCommand(req.(redis.Command), rs)
+		if err != nil {
+			rs.onResp(&raftcmdpb.Response{
+				ErrorResult: util.StringToSlice(err.Error()),
+			})
 		}
-		fmt.Println("")
+	}
+}
 
-		// session.Write(redis.StatusReply("OK"))
-
+func (s *RedisServer) onRedisCommand(cmd redis.Command, session *session) error {
+	t := s.typeMapping[cmd.CmdString()]
+	h, ok := s.handlers[t]
+	if !ok {
+		session.onResp(redis.ErrNotSupportCommand)
 		return nil
 	}
+
+	return h(t, cmd, session)
+}
+
+func (s *RedisServer) onDel(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) error {
+	args := cmd.Args()
+	if len(args) != 1 {
+		session.onResp(redis.ErrInvalidCommandResp)
+		return nil
+	}
+
+	return s.store.OnRedisCommand(cmdType, cmd, session.respCB)
 }

@@ -22,6 +22,7 @@ import (
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
 	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
 	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
+	"github.com/deepfabric/elasticell/pkg/redis"
 	"github.com/deepfabric/elasticell/pkg/storage"
 	"github.com/deepfabric/elasticell/pkg/util"
 )
@@ -76,7 +77,7 @@ func (d *applyDelegate) doApplyRaftCMD(req *raftcmdpb.RaftCMDRequest, term uint6
 
 	ctx.applyState.AppliedIndex = index
 	if !d.isPendingRemove() {
-		err := ctx.wb.Set(storage.Meta, getApplyStateKey(d.cell.ID), util.MustMarshal(&ctx.applyState))
+		err := ctx.wb.Set(getApplyStateKey(d.cell.ID), util.MustMarshal(&ctx.applyState))
 		if err != nil {
 			log.Fatalf("raftstore-apply[cell-%d]: save apply context failed, errors:\n %+v",
 				d.cell.ID,
@@ -325,9 +326,27 @@ func (d *applyDelegate) doExecRaftGC(ctx *execContext) (*raftcmdpb.RaftCMDRespon
 }
 
 func (d *applyDelegate) execWriteRequest(ctx *execContext) *raftcmdpb.RaftCMDResponse {
+	resp := new(raftcmdpb.RaftCMDResponse)
+
+	// TODO: imple write command
 	for _, req := range ctx.req.Requests {
 		switch req.Type {
-		// TODO: imple write command
+		case raftcmdpb.Set:
+			resp.Responses = append(resp.Responses, d.execKVSet(req))
+		case raftcmdpb.Incrby:
+			resp.Responses = append(resp.Responses, d.execKVIncrBy(req))
+		case raftcmdpb.Incr:
+			resp.Responses = append(resp.Responses, d.execKVIncr(req))
+		case raftcmdpb.Decrby:
+			resp.Responses = append(resp.Responses, d.execKVDecrby(req))
+		case raftcmdpb.Decr:
+			resp.Responses = append(resp.Responses, d.execKVDecr(req))
+		case raftcmdpb.GetSet:
+			resp.Responses = append(resp.Responses, d.execKVGetSet(req))
+		case raftcmdpb.Append:
+			resp.Responses = append(resp.Responses, d.execKVAppend(req))
+		case raftcmdpb.Setnx:
+			resp.Responses = append(resp.Responses, d.execKVSetNX(req))
 		}
 	}
 
@@ -335,7 +354,226 @@ func (d *applyDelegate) execWriteRequest(ctx *execContext) *raftcmdpb.RaftCMDRes
 }
 
 func (pr *PeerReplicate) doExecReadCmd(cmd *cmd) {
-	// TODO: imple read cmd
+	resp := new(raftcmdpb.RaftCMDResponse)
+
+	// TODO: impl read cmd
+	for _, req := range cmd.req.Requests {
+		switch req.Type {
+		case raftcmdpb.Get:
+			resp.Responses = append(resp.Responses, pr.execKVGet(req))
+		case raftcmdpb.StrLen:
+			resp.Responses = append(resp.Responses, pr.execKVStrLen(req))
+		}
+	}
+}
+
+// kv
+func (d *applyDelegate) execKVSet(req *raftcmdpb.Request) *raftcmdpb.Response {
+	cmd := redis.Command(req.Cmd)
+	args := cmd.Args()
+
+	if len(args) != 2 {
+		return redis.ErrInvalidCommandResp
+	}
+
+	err := d.store.getKVEngine().Set(args[0], args[1])
+	if err != nil {
+		return &raftcmdpb.Response{
+			ErrorResult: util.StringToSlice(err.Error()),
+		}
+	}
+
+	return redis.OKStatusResp
+}
+
+func (pr *PeerReplicate) execKVGet(req *raftcmdpb.Request) *raftcmdpb.Response {
+	cmd := redis.Command(req.Cmd)
+	args := cmd.Args()
+
+	if len(args) != 1 {
+		return redis.ErrInvalidCommandResp
+	}
+
+	value, err := pr.store.getKVEngine().Get(args[0])
+	if err != nil {
+		return &raftcmdpb.Response{
+			ErrorResult: util.StringToSlice(err.Error()),
+		}
+	}
+
+	return &raftcmdpb.Response{
+		BulkResult: value,
+	}
+}
+
+func (pr *PeerReplicate) execKVStrLen(req *raftcmdpb.Request) *raftcmdpb.Response {
+	cmd := redis.Command(req.Cmd)
+	args := cmd.Args()
+
+	if len(args) != 1 {
+		return redis.ErrInvalidCommandResp
+	}
+
+	n, err := pr.store.getKVEngine().StrLen(args[0])
+	if err != nil {
+		return &raftcmdpb.Response{
+			ErrorResult: util.StringToSlice(err.Error()),
+		}
+	}
+
+	return &raftcmdpb.Response{
+		IntegerResult: &n,
+	}
+}
+
+func (d *applyDelegate) execKVIncrBy(req *raftcmdpb.Request) *raftcmdpb.Response {
+	cmd := redis.Command(req.Cmd)
+	args := cmd.Args()
+
+	if len(args) != 2 {
+		return redis.ErrInvalidCommandResp
+	}
+
+	incrment, err := util.StrInt64(args[1])
+	if err != nil {
+		return redis.ErrInvalidCommandResp
+	}
+
+	n, err := d.store.getKVEngine().IncrBy(args[0], incrment)
+	if err != nil {
+		return &raftcmdpb.Response{
+			ErrorResult: util.StringToSlice(err.Error()),
+		}
+	}
+
+	return &raftcmdpb.Response{
+		IntegerResult: &n,
+	}
+}
+
+func (d *applyDelegate) execKVIncr(req *raftcmdpb.Request) *raftcmdpb.Response {
+	cmd := redis.Command(req.Cmd)
+	args := cmd.Args()
+
+	if len(args) != 1 {
+		return redis.ErrInvalidCommandResp
+	}
+
+	n, err := d.store.getKVEngine().IncrBy(args[0], 1)
+	if err != nil {
+		return &raftcmdpb.Response{
+			ErrorResult: util.StringToSlice(err.Error()),
+		}
+	}
+
+	return &raftcmdpb.Response{
+		IntegerResult: &n,
+	}
+}
+
+func (d *applyDelegate) execKVDecrby(req *raftcmdpb.Request) *raftcmdpb.Response {
+	cmd := redis.Command(req.Cmd)
+	args := cmd.Args()
+
+	if len(args) != 2 {
+		return redis.ErrInvalidCommandResp
+	}
+
+	incrment, err := util.StrInt64(args[1])
+	if err != nil {
+		return redis.ErrInvalidCommandResp
+	}
+
+	n, err := d.store.getKVEngine().DecrBy(args[0], incrment)
+	if err != nil {
+		return &raftcmdpb.Response{
+			ErrorResult: util.StringToSlice(err.Error()),
+		}
+	}
+
+	return &raftcmdpb.Response{
+		IntegerResult: &n,
+	}
+}
+
+func (d *applyDelegate) execKVDecr(req *raftcmdpb.Request) *raftcmdpb.Response {
+	cmd := redis.Command(req.Cmd)
+	args := cmd.Args()
+
+	if len(args) != 1 {
+		return redis.ErrInvalidCommandResp
+	}
+
+	n, err := d.store.getKVEngine().DecrBy(args[0], 1)
+	if err != nil {
+		return &raftcmdpb.Response{
+			ErrorResult: util.StringToSlice(err.Error()),
+		}
+	}
+
+	return &raftcmdpb.Response{
+		IntegerResult: &n,
+	}
+}
+
+func (d *applyDelegate) execKVGetSet(req *raftcmdpb.Request) *raftcmdpb.Response {
+	cmd := redis.Command(req.Cmd)
+	args := cmd.Args()
+
+	if len(args) != 2 {
+		return redis.ErrInvalidCommandResp
+	}
+
+	value, err := d.store.getKVEngine().GetSet(args[0], args[1])
+	if err != nil {
+		return &raftcmdpb.Response{
+			ErrorResult: util.StringToSlice(err.Error()),
+		}
+	}
+
+	return &raftcmdpb.Response{
+		BulkResult: value,
+	}
+}
+
+func (d *applyDelegate) execKVAppend(req *raftcmdpb.Request) *raftcmdpb.Response {
+	cmd := redis.Command(req.Cmd)
+	args := cmd.Args()
+
+	if len(args) != 2 {
+		return redis.ErrInvalidCommandResp
+	}
+
+	n, err := d.store.getKVEngine().Append(args[0], args[1])
+	if err != nil {
+		return &raftcmdpb.Response{
+			ErrorResult: util.StringToSlice(err.Error()),
+		}
+	}
+
+	return &raftcmdpb.Response{
+		IntegerResult: &n,
+	}
+}
+
+func (d *applyDelegate) execKVSetNX(req *raftcmdpb.Request) *raftcmdpb.Response {
+	cmd := redis.Command(req.Cmd)
+	args := cmd.Args()
+
+	if len(args) != 2 {
+		return redis.ErrInvalidCommandResp
+	}
+
+	n, err := d.store.getKVEngine().SetNX(args[0], args[1])
+	if err != nil {
+		return &raftcmdpb.Response{
+			ErrorResult: util.StringToSlice(err.Error()),
+		}
+	}
+
+	return &raftcmdpb.Response{
+		IntegerResult: &n,
+	}
 }
 
 func newAdminRaftCMDResponse(adminType raftcmdpb.AdminCmdType, subRsp util.Marashal) *raftcmdpb.RaftCMDResponse {

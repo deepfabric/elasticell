@@ -13,49 +13,70 @@
 
 package storage
 
-// Kind is the type for engine
-type Kind int
-
-var (
-	// Meta is used for meta info storage
-	Meta = Kind(0)
-	// DataKV is used for KV storage
-	DataKV = Kind(1)
-	// DataHash is used for Hash storage
-	DataHash = Kind(2)
-	// DataSet is used for Set storage
-	DataSet = Kind(4)
-	// DataZSet is used for ZSet storage
-	DataZSet = Kind(8)
-	// DataList is used for List storage
-	DataList = Kind(16)
-	// Data is used for DATA storage
-	Data = Kind(DataKV | DataHash | DataSet | DataZSet | DataList)
-)
-
 // WriteBatch batch operation
 type WriteBatch interface {
-	Delete(kind Kind, key []byte) error
-	Set(kind Kind, key []byte, value []byte) error
+	Delete(key []byte) error
+	Set(key []byte, value []byte) error
 }
 
 // Driver is def storage interface
 type Driver interface {
-	GetEngine(kind Kind) Engine
+	GetEngine() Engine
+	GetDataEngine() DataEngine
+
+	// TODO: impl redis data struct engine
+	GetKVEngine() KVEngine
+	// GetHashEngine() HashEngine
+	// GetSetEngine() SetEngine
+	// GetListEngine() ListEngine
+
 	NewWriteBatch() WriteBatch
 	Write(wb WriteBatch) error
 }
 
-// Engine is the data storage engine
-type Engine interface {
-	Set(key []byte, value []byte) error
+// KVEngine is the storage of KV
+type KVEngine interface {
+	Set(key, value []byte) error
 	Get(key []byte) ([]byte, error)
-	Delete(key []byte) error
+	IncrBy(key []byte, incrment int64) (int64, error)
+	DecrBy(key []byte, incrment int64) (int64, error)
+	GetSet(key, value []byte) ([]byte, error)
+	Append(key, value []byte) (int64, error)
+	SetNX(key, value []byte) (int64, error)
+	StrLen(key []byte) (int64, error)
+}
+
+// HashEngine is the storage of Hash
+type HashEngine interface {
+}
+
+// SetEngine is the storage of Set
+type SetEngine interface {
+}
+
+// ListEngine is the storage of List
+type ListEngine interface {
+}
+
+// DataEngine is the storage of redis data
+type DataEngine interface {
 	RangeDelete(start, end []byte) error
 	// Scan scans the range and execute the handler fun.
 	// returns false means end the scan.
 	Scan(startKey []byte, endKey []byte, handler func(key, value []byte) (bool, error)) error
+	// Scan scans the range and execute the handler fun.
+	// returns false means end the scan.
+	ScanSize(startKey []byte, endKey []byte, handler func(key []byte, size uint64) (bool, error)) error
 	CompactRange(startKey []byte, endKey []byte) error
 	// Seek the first key >= given key, if no found, return None.
 	Seek(key []byte) ([]byte, []byte, error)
+}
+
+// Engine is the storage of meta data
+type Engine interface {
+	DataEngine
+
+	Set(key []byte, value []byte) error
+	Get(key []byte) ([]byte, error)
+	Delete(key []byte) error
 }

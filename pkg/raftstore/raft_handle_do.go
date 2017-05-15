@@ -189,7 +189,7 @@ func (ps *peerStorage) doAppendEntries(ctx *tempRaftContext, entries []raftpb.En
 
 func (pr *PeerReplicate) doSaveRaftState(ctx *tempRaftContext) error {
 	data, _ := ctx.raftState.Marshal()
-	err := ctx.wb.Set(storage.Meta, getRaftStateKey(pr.ps.getCell().ID), data)
+	err := ctx.wb.Set(getRaftStateKey(pr.ps.getCell().ID), data)
 	if err != nil {
 		log.Errorf("raftstore[cell-%d]: save temp raft state failure, errors:\n %+v",
 			pr.ps.getCell().ID,
@@ -200,7 +200,7 @@ func (pr *PeerReplicate) doSaveRaftState(ctx *tempRaftContext) error {
 }
 
 func (pr *PeerReplicate) doSaveApplyState(ctx *tempRaftContext) error {
-	err := ctx.wb.Set(storage.Meta, getApplyStateKey(pr.ps.getCell().ID), util.MustMarshal(&ctx.applyState))
+	err := ctx.wb.Set(getApplyStateKey(pr.ps.getCell().ID), util.MustMarshal(&ctx.applyState))
 	if err != nil {
 		log.Errorf("raftstore[cell-%d]: save temp apply state failure, errors:\n %+v",
 			pr.ps.getCell().ID,
@@ -301,8 +301,8 @@ func (pr *PeerReplicate) doSplitCheck(epoch metapb.CellEpoch, startKey, endKey [
 	var size uint64
 	var splitKey []byte
 
-	err := pr.store.getDataEngine().Scan(startKey, endKey, func(key, value []byte) (bool, error) {
-		size += uint64(len(value))
+	err := pr.store.getDataEngine().ScanSize(startKey, endKey, func(key []byte, keySize uint64) (bool, error) {
+		size += keySize
 
 		if len(splitKey) == 0 && size > pr.store.cfg.CellSplitSize {
 			splitKey = key

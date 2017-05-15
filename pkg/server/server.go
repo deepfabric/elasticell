@@ -18,6 +18,7 @@ import (
 
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/node"
+	"github.com/deepfabric/elasticell/pkg/raftstore"
 	"github.com/deepfabric/elasticell/pkg/redis"
 	"github.com/deepfabric/elasticell/pkg/storage"
 	"github.com/fagongzi/goetty"
@@ -41,8 +42,8 @@ func NewServer(cfg *Cfg) *Server {
 	s.cfg = cfg
 	s.stopC = make(chan interface{})
 
-	s.initRedis()
 	s.initNode()
+	s.initRedis()
 
 	return s
 }
@@ -51,8 +52,8 @@ func NewServer(cfg *Cfg) *Server {
 func (s *Server) Start() {
 	go s.listenToStop()
 
-	go s.startRedis()
-	go s.startNode()
+	store := s.startNode()
+	s.startRedis(store)
 }
 
 // Stop stop the server
@@ -75,8 +76,9 @@ func (s *Server) doStop() {
 	})
 }
 
-func (s *Server) startRedis() {
+func (s *Server) startRedis(store *raftstore.Store) {
 	if nil != s.redisServer {
+		s.redisServer.store = store
 		err := s.redisServer.Start()
 		if err != nil {
 			log.Fatalf("bootstrap: failure to start redis server, cfg=<%v> errors:\n %+v",
@@ -100,10 +102,12 @@ func (s *Server) stopRedis() {
 	}
 }
 
-func (s *Server) startNode() {
+func (s *Server) startNode() *raftstore.Store {
 	if nil != s.nodeServer {
-		s.nodeServer.Start()
+		return s.nodeServer.Start()
 	}
+
+	return nil
 }
 
 func (s *Server) stopNode() {
@@ -128,6 +132,7 @@ func (s *Server) initRedis() {
 		goetty.NewInt64IDGenerator())
 
 	s.redisServer = rs
+	s.redisServer.init()
 }
 
 func (s *Server) initNode() {

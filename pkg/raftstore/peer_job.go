@@ -22,7 +22,6 @@ import (
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
 	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
-	"github.com/deepfabric/elasticell/pkg/storage"
 )
 
 func (pr *PeerReplicate) startApplyingSnapJob() {
@@ -350,7 +349,7 @@ func (pr *PeerReplicate) doRaftLogGC(cellID, startIndex, endIndex uint64) error 
 	if firstIndex == 0 {
 		startKey := getRaftLogKey(cellID, 0)
 		firstIndex = endIndex
-		key, _, err := pr.store.engine.GetEngine(storage.Meta).Seek(startKey)
+		key, _, err := pr.store.engine.GetEngine().Seek(startKey)
 		if err != nil {
 			return err
 		}
@@ -372,7 +371,7 @@ func (pr *PeerReplicate) doRaftLogGC(cellID, startIndex, endIndex uint64) error 
 	wb := pr.store.engine.NewWriteBatch()
 	for index := firstIndex; index < endIndex; index++ {
 		key := getRaftLogKey(cellID, index)
-		err := wb.Delete(storage.Meta, key)
+		err := wb.Delete(key)
 		if err != nil {
 			return err
 		}

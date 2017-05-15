@@ -420,7 +420,7 @@ func (ps *peerStorage) clearMeta(wb storage.WriteBatch) error {
 	metaEnd := getCellMetaPrefix(ps.getCell().ID + 1)
 
 	err := ps.store.getMetaEngine().Scan(metaStart, metaEnd, func(key, value []byte) (bool, error) {
-		err := wb.Delete(storage.Meta, key)
+		err := wb.Delete(key)
 		if err != nil {
 			return false, errors.Wrapf(err, "")
 		}
@@ -437,7 +437,7 @@ func (ps *peerStorage) clearMeta(wb storage.WriteBatch) error {
 	raftEnd := getCellRaftPrefix(ps.getCell().ID + 1)
 
 	err = ps.store.getMetaEngine().Scan(raftStart, raftEnd, func(key, value []byte) (bool, error) {
-		err := wb.Delete(storage.Meta, key)
+		err := wb.Delete(key)
 		if err != nil {
 			return false, errors.Wrapf(err, "")
 		}
@@ -524,7 +524,7 @@ func (ps *peerStorage) updatePeerState(cell metapb.Cell, state mraft.PeerState, 
 	data, _ := cellState.Marshal()
 
 	if wb != nil {
-		return wb.Set(storage.Meta, getCellStateKey(cell.ID), data)
+		return wb.Set(getCellStateKey(cell.ID), data)
 	}
 
 	return ps.store.getMetaEngine().Set(getCellStateKey(cell.ID), data)
@@ -541,12 +541,12 @@ func (ps *peerStorage) writeInitialState(cellID uint64, wb storage.WriteBatch) e
 	applyState.TruncatedState.Index = raftInitLogIndex
 	applyState.TruncatedState.Term = raftInitLogTerm
 
-	err := wb.Set(storage.Meta, getRaftStateKey(cellID), util.MustMarshal(raftState))
+	err := wb.Set(getRaftStateKey(cellID), util.MustMarshal(raftState))
 	if err != nil {
 		return err
 	}
 
-	return wb.Set(storage.Meta, getApplyStateKey(cellID), util.MustMarshal(applyState))
+	return wb.Set(getApplyStateKey(cellID), util.MustMarshal(applyState))
 }
 
 func (ps *peerStorage) deleteAllInRange(start, end []byte, job *util.Job) error {

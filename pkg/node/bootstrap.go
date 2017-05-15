@@ -23,7 +23,6 @@ import (
 	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
 	"github.com/deepfabric/elasticell/pkg/pd"
 	"github.com/deepfabric/elasticell/pkg/raftstore"
-	"github.com/deepfabric/elasticell/pkg/storage"
 	"github.com/deepfabric/elasticell/pkg/util"
 	"golang.org/x/net/context"
 )
@@ -44,7 +43,7 @@ func (n *Node) checkClusterBootstrapped() bool {
 }
 
 func (n *Node) checkStore() uint64 {
-	data, err := n.driver.GetEngine(storage.Meta).Get(raftstore.GetStoreIdentKey())
+	data, err := n.driver.GetEngine().Get(raftstore.GetStoreIdentKey())
 	if err != nil {
 		log.Fatalf("bootstrap: check store failed, errors:\n %+v", err)
 	}
@@ -79,7 +78,7 @@ func (n *Node) bootstrapStore() uint64 {
 	log.Infof("bootstrap: alloc store id succ, id=<%d>", storeID)
 
 	count := 0
-	err = n.driver.GetEngine(storage.Meta).Scan(raftstore.GetMinKey(), raftstore.GetMaxKey(), func([]byte, []byte) (bool, error) {
+	err = n.driver.GetEngine().Scan(raftstore.GetMinKey(), raftstore.GetMaxKey(), func([]byte, []byte) (bool, error) {
 		count++
 		return false, nil
 	})
@@ -96,7 +95,7 @@ func (n *Node) bootstrapStore() uint64 {
 	st.ClusterID = n.clusterID
 	st.StoreID = storeID
 
-	err = n.driver.GetEngine(storage.Meta).Set(raftstore.GetStoreIdentKey(), util.MustMarshal(st))
+	err = n.driver.GetEngine().Set(raftstore.GetStoreIdentKey(), util.MustMarshal(st))
 	if err != nil {
 		log.Fatalf("bootstrap: bootstrap store failed, errors:\n %v", err)
 	}

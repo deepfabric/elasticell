@@ -40,7 +40,13 @@ const (
 	defaultBufferSize = 64
 )
 
-func readCommand(in *goetty.ByteBuf) (bool, *Command, error) {
+var (
+	delims    = []byte("\r\n")
+	nullBulk  = []byte("-1")
+	nullArray = []byte("-1")
+)
+
+func readCommand(in *goetty.ByteBuf) (bool, Command, error) {
 	for {
 		// remember the begin read index,
 		// if we found has no enough data, we will resume this read index,
@@ -54,7 +60,7 @@ func readCommand(in *goetty.ByteBuf) (bool, *Command, error) {
 
 		// 1. Read ( *<number of arguments> CR LF )
 		if c != CMDBegin {
-			return false, nil, pe.Wrap(ErrIllegalPacket, "1 read")
+			return false, nil, pe.Wrap(ErrIllegalPacket, "")
 		}
 
 		// 2. Read number of arguments
@@ -79,7 +85,7 @@ func readCommand(in *goetty.ByteBuf) (bool, *Command, error) {
 			// 3.2 Read ( *<number of arguments> CR LF )
 
 			if c != ARGBegin {
-				return false, nil, pe.Wrapf(ErrIllegalPacket, "3.2 read")
+				return false, nil, pe.Wrapf(ErrIllegalPacket, "")
 			}
 
 			count, argBytesCount, err := readStringInt(in)
@@ -89,7 +95,7 @@ func readCommand(in *goetty.ByteBuf) (bool, *Command, error) {
 			} else if err != nil {
 				return false, nil, err
 			} else if count < 2 {
-				return false, nil, pe.Wrap(ErrIllegalPacket, "3.2-a read")
+				return false, nil, pe.Wrap(ErrIllegalPacket, "")
 			}
 
 			// 3.3  Read ( <argument data> CR LF )
@@ -104,7 +110,7 @@ func readCommand(in *goetty.ByteBuf) (bool, *Command, error) {
 			data[i] = value[:count-2]
 		}
 
-		return true, NewCommand(data), nil
+		return true, Command(data), nil
 	}
 }
 

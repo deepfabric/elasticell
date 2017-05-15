@@ -11,28 +11,31 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package server
+// +build freebsd openbsd netbsd dragonfly linux
+
+package storage
 
 import (
-	"github.com/deepfabric/elasticell/pkg/redis"
-	"github.com/fagongzi/goetty"
+	gonemo "github.com/deepfabric/go-nemo"
 )
 
-func (s *Server) setCmd(cmd *redis.Command, session goetty.IOSession) error {
-	if len(cmd.Args) != 2 {
-		return ErrInvlidArgs
-	}
+type nemoWriteBatch struct {
+	wb *gonemo.WriteBatch
+}
 
-	// return s.sd.Set(cmd.Args[0], cmd.Args[1])
+func newNemoWriteBatch(wb *gonemo.WriteBatch) WriteBatch {
+	return &nemoWriteBatch{
+		wb: wb,
+	}
+}
+
+func (n *nemoWriteBatch) Delete(key []byte) error {
+	// TODO: nemo bug, only one argment
+	n.wb.WriteBatchDel(key, nil)
 	return nil
 }
 
-func (s *Server) getCmd(cmd *redis.Command, session goetty.IOSession) error {
-	if len(cmd.Args) != 1 {
-		return ErrInvlidArgs
-	}
-
-	// v, err := s.sd.Get(cmd.Args[0])
-
+func (n *nemoWriteBatch) Set(key []byte, value []byte) error {
+	n.wb.WriteBatchPut(key, value)
 	return nil
 }

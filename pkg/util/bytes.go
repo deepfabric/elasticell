@@ -15,6 +15,7 @@ package util
 
 import (
 	"encoding/binary"
+	"strconv"
 
 	"github.com/pkg/errors"
 )
@@ -33,4 +34,9 @@ func Uint64ToBytes(v uint64) []byte {
 	b := make([]byte, 8)
 	binary.BigEndian.PutUint64(b, v)
 	return b
+}
+
+// StrInt64 str -> int64
+func StrInt64(v []byte) (int64, error) {
+	return strconv.ParseInt(SliceToString(v), 10, 64)
 }

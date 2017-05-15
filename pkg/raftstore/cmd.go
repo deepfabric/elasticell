@@ -30,6 +30,7 @@ var (
 	errMissingUUIDCMD     = errors.New("missing request uuid")
 	errLargeRaftEntrySize = errors.New("entry is too large")
 	errKeyNotInCell       = errors.New("key not in cell")
+	errKeyNotInStore      = errors.New("key not in store")
 
 	infoStaleCMD = new(errorpb.StaleCommand)
 )

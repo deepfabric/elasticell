@@ -14,6 +14,8 @@ type IOSession interface {
 	Read() (interface{}, error)
 	ReadTimeout(timeout time.Duration) (interface{}, error)
 	Write(msg interface{}) error
+	OutBuf() *ByteBuf
+	WriteOutBuf() error
 	SetAttr(key string, value interface{})
 	GetAttr(key string) interface{}
 	RemoteAddr() string
@@ -92,13 +94,22 @@ func (s *clientIOSession) Write(msg interface{}) error {
 		return err
 	}
 
+	return s.WriteOutBuf()
+}
+
+// OutBuf returns internal bytebuf that used for write to client
+func (s *clientIOSession) OutBuf() *ByteBuf {
+	return s.out
+}
+
+// WriteOutBuf writes bytes that in the internal bytebuf
+func (s *clientIOSession) WriteOutBuf() error {
 	_, bytes, _ := s.out.ReadAll()
 
 	n, err := s.conn.Write(bytes)
 
 	if err != nil {
 		s.out.Clear()
-
 		return err
 	}
 

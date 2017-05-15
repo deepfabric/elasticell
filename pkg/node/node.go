@@ -61,7 +61,7 @@ func NewNode(cfg *Cfg, driver storage.Driver) (*Node, error) {
 
 // Start start the node.
 // if cluster is not bootstrapped, bootstrap cluster and create the first cell.
-func (n *Node) Start() {
+func (n *Node) Start() *raftstore.Store {
 	bootstrapped := n.checkClusterBootstrapped()
 	storeID := n.checkStore()
 
@@ -84,6 +84,8 @@ func (n *Node) Start() {
 
 	n.startStore()
 	n.putStore()
+
+	return n.store
 }
 
 // Stop the node

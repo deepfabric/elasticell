@@ -25,7 +25,6 @@ import (
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
 	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
 	"github.com/deepfabric/elasticell/pkg/pd"
-	"github.com/deepfabric/elasticell/pkg/storage"
 	"github.com/deepfabric/elasticell/pkg/util"
 	"golang.org/x/net/context"
 )
@@ -153,7 +152,7 @@ func (pr *PeerReplicate) doCompact() error {
 	startKey := encStartKey(&c)
 	endKey := encEndKey(&c)
 
-	return pr.store.engine.GetEngine(storage.Data).CompactRange(startKey, endKey)
+	return pr.store.getDataEngine().CompactRange(startKey, endKey)
 }
 
 func (pr *PeerReplicate) doHeartbeat() error {
@@ -299,4 +298,8 @@ func (pr *PeerReplicate) getStore() *peerStorage {
 
 func (pr *PeerReplicate) getCell() metapb.Cell {
 	return pr.getStore().getCell()
+}
+
+func (pr *PeerReplicate) getPeer() metapb.Peer {
+	return pr.peer
 }
