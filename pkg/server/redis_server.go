@@ -79,6 +79,21 @@ func (s *RedisServer) init() {
 	s.handlers[raftcmdpb.HSetNX] = s.onHSetNX
 	s.handlers[raftcmdpb.HStrLen] = s.onHStrLen
 	s.handlers[raftcmdpb.HVals] = s.onHVals
+
+	// list
+	s.handlers[raftcmdpb.LIndex] = s.onLIndex
+	s.handlers[raftcmdpb.LInsert] = s.onLInsert
+	s.handlers[raftcmdpb.LLEN] = s.onLLen
+	s.handlers[raftcmdpb.LPop] = s.onLPop
+	s.handlers[raftcmdpb.LPush] = s.onLPush
+	s.handlers[raftcmdpb.LPushX] = s.onLPushX
+	s.handlers[raftcmdpb.LRange] = s.onLRange
+	s.handlers[raftcmdpb.LRem] = s.onLRem
+	s.handlers[raftcmdpb.LSet] = s.onLSet
+	s.handlers[raftcmdpb.LTrim] = s.onLTrim
+	s.handlers[raftcmdpb.RPop] = s.onRPop
+	s.handlers[raftcmdpb.RPush] = s.onRPush
+	s.handlers[raftcmdpb.RPushX] = s.onRPushX
 }
 
 func (s *RedisServer) doConnection(session goetty.IOSession) error {

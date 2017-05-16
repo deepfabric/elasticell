@@ -30,7 +30,7 @@ type Driver interface {
 	GetKVEngine() KVEngine
 	GetHashEngine() HashEngine
 	// GetSetEngine() SetEngine
-	// GetListEngine() ListEngine
+	GetListEngine() ListEngine
 
 	NewWriteBatch() WriteBatch
 	Write(wb WriteBatch) error
@@ -71,6 +71,19 @@ type SetEngine interface {
 
 // ListEngine is the storage of List
 type ListEngine interface {
+	LIndex(key []byte, index int64) ([]byte, error)
+	LInsert(key []byte, pos int, pivot []byte, value []byte) (int64, error)
+	LLen(key []byte) (int64, error)
+	LPop(key []byte) ([]byte, error)
+	LPush(key []byte, values ...[]byte) (int64, error)
+	LPushX(key []byte, value []byte) (int64, error)
+	LRange(key []byte, begin int64, end int64) ([][]byte, error)
+	LRem(key []byte, count int64, value []byte) (int64, error)
+	LSet(key []byte, index int64, value []byte) error
+	LTrim(key []byte, begin int64, end int64) error
+	RPop(key []byte) ([]byte, error)
+	RPush(key []byte, values ...[]byte) (int64, error)
+	RPushX(key []byte, value []byte) (int64, error)
 }
 
 // DataEngine is the storage of redis data

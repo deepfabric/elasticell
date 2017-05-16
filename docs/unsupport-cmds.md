@@ -1,11 +1,17 @@
 ## server
-* Keys
+* keys
 
 ## KV 
-* MSet
-* MGet
-* SetRange
+* mset
+* mget
+* setrange
 
 ## Hash
-* HScan
-* HIncrByFloat
+* hscan
+* hincrbyfloat
+
+## Lists
+* blpop
+* brpop
+* brpoplpush
+* rpoplpush 

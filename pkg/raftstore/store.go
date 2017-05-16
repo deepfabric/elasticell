@@ -937,3 +937,7 @@ func (s *Store) getKVEngine() storage.KVEngine {
 func (s *Store) getHashEngine() storage.HashEngine {
 	return s.engine.GetHashEngine()
 }
+
+func (s *Store) getListEngine() storage.ListEngine {
+	return s.engine.GetListEngine()
+}

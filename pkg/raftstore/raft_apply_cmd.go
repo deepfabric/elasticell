@@ -357,6 +357,26 @@ func (d *applyDelegate) execWriteRequest(ctx *execContext) *raftcmdpb.RaftCMDRes
 			resp.Responses = append(resp.Responses, d.execHSetNX(req))
 		case raftcmdpb.HIncrBy:
 			resp.Responses = append(resp.Responses, d.execHIncrBy(req))
+		case raftcmdpb.LInsert:
+			resp.Responses = append(resp.Responses, d.execLInsert(req))
+		case raftcmdpb.LPop:
+			resp.Responses = append(resp.Responses, d.execLPop(req))
+		case raftcmdpb.LPush:
+			resp.Responses = append(resp.Responses, d.execLPush(req))
+		case raftcmdpb.LPushX:
+			resp.Responses = append(resp.Responses, d.execLPushX(req))
+		case raftcmdpb.LRem:
+			resp.Responses = append(resp.Responses, d.execLRem(req))
+		case raftcmdpb.LSet:
+			resp.Responses = append(resp.Responses, d.execLSet(req))
+		case raftcmdpb.LTrim:
+			resp.Responses = append(resp.Responses, d.execLTrim(req))
+		case raftcmdpb.RPop:
+			resp.Responses = append(resp.Responses, d.execRPop(req))
+		case raftcmdpb.RPush:
+			resp.Responses = append(resp.Responses, d.execRPush(req))
+		case raftcmdpb.RPushX:
+			resp.Responses = append(resp.Responses, d.execRPushX(req))
 		}
 	}
 
@@ -389,6 +409,12 @@ func (pr *PeerReplicate) doExecReadCmd(cmd *cmd) {
 			resp.Responses = append(resp.Responses, pr.execHMGet(req))
 		case raftcmdpb.HStrLen:
 			resp.Responses = append(resp.Responses, pr.execHStrLen(req))
+		case raftcmdpb.LIndex:
+			resp.Responses = append(resp.Responses, pr.execLIndex(req))
+		case raftcmdpb.LLEN:
+			resp.Responses = append(resp.Responses, pr.execLLEN(req))
+		case raftcmdpb.LRange:
+			resp.Responses = append(resp.Responses, pr.execLRange(req))
 		}
 	}
 }
@@ -629,6 +655,91 @@ func (pr *PeerReplicate) execHStrLen(req *raftcmdpb.Request) *raftcmdpb.Response
 
 	return &raftcmdpb.Response{
 		IntegerResult: &value,
+	}
+}
+
+func (pr *PeerReplicate) execLIndex(req *raftcmdpb.Request) *raftcmdpb.Response {
+	cmd := redis.Command(req.Cmd)
+	args := cmd.Args()
+
+	if len(args) != 2 {
+		return redis.ErrInvalidCommandResp
+	}
+
+	index, err := util.StrInt64(args[1])
+	if err != nil {
+		return &raftcmdpb.Response{
+			ErrorResult: util.StringToSlice(err.Error()),
+		}
+	}
+
+	value, err := pr.store.getListEngine().LIndex(args[0], index)
+	if err != nil {
+		return &raftcmdpb.Response{
+			ErrorResult: util.StringToSlice(err.Error()),
+		}
+	}
+
+	has := true
+	return &raftcmdpb.Response{
+		BulkResult:         value,
+		HasEmptyBulkResult: &has,
+	}
+}
+
+func (pr *PeerReplicate) execLLEN(req *raftcmdpb.Request) *raftcmdpb.Response {
+	cmd := redis.Command(req.Cmd)
+	args := cmd.Args()
+
+	if len(args) != 1 {
+		return redis.ErrInvalidCommandResp
+	}
+
+	value, err := pr.store.getListEngine().LLen(args[0])
+	if err != nil {
+		return &raftcmdpb.Response{
+			ErrorResult: util.StringToSlice(err.Error()),
+		}
+	}
+
+	return &raftcmdpb.Response{
+		IntegerResult: &value,
+	}
+}
+
+func (pr *PeerReplicate) execLRange(req *raftcmdpb.Request) *raftcmdpb.Response {
+	cmd := redis.Command(req.Cmd)
+	args := cmd.Args()
+
+	if len(args) != 3 {
+		return redis.ErrInvalidCommandResp
+	}
+
+	start, err := util.StrInt64(args[1])
+	if err != nil {
+		return &raftcmdpb.Response{
+			ErrorResult: util.StringToSlice(err.Error()),
+		}
+	}
+
+	end, err := util.StrInt64(args[2])
+	if err != nil {
+		return &raftcmdpb.Response{
+			ErrorResult: util.StringToSlice(err.Error()),
+		}
+	}
+
+	value, err := pr.store.getListEngine().LRange(args[0], start, end)
+	if err != nil {
+		return &raftcmdpb.Response{
+			ErrorResult: util.StringToSlice(err.Error()),
+		}
+	}
+
+	has := true
+	return &raftcmdpb.Response{
+		SliceArrayResult:         value,
+		HasEmptySliceArrayResult: &has,
 	}
 }
 
@@ -902,6 +1013,241 @@ func (d *applyDelegate) execHIncrBy(req *raftcmdpb.Request) *raftcmdpb.Response 
 	}
 	return &raftcmdpb.Response{
 		IntegerResult: &v,
+	}
+}
+
+func (d *applyDelegate) execLInsert(req *raftcmdpb.Request) *raftcmdpb.Response {
+	cmd := redis.Command(req.Cmd)
+	args := cmd.Args()
+
+	if len(args) != 4 {
+		return redis.ErrInvalidCommandResp
+	}
+
+	pos, err := util.StrInt64(args[1])
+	if err != nil {
+		return &raftcmdpb.Response{
+			ErrorResult: util.StringToSlice(err.Error()),
+		}
+	}
+
+	value, err := d.store.getListEngine().LInsert(args[0], int(pos), args[2], args[3])
+	if err != nil {
+		return &raftcmdpb.Response{
+			ErrorResult: util.StringToSlice(err.Error()),
+		}
+	}
+
+	return &raftcmdpb.Response{
+		IntegerResult: &value,
+	}
+}
+
+func (d *applyDelegate) execLPop(req *raftcmdpb.Request) *raftcmdpb.Response {
+	cmd := redis.Command(req.Cmd)
+	args := cmd.Args()
+
+	if len(args) != 1 {
+		return redis.ErrInvalidCommandResp
+	}
+
+	value, err := d.store.getListEngine().LPop(args[0])
+	if err != nil {
+		return &raftcmdpb.Response{
+			ErrorResult: util.StringToSlice(err.Error()),
+		}
+	}
+
+	has := true
+	return &raftcmdpb.Response{
+		BulkResult:         value,
+		HasEmptyBulkResult: &has,
+	}
+}
+
+func (d *applyDelegate) execLPush(req *raftcmdpb.Request) *raftcmdpb.Response {
+	cmd := redis.Command(req.Cmd)
+	args := cmd.Args()
+
+	if len(args) < 2 {
+		return redis.ErrInvalidCommandResp
+	}
+
+	value, err := d.store.getListEngine().LPush(args[0], args[1:]...)
+	if err != nil {
+		return &raftcmdpb.Response{
+			ErrorResult: util.StringToSlice(err.Error()),
+		}
+	}
+
+	return &raftcmdpb.Response{
+		IntegerResult: &value,
+	}
+}
+
+func (d *applyDelegate) execLPushX(req *raftcmdpb.Request) *raftcmdpb.Response {
+	cmd := redis.Command(req.Cmd)
+	args := cmd.Args()
+
+	if len(args) != 2 {
+		return redis.ErrInvalidCommandResp
+	}
+
+	value, err := d.store.getListEngine().LPushX(args[0], args[1])
+	if err != nil {
+		return &raftcmdpb.Response{
+			ErrorResult: util.StringToSlice(err.Error()),
+		}
+	}
+
+	return &raftcmdpb.Response{
+		IntegerResult: &value,
+	}
+}
+
+func (d *applyDelegate) execLRem(req *raftcmdpb.Request) *raftcmdpb.Response {
+	cmd := redis.Command(req.Cmd)
+	args := cmd.Args()
+
+	if len(args) != 3 {
+		return redis.ErrInvalidCommandResp
+	}
+
+	count, err := util.StrInt64(args[1])
+	if err != nil {
+		return &raftcmdpb.Response{
+			ErrorResult: util.StringToSlice(err.Error()),
+		}
+	}
+
+	value, err := d.store.getListEngine().LRem(args[0], count, args[2])
+	if err != nil {
+		return &raftcmdpb.Response{
+			ErrorResult: util.StringToSlice(err.Error()),
+		}
+	}
+
+	return &raftcmdpb.Response{
+		IntegerResult: &value,
+	}
+}
+
+func (d *applyDelegate) execLSet(req *raftcmdpb.Request) *raftcmdpb.Response {
+	cmd := redis.Command(req.Cmd)
+	args := cmd.Args()
+
+	if len(args) != 3 {
+		return redis.ErrInvalidCommandResp
+	}
+
+	index, err := util.StrInt64(args[1])
+	if err != nil {
+		return &raftcmdpb.Response{
+			ErrorResult: util.StringToSlice(err.Error()),
+		}
+	}
+
+	err = d.store.getListEngine().LSet(args[0], index, args[2])
+	if err != nil {
+		return &raftcmdpb.Response{
+			ErrorResult: util.StringToSlice(err.Error()),
+		}
+	}
+
+	return redis.OKStatusResp
+}
+
+func (d *applyDelegate) execLTrim(req *raftcmdpb.Request) *raftcmdpb.Response {
+	cmd := redis.Command(req.Cmd)
+	args := cmd.Args()
+
+	if len(args) != 3 {
+		return redis.ErrInvalidCommandResp
+	}
+
+	begin, err := util.StrInt64(args[1])
+	if err != nil {
+		return &raftcmdpb.Response{
+			ErrorResult: util.StringToSlice(err.Error()),
+		}
+	}
+
+	end, err := util.StrInt64(args[2])
+	if err != nil {
+		return &raftcmdpb.Response{
+			ErrorResult: util.StringToSlice(err.Error()),
+		}
+	}
+
+	err = d.store.getListEngine().LTrim(args[0], begin, end)
+	if err != nil {
+		return &raftcmdpb.Response{
+			ErrorResult: util.StringToSlice(err.Error()),
+		}
+	}
+
+	return redis.OKStatusResp
+}
+
+func (d *applyDelegate) execRPop(req *raftcmdpb.Request) *raftcmdpb.Response {
+	cmd := redis.Command(req.Cmd)
+	args := cmd.Args()
+
+	if len(args) != 1 {
+		return redis.ErrInvalidCommandResp
+	}
+
+	value, err := d.store.getListEngine().RPop(args[0])
+	if err != nil {
+		return &raftcmdpb.Response{
+			ErrorResult: util.StringToSlice(err.Error()),
+		}
+	}
+
+	has := true
+	return &raftcmdpb.Response{
+		BulkResult:         value,
+		HasEmptyBulkResult: &has,
+	}
+}
+
+func (d *applyDelegate) execRPush(req *raftcmdpb.Request) *raftcmdpb.Response {
+	cmd := redis.Command(req.Cmd)
+	args := cmd.Args()
+
+	if len(args) < 2 {
+		return redis.ErrInvalidCommandResp
+	}
+
+	value, err := d.store.getListEngine().RPush(args[0], args[1:]...)
+	if err != nil {
+		return &raftcmdpb.Response{
+			ErrorResult: util.StringToSlice(err.Error()),
+		}
+	}
+
+	return &raftcmdpb.Response{
+		IntegerResult: &value,
+	}
+}
+
+func (d *applyDelegate) execRPushX(req *raftcmdpb.Request) *raftcmdpb.Response {
+	cmd := redis.Command(req.Cmd)
+	args := cmd.Args()
+
+	if len(args) != 2 {
+		return redis.ErrInvalidCommandResp
+	}
+
+	value, err := d.store.getListEngine().RPushX(args[0], args[1])
+	if err != nil {
+		return &raftcmdpb.Response{
+			ErrorResult: util.StringToSlice(err.Error()),
+		}
+	}
+
+	return &raftcmdpb.Response{
+		IntegerResult: &value,
 	}
 }
 

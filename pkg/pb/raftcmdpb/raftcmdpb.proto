@@ -49,6 +49,22 @@ enum CMDType {
     HSetNX  = 310;
     HStrLen = 311;
     HIncrBy = 312;
+
+    // lists
+    LIndex    = 400;
+    LInsert   = 401;
+    LLEN      = 402;
+    LPop      = 403;
+    LPush     = 404;
+    LPushX    = 405;
+    LRange    = 406;
+    LRem      = 407;
+    LSet      = 408;
+    LTrim     = 409;
+    RPop      = 410;
+    RPopLPush = 411;
+    RPush     = 412;
+    RPushX    = 413;
 }
 
 enum AdminCmdType {
