@@ -347,6 +347,16 @@ func (d *applyDelegate) execWriteRequest(ctx *execContext) *raftcmdpb.RaftCMDRes
 			resp.Responses = append(resp.Responses, d.execKVAppend(req))
 		case raftcmdpb.Setnx:
 			resp.Responses = append(resp.Responses, d.execKVSetNX(req))
+		case raftcmdpb.HSet:
+			resp.Responses = append(resp.Responses, d.execHSet(req))
+		case raftcmdpb.HDel:
+			resp.Responses = append(resp.Responses, d.execHDel(req))
+		case raftcmdpb.HMSet:
+			resp.Responses = append(resp.Responses, d.execHMSet(req))
+		case raftcmdpb.HSetNX:
+			resp.Responses = append(resp.Responses, d.execHSetNX(req))
+		case raftcmdpb.HIncrBy:
+			resp.Responses = append(resp.Responses, d.execHIncrBy(req))
 		}
 	}
 
@@ -363,6 +373,22 @@ func (pr *PeerReplicate) doExecReadCmd(cmd *cmd) {
 			resp.Responses = append(resp.Responses, pr.execKVGet(req))
 		case raftcmdpb.StrLen:
 			resp.Responses = append(resp.Responses, pr.execKVStrLen(req))
+		case raftcmdpb.HGet:
+			resp.Responses = append(resp.Responses, pr.execHGet(req))
+		case raftcmdpb.HExists:
+			resp.Responses = append(resp.Responses, pr.execHExists(req))
+		case raftcmdpb.HKeys:
+			resp.Responses = append(resp.Responses, pr.execHKeys(req))
+		case raftcmdpb.HVals:
+			resp.Responses = append(resp.Responses, pr.execHVals(req))
+		case raftcmdpb.HGetAll:
+			resp.Responses = append(resp.Responses, pr.execHGetAll(req))
+		case raftcmdpb.HLen:
+			resp.Responses = append(resp.Responses, pr.execHLen(req))
+		case raftcmdpb.HMGet:
+			resp.Responses = append(resp.Responses, pr.execHMGet(req))
+		case raftcmdpb.HStrLen:
+			resp.Responses = append(resp.Responses, pr.execHStrLen(req))
 		}
 	}
 }
@@ -423,6 +449,186 @@ func (pr *PeerReplicate) execKVStrLen(req *raftcmdpb.Request) *raftcmdpb.Respons
 
 	return &raftcmdpb.Response{
 		IntegerResult: &n,
+	}
+}
+
+func (pr *PeerReplicate) execHGet(req *raftcmdpb.Request) *raftcmdpb.Response {
+	cmd := redis.Command(req.Cmd)
+	args := cmd.Args()
+
+	if len(args) != 2 {
+		return redis.ErrInvalidCommandResp
+	}
+
+	value, err := pr.store.getHashEngine().HGet(args[0], args[1])
+	if err != nil {
+		return &raftcmdpb.Response{
+			ErrorResult: util.StringToSlice(err.Error()),
+		}
+	}
+
+	has := true
+	return &raftcmdpb.Response{
+		BulkResult:         value,
+		HasEmptyBulkResult: &has,
+	}
+}
+
+func (pr *PeerReplicate) execHExists(req *raftcmdpb.Request) *raftcmdpb.Response {
+	cmd := redis.Command(req.Cmd)
+	args := cmd.Args()
+
+	if len(args) != 2 {
+		return redis.ErrInvalidCommandResp
+	}
+
+	exists, err := pr.store.getHashEngine().HExists(args[0], args[1])
+	if err != nil {
+		return &raftcmdpb.Response{
+			ErrorResult: util.StringToSlice(err.Error()),
+		}
+	}
+
+	var value int64
+	if exists {
+		value = 1
+	}
+
+	return &raftcmdpb.Response{
+		IntegerResult: &value,
+	}
+}
+
+func (pr *PeerReplicate) execHKeys(req *raftcmdpb.Request) *raftcmdpb.Response {
+	cmd := redis.Command(req.Cmd)
+	args := cmd.Args()
+
+	if len(args) != 1 {
+		return redis.ErrInvalidCommandResp
+	}
+
+	value, err := pr.store.getHashEngine().HKeys(args[0])
+	if err != nil {
+		return &raftcmdpb.Response{
+			ErrorResult: util.StringToSlice(err.Error()),
+		}
+	}
+
+	var has = true
+	return &raftcmdpb.Response{
+		SliceArrayResult:         value,
+		HasEmptySliceArrayResult: &has,
+	}
+}
+
+func (pr *PeerReplicate) execHVals(req *raftcmdpb.Request) *raftcmdpb.Response {
+	cmd := redis.Command(req.Cmd)
+	args := cmd.Args()
+
+	if len(args) != 1 {
+		return redis.ErrInvalidCommandResp
+	}
+
+	value, err := pr.store.getHashEngine().HVals(args[0])
+	if err != nil {
+		return &raftcmdpb.Response{
+			ErrorResult: util.StringToSlice(err.Error()),
+		}
+	}
+
+	var has = true
+	return &raftcmdpb.Response{
+		SliceArrayResult:         value,
+		HasEmptySliceArrayResult: &has,
+	}
+}
+
+func (pr *PeerReplicate) execHGetAll(req *raftcmdpb.Request) *raftcmdpb.Response {
+	cmd := redis.Command(req.Cmd)
+	args := cmd.Args()
+
+	if len(args) != 1 {
+		return redis.ErrInvalidCommandResp
+	}
+
+	value, err := pr.store.getHashEngine().HGetAll(args[0])
+	if err != nil {
+		return &raftcmdpb.Response{
+			ErrorResult: util.StringToSlice(err.Error()),
+		}
+	}
+
+	var has = true
+	return &raftcmdpb.Response{
+		FvPairArrayResult:         value,
+		HasEmptyFVPairArrayResult: &has,
+	}
+}
+
+func (pr *PeerReplicate) execHLen(req *raftcmdpb.Request) *raftcmdpb.Response {
+	cmd := redis.Command(req.Cmd)
+	args := cmd.Args()
+
+	if len(args) != 1 {
+		return redis.ErrInvalidCommandResp
+	}
+
+	value, err := pr.store.getHashEngine().HLen(args[0])
+	if err != nil {
+		return &raftcmdpb.Response{
+			ErrorResult: util.StringToSlice(err.Error()),
+		}
+	}
+
+	return &raftcmdpb.Response{
+		IntegerResult: &value,
+	}
+}
+
+func (pr *PeerReplicate) execHMGet(req *raftcmdpb.Request) *raftcmdpb.Response {
+	cmd := redis.Command(req.Cmd)
+	args := cmd.Args()
+
+	if len(args) < 2 {
+		return redis.ErrInvalidCommandResp
+	}
+
+	value, errs := pr.store.getHashEngine().HMGet(args[0], args[1:]...)
+	if errs != nil {
+		errors := make([][]byte, len(errs))
+		for idx, err := range errs {
+			errors[idx] = util.StringToSlice(err.Error())
+		}
+
+		return &raftcmdpb.Response{
+			ErrorResults: errors,
+		}
+	}
+
+	has := true
+	return &raftcmdpb.Response{
+		SliceArrayResult:         value,
+		HasEmptySliceArrayResult: &has,
+	}
+}
+
+func (pr *PeerReplicate) execHStrLen(req *raftcmdpb.Request) *raftcmdpb.Response {
+	cmd := redis.Command(req.Cmd)
+	args := cmd.Args()
+
+	if len(args) != 2 {
+		return redis.ErrInvalidCommandResp
+	}
+
+	value, err := pr.store.getHashEngine().HStrLen(args[0], args[1])
+	if err != nil {
+		return &raftcmdpb.Response{
+			ErrorResult: util.StringToSlice(err.Error()),
+		}
+	}
+
+	return &raftcmdpb.Response{
+		IntegerResult: &value,
 	}
 }
 
@@ -573,6 +779,129 @@ func (d *applyDelegate) execKVSetNX(req *raftcmdpb.Request) *raftcmdpb.Response 
 
 	return &raftcmdpb.Response{
 		IntegerResult: &n,
+	}
+}
+
+func (d *applyDelegate) execHSet(req *raftcmdpb.Request) *raftcmdpb.Response {
+	cmd := redis.Command(req.Cmd)
+	args := cmd.Args()
+
+	if len(args) != 3 {
+		return redis.ErrInvalidCommandResp
+	}
+
+	n, err := d.store.getHashEngine().HSet(args[0], args[1], args[2])
+	if err != nil {
+		return &raftcmdpb.Response{
+			ErrorResult: util.StringToSlice(err.Error()),
+		}
+	}
+
+	return &raftcmdpb.Response{
+		IntegerResult: &n,
+	}
+}
+
+func (d *applyDelegate) execHDel(req *raftcmdpb.Request) *raftcmdpb.Response {
+	cmd := redis.Command(req.Cmd)
+	args := cmd.Args()
+
+	if len(args) < 2 {
+		return redis.ErrInvalidCommandResp
+	}
+
+	n, err := d.store.getHashEngine().HDel(args[0], args[1:]...)
+	if err != nil {
+		return &raftcmdpb.Response{
+			ErrorResult: util.StringToSlice(err.Error()),
+		}
+	}
+
+	return &raftcmdpb.Response{
+		IntegerResult: &n,
+	}
+}
+
+func (d *applyDelegate) execHMSet(req *raftcmdpb.Request) *raftcmdpb.Response {
+	cmd := redis.Command(req.Cmd)
+	args := cmd.Args()
+
+	l := len(args)
+	if l < 3 || l%2 == 0 {
+		return redis.ErrInvalidCommandResp
+	}
+
+	key := args[0]
+	kvs := args[1:]
+	l = len(kvs) / 2
+	fields := make([][]byte, l)
+	values := make([][]byte, l)
+
+	for i := 0; i < len(kvs); i++ {
+		fields[i] = kvs[2*i]
+		values[i] = kvs[2*i+1]
+	}
+
+	err := d.store.getHashEngine().HMSet(key, fields, values)
+	if err != nil {
+		return &raftcmdpb.Response{
+			ErrorResult: util.StringToSlice(err.Error()),
+		}
+	}
+
+	return redis.OKStatusResp
+}
+
+func (d *applyDelegate) execHSetNX(req *raftcmdpb.Request) *raftcmdpb.Response {
+	cmd := redis.Command(req.Cmd)
+	args := cmd.Args()
+
+	if len(args) != 3 {
+		return redis.ErrInvalidCommandResp
+	}
+
+	value, err := d.store.getHashEngine().HSetNX(args[0], args[1], args[2])
+	if err != nil {
+		return &raftcmdpb.Response{
+			ErrorResult: util.StringToSlice(err.Error()),
+		}
+	}
+
+	return &raftcmdpb.Response{
+		IntegerResult: &value,
+	}
+}
+
+func (d *applyDelegate) execHIncrBy(req *raftcmdpb.Request) *raftcmdpb.Response {
+	cmd := redis.Command(req.Cmd)
+	args := cmd.Args()
+
+	if len(args) != 3 {
+		return redis.ErrInvalidCommandResp
+	}
+
+	incrment, err := util.StrInt64(args[2])
+	if err != nil {
+		return &raftcmdpb.Response{
+			ErrorResult: util.StringToSlice(err.Error()),
+		}
+	}
+
+	value, err := d.store.getHashEngine().HIncrBy(args[0], args[1], incrment)
+	if err != nil {
+		return &raftcmdpb.Response{
+			ErrorResult: util.StringToSlice(err.Error()),
+		}
+	}
+
+	v, err := util.StrInt64(value)
+	if err != nil {
+		return &raftcmdpb.Response{
+			ErrorResult: util.StringToSlice(err.Error()),
+		}
+	}
+	return &raftcmdpb.Response{
+		IntegerResult: &v,
 	}
 }
 

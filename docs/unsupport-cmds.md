@@ -5,3 +5,7 @@
 * MSet
 * MGet
 * SetRange
+
+## Hash
+* HScan
+* HIncrByFloat

@@ -79,11 +79,17 @@ func (s *session) doResp(resp *raftcmdpb.Response) {
 		redis.WriteError(resp.ErrorResult, buf)
 	}
 
+	if resp.ErrorResults != nil {
+		for _, err := range resp.ErrorResults {
+			redis.WriteError(err, buf)
+		}
+	}
+
 	if resp.BulkResult != nil || resp.HasEmptyBulkResult != nil {
 		redis.WriteBulk(resp.ErrorResult, buf)
 	}
 
-	if resp.FvPairArrayResult != nil {
+	if resp.FvPairArrayResult != nil || resp.HasEmptyFVPairArrayResult != nil {
 		redis.WriteFVPairArray(resp.FvPairArrayResult, buf)
 	}
 
@@ -91,11 +97,11 @@ func (s *session) doResp(resp *raftcmdpb.Response) {
 		redis.WriteInteger(*resp.IntegerResult, buf)
 	}
 
-	if resp.ScorePairArrayResult != nil {
+	if resp.ScorePairArrayResult != nil || resp.HasEmptyScorePairArrayResult != nil {
 		redis.WriteScorePairArray(resp.ScorePairArrayResult, *resp.Withscores, buf)
 	}
 
-	if resp.SliceArrayResult != nil {
+	if resp.SliceArrayResult != nil || resp.HasEmptySliceArrayResult != nil {
 		redis.WriteSliceArray(resp.SliceArrayResult, buf)
 	}
 

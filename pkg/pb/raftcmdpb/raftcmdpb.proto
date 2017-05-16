@@ -34,6 +34,21 @@ enum CMDType {
     Decr     = 211;
     SetRange = 212;
     MSetNX   = 213;
+
+    // Hash
+    HSet    = 300;
+    HGet    = 301;
+    HDel    = 302;
+    HExists = 303;
+    HKeys   = 304;
+    HVals   = 305;
+    HGetAll = 306;
+    HLen    = 307;
+    HMGet   = 308;
+    HMSet   = 309;
+    HSetNX  = 310;
+    HStrLen = 311;
+    HIncrBy = 312;
 }
 
 enum AdminCmdType {
@@ -151,14 +166,18 @@ message Request {
 }
 
 message Response {
-    optional CMDType   type                 = 1 [(gogoproto.nullable) = false];
-    optional bytes     errorResult          = 2;
-    optional bytes     statusResult         = 3;
-    optional int64     integerResult        = 4;
-    optional bytes     bulkResult           = 5;
-    optional bool      hasEmptyBulkResult   = 6;
-    repeated bytes     sliceArrayResult     = 7;
-    repeated FVPair    fvPairArrayResult    = 8;
-    repeated ScorePair scorePairArrayResult = 9;
-    optional bool      withscores           = 10;
+    optional CMDType   type                         = 1 [(gogoproto.nullable) = false];
+    optional bytes     errorResult                  = 2;
+    repeated bytes     errorResults                 = 3;
+    optional bytes     statusResult                 = 4;
+    optional int64     integerResult                = 5;
+    optional bytes     bulkResult                   = 7;
+    optional bool      hasEmptyBulkResult           = 8;
+    repeated bytes     sliceArrayResult             = 9;
+    optional bool      hasEmptySliceArrayResult     = 10;
+    repeated FVPair    fvPairArrayResult            = 11;
+    optional bool      hasEmptyFVPairArrayResult    = 12;
+    repeated ScorePair scorePairArrayResult         = 13;
+    optional bool      hasEmptyScorePairArrayResult = 14;
+    optional bool      withscores                   = 15;
 }

@@ -13,6 +13,8 @@
 
 package storage
 
+import "github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
+
 // WriteBatch batch operation
 type WriteBatch interface {
 	Delete(key []byte) error
@@ -26,7 +28,7 @@ type Driver interface {
 
 	// TODO: impl redis data struct engine
 	GetKVEngine() KVEngine
-	// GetHashEngine() HashEngine
+	GetHashEngine() HashEngine
 	// GetSetEngine() SetEngine
 	// GetListEngine() ListEngine
 
@@ -48,6 +50,19 @@ type KVEngine interface {
 
 // HashEngine is the storage of Hash
 type HashEngine interface {
+	HSet(key, field, value []byte) (int64, error)
+	HGet(key, field []byte) ([]byte, error)
+	HDel(key []byte, fields ...[]byte) (int64, error)
+	HExists(key, field []byte) (bool, error)
+	HKeys(key []byte) ([][]byte, error)
+	HVals(key []byte) ([][]byte, error)
+	HGetAll(key []byte) ([]*raftcmdpb.FVPair, error)
+	HLen(key []byte) (int64, error)
+	HMGet(key []byte, fields ...[]byte) ([][]byte, []error)
+	HMSet(key []byte, fields, values [][]byte) error
+	HSetNX(key, field, value []byte) (int64, error)
+	HStrLen(key, field []byte) (int64, error)
+	HIncrBy(key, field []byte, incrment int64) ([]byte, error)
 }
 
 // SetEngine is the storage of Set
