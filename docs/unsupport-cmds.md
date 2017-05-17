@@ -15,3 +15,14 @@
 * brpop
 * brpoplpush
 * rpoplpush 
+
+## Sets
+* sdiff
+* sdiffstore
+* sinter
+* sinterstore
+* smove
+* srandmember
+* sunion
+* sunionstore
+* sscan

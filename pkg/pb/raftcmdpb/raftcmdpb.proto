@@ -65,6 +65,14 @@ enum CMDType {
     RPopLPush = 411;
     RPush     = 412;
     RPushX    = 413;
+
+    // sets
+    SAdd      = 500;
+    SCard     = 501;
+    SRem      = 502;
+    SMembers  = 503;
+    SIsMember = 504;
+    SPop      = 505;
 }
 
 enum AdminCmdType {

@@ -68,6 +68,9 @@ type Store struct {
 	engine     storage.Driver
 	runner     *util.Runner
 	notifyChan chan interface{}
+
+	redisReadHandles  map[raftcmdpb.CMDType]func(*raftcmdpb.Request) *raftcmdpb.Response
+	redisWriteHandles map[raftcmdpb.CMDType]func(*raftcmdpb.Request) *raftcmdpb.Response
 }
 
 // NewStore returns store
@@ -96,6 +99,10 @@ func NewStore(clusterID uint64, pdClient *pd.Client, meta metapb.Store, engine s
 	s.runner.AddNamedWorker(splitWorker, defaultWorkerQueueSize)
 	s.runner.AddNamedWorker(compactWorker, defaultWorkerQueueSize)
 
+	s.redisReadHandles = make(map[raftcmdpb.CMDType]func(*raftcmdpb.Request) *raftcmdpb.Response)
+	s.redisWriteHandles = make(map[raftcmdpb.CMDType]func(*raftcmdpb.Request) *raftcmdpb.Response)
+
+	s.initRedisHandle()
 	s.init()
 
 	return s
@@ -940,4 +947,8 @@ func (s *Store) getHashEngine() storage.HashEngine {
 
 func (s *Store) getListEngine() storage.ListEngine {
 	return s.engine.GetListEngine()
+}
+
+func (s *Store) getSetEngine() storage.SetEngine {
+	return s.engine.GetSetEngine()
 }

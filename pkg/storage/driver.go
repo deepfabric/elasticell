@@ -29,7 +29,7 @@ type Driver interface {
 	// TODO: impl redis data struct engine
 	GetKVEngine() KVEngine
 	GetHashEngine() HashEngine
-	// GetSetEngine() SetEngine
+	GetSetEngine() SetEngine
 	GetListEngine() ListEngine
 
 	NewWriteBatch() WriteBatch
@@ -67,6 +67,12 @@ type HashEngine interface {
 
 // SetEngine is the storage of Set
 type SetEngine interface {
+	SAdd(key []byte, members ...[]byte) (int64, error)
+	SRem(key []byte, members ...[]byte) (int64, error)
+	SCard(key []byte) (int64, error)
+	SMembers(key []byte) ([][]byte, error)
+	SIsMember(key []byte, member []byte) (int64, error)
+	SPop(key []byte) ([]byte, error)
 }
 
 // ListEngine is the storage of List
