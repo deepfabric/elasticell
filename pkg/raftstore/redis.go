@@ -31,10 +31,10 @@ func (s *Store) initRedisHandle() {
 	s.redisWriteHandles[raftcmdpb.SRem] = s.execSRem
 	s.redisWriteHandles[raftcmdpb.ZAdd] = s.execZAdd
 	s.redisWriteHandles[raftcmdpb.ZIncrBy] = s.execZIncrBy
-	s.redisReadHandles[raftcmdpb.ZRem] = s.execZRem
-	s.redisReadHandles[raftcmdpb.ZRemRangeByLex] = s.execZRemRangeByLex
-	s.redisReadHandles[raftcmdpb.ZRemRangeByRank] = s.execZRemRangeByRank
-	s.redisReadHandles[raftcmdpb.ZRemRangeByScore] = s.execZRemRangeByScore
+	s.redisWriteHandles[raftcmdpb.ZRem] = s.execZRem
+	s.redisWriteHandles[raftcmdpb.ZRemRangeByLex] = s.execZRemRangeByLex
+	s.redisWriteHandles[raftcmdpb.ZRemRangeByRank] = s.execZRemRangeByRank
+	s.redisWriteHandles[raftcmdpb.ZRemRangeByScore] = s.execZRemRangeByScore
 
 	// read
 	s.redisReadHandles[raftcmdpb.Get] = s.execKVGet
