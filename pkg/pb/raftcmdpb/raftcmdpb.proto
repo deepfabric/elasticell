@@ -73,6 +73,22 @@ enum CMDType {
     SMembers  = 503;
     SIsMember = 504;
     SPop      = 505;
+
+    // zsets
+    ZAdd             = 600;
+    ZCard            = 601;             
+    ZCount           = 602;         
+    ZIncrBy          = 603;          
+    ZLexCount        = 604;            
+    ZRange           = 605;         
+    ZRangeByLex      = 606;              
+    ZRangeByScore    = 607;                
+    ZRank            = 608;        
+    ZRem             = 609;       
+    ZRemRangeByLex   = 611;                 
+    ZRemRangeByRank  = 612;                    
+    ZRemRangeByScore = 613;
+    ZScore           = 614;
 }
 
 enum AdminCmdType {
@@ -180,8 +196,8 @@ message FVPair {
 }
 
 message ScorePair {
-    optional int64 score  = 1 [(gogoproto.nullable) = false];
-    optional bytes member = 2;
+    optional double score  = 1 [(gogoproto.nullable) = false];
+    optional bytes  member = 2;
 }
 
 message Request {

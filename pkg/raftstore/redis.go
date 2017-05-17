@@ -3,6 +3,7 @@ package raftstore
 import "github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
 
 func (s *Store) initRedisHandle() {
+	// write
 	s.redisWriteHandles[raftcmdpb.Set] = s.execKVSet
 	s.redisWriteHandles[raftcmdpb.Incrby] = s.execKVIncrBy
 	s.redisWriteHandles[raftcmdpb.Incr] = s.execKVIncr
@@ -28,7 +29,14 @@ func (s *Store) initRedisHandle() {
 	s.redisWriteHandles[raftcmdpb.RPushX] = s.execRPushX
 	s.redisWriteHandles[raftcmdpb.SAdd] = s.execSAdd
 	s.redisWriteHandles[raftcmdpb.SRem] = s.execSRem
+	s.redisWriteHandles[raftcmdpb.ZAdd] = s.execZAdd
+	s.redisWriteHandles[raftcmdpb.ZIncrBy] = s.execZIncrBy
+	s.redisReadHandles[raftcmdpb.ZRem] = s.execZRem
+	s.redisReadHandles[raftcmdpb.ZRemRangeByLex] = s.execZRemRangeByLex
+	s.redisReadHandles[raftcmdpb.ZRemRangeByRank] = s.execZRemRangeByRank
+	s.redisReadHandles[raftcmdpb.ZRemRangeByScore] = s.execZRemRangeByScore
 
+	// read
 	s.redisReadHandles[raftcmdpb.Get] = s.execKVGet
 	s.redisReadHandles[raftcmdpb.StrLen] = s.execKVStrLen
 	s.redisReadHandles[raftcmdpb.HGet] = s.execHGet
@@ -45,4 +53,12 @@ func (s *Store) initRedisHandle() {
 	s.redisReadHandles[raftcmdpb.SCard] = s.execSCard
 	s.redisReadHandles[raftcmdpb.SIsMember] = s.execSIsMember
 	s.redisReadHandles[raftcmdpb.SMembers] = s.execSMembers
+	s.redisReadHandles[raftcmdpb.ZCard] = s.execZCard
+	s.redisReadHandles[raftcmdpb.ZCount] = s.execZCount
+	s.redisReadHandles[raftcmdpb.ZLexCount] = s.execZLexCount
+	s.redisReadHandles[raftcmdpb.ZRange] = s.execZRange
+	s.redisReadHandles[raftcmdpb.ZRangeByLex] = s.execZRangeByLex
+	s.redisReadHandles[raftcmdpb.ZRangeByScore] = s.execZRangeByScore
+	s.redisReadHandles[raftcmdpb.ZRank] = s.execZRank
+	s.redisReadHandles[raftcmdpb.ZScore] = s.execZScore
 }

@@ -27,6 +27,7 @@ type nemoDrvier struct {
 	hashEngine HashEngine
 	listEngine ListEngine
 	setEngine  SetEngine
+	zsetEngine ZSetEngine
 }
 
 func newNemoDriver(path string) (Driver, error) {
@@ -49,6 +50,7 @@ func (n *nemoDrvier) init() {
 	n.hashEngine = newNemoHashEngine(n.db)
 	n.listEngine = newNemoListEngine(n.db)
 	n.setEngine = newNemoSetEngine(n.db)
+	n.zsetEngine = newNemoZSetEngine(n.db)
 }
 
 func (n *nemoDrvier) GetEngine() Engine {
@@ -73,6 +75,10 @@ func (n *nemoDrvier) GetListEngine() ListEngine {
 
 func (n *nemoDrvier) GetSetEngine() SetEngine {
 	return n.setEngine
+}
+
+func (n *nemoDrvier) GetZSetEngine() ZSetEngine {
+	return n.zsetEngine
 }
 
 func (n *nemoDrvier) NewWriteBatch() WriteBatch {

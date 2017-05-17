@@ -21,6 +21,7 @@ for dir in ${DIRS}; do
 		sed -i.bak -E 's/github\.com\/deepfabric\/elasticell\/pkg\/pb\/(errors|fmt|io)/\1/g' *.pb.go
 		sed -i.bak -E 's/import _ \"gogoproto\"//g' *.pb.go
 		sed -i.bak -E 's/import fmt \"fmt\"//g' *.pb.go
+		sed -i.bak -E 's/import math \"github.com\/deepfabric\/elasticell\/pkg\/pb\/math\"//g' *.pb.go
 		rm -f *.bak
 		goimports -w *.pb.go
 	popd

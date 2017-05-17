@@ -952,3 +952,7 @@ func (s *Store) getListEngine() storage.ListEngine {
 func (s *Store) getSetEngine() storage.SetEngine {
 	return s.engine.GetSetEngine()
 }
+
+func (s *Store) getZSetEngine() storage.ZSetEngine {
+	return s.engine.GetZSetEngine()
+}

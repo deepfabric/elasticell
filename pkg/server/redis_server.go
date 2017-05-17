@@ -102,6 +102,22 @@ func (s *RedisServer) init() {
 	s.handlers[raftcmdpb.SMembers] = s.onSMembers
 	s.handlers[raftcmdpb.SIsMember] = s.onSIsMember
 	s.handlers[raftcmdpb.SPop] = s.onSPop
+
+	// zset
+	s.handlers[raftcmdpb.ZAdd] = s.onZAdd
+	s.handlers[raftcmdpb.ZCard] = s.onZCard
+	s.handlers[raftcmdpb.ZCount] = s.onZCount
+	s.handlers[raftcmdpb.ZIncrBy] = s.onZIncrBy
+	s.handlers[raftcmdpb.ZLexCount] = s.onZLexCount
+	s.handlers[raftcmdpb.ZRange] = s.onZRange
+	s.handlers[raftcmdpb.ZRangeByLex] = s.onZRangeByLex
+	s.handlers[raftcmdpb.ZRangeByScore] = s.onZRangeByScore
+	s.handlers[raftcmdpb.ZRank] = s.onZRank
+	s.handlers[raftcmdpb.ZRem] = s.onZRem
+	s.handlers[raftcmdpb.ZRemRangeByLex] = s.onZRemRangeByLex
+	s.handlers[raftcmdpb.ZRemRangeByRank] = s.onZRemRangeByRank
+	s.handlers[raftcmdpb.ZRemRangeByScore] = s.onZRemRangeByScore
+	s.handlers[raftcmdpb.ZScore] = s.onZScore
 }
 
 func (s *RedisServer) doConnection(session goetty.IOSession) error {

@@ -26,3 +26,12 @@
 * sunion
 * sunionstore
 * sscan
+
+## ZSet
+* zinterstore
+* zrevrangebylex
+* zrevrange
+* zrevrangebyscore
+* zrevrank
+* zunionstore
+* zscan

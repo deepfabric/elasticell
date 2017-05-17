@@ -44,10 +44,6 @@ var (
 	}
 )
 
-func int64ToBytes(v int64) []byte {
-	return strconv.AppendInt(nil, v, 10)
-}
-
 func WriteError(err []byte, buf *goetty.ByteBuf) {
 	buf.WriteByte(' ')
 	if err != nil {
@@ -65,7 +61,7 @@ func WriteStatus(status []byte, buf *goetty.ByteBuf) {
 
 func WriteInteger(n int64, buf *goetty.ByteBuf) {
 	buf.WriteByte(':')
-	buf.Write(int64ToBytes(n))
+	buf.Write(util.FormatInt64ToBytes(n))
 	buf.Write(delims)
 }
 
@@ -164,7 +160,7 @@ func WriteScorePairArray(lst []*raftcmdpb.ScorePair, withScores bool, buf *goett
 			WriteBulk(lst[i].Member, buf)
 
 			if withScores {
-				WriteBulk(int64ToBytes(lst[i].Score), buf)
+				WriteBulk(util.FormatFloat64ToBytes(lst[i].Score), buf)
 			}
 		}
 	}
