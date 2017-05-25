@@ -11,30 +11,38 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// +build freebsd openbsd netbsd dragonfly linux
-
-package storage
+package util
 
 import (
-	gonemo "github.com/deepfabric/go-nemo"
+	"compress/gzip"
+	"fmt"
+	"io"
+	"os"
 )
 
-type nemoWriteBatch struct {
-	wb *gonemo.WriteBatch
-}
-
-func newNemoWriteBatch(wb *gonemo.WriteBatch) WriteBatch {
-	return &nemoWriteBatch{
-		wb: wb,
+// GZIP compress a path to a gzip file
+func GZIP(path string) error {
+	file, err := os.Create(fmt.Sprintf("%s.gz", path))
+	if err != nil {
+		return err
 	}
-}
+	defer file.Close()
 
-func (n *nemoWriteBatch) Delete(key []byte) error {
-	n.wb.WriteBatchDel(key)
+	w, err := gzip.NewWriterLevel(nil, gzip.BestSpeed)
+	if err != nil {
+		return err
+	}
+	defer w.Close()
+
+	_, err = io.Copy(w, file)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
-func (n *nemoWriteBatch) Set(key []byte, value []byte) error {
-	n.wb.WriteBatchPut(key, value)
+// UnGZIP ungip file
+func UnGZIP(file string) error {
 	return nil
 }

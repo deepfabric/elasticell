@@ -147,14 +147,6 @@ func (pr *PeerReplicate) handleHeartbeat() {
 	}
 }
 
-func (pr *PeerReplicate) doCompact() error {
-	c := pr.getCell()
-	startKey := encStartKey(&c)
-	endKey := encEndKey(&c)
-
-	return pr.store.getDataEngine().CompactRange(startKey, endKey)
-}
-
 func (pr *PeerReplicate) doHeartbeat() error {
 	req := new(pdpb.CellHeartbeatReq)
 	req.Cell = pr.getCell()

@@ -35,13 +35,11 @@ func (e *nemoZSetEngine) ZAdd(key []byte, score float64, member []byte) (int64, 
 }
 
 func (e *nemoZSetEngine) ZCard(key []byte) (int64, error) {
-	// TODO: nemo must return a error
-	return e.db.ZCard(key), nil
+	return e.db.ZCard(key)
 }
 
 func (e *nemoZSetEngine) ZCount(key []byte, begin float64, end float64) (int64, error) {
-	// TODO: nemo must return a error
-	return e.db.ZCount(key, begin, end, false, false), nil
+	return e.db.ZCount(key, begin, end, false, false)
 }
 
 func (e *nemoZSetEngine) ZIncrBy(key []byte, member []byte, by float64) ([]byte, error) {
@@ -49,7 +47,7 @@ func (e *nemoZSetEngine) ZIncrBy(key []byte, member []byte, by float64) ([]byte,
 }
 
 func (e *nemoZSetEngine) ZLexCount(key []byte, min []byte, max []byte) (int64, error) {
-	// TODO: nemo must impl
+	// TODO: nemo must impl zlexcount
 	return 0, nil
 }
 
@@ -72,7 +70,7 @@ func (e *nemoZSetEngine) ZRange(key []byte, start int64, stop int64) ([]*raftcmd
 }
 
 func (e *nemoZSetEngine) ZRangeByLex(key []byte, min []byte, max []byte) ([][]byte, error) {
-	// TODO: nemo must impl
+	// TODO: nemo must impl zrangebylex
 	return nil, nil
 }
 
@@ -99,22 +97,21 @@ func (e *nemoZSetEngine) ZRank(key []byte, member []byte) (int64, error) {
 }
 
 func (e *nemoZSetEngine) ZRem(key []byte, members ...[]byte) (int64, error) {
-	// TODO: nemo must support more members
-	return e.db.ZRem(key, members[0])
+	return e.db.ZRem(key, members...)
 }
 
 func (e *nemoZSetEngine) ZRemRangeByLex(key []byte, min []byte, max []byte) (int64, error) {
-	// TODO: nemo must impl
+	// TODO: nemo must impl zremrangebylex
 	return 0, nil
 }
 
 func (e *nemoZSetEngine) ZRemRangeByRank(key []byte, start int64, stop int64) (int64, error) {
-	// TODO: nemo must impl
+	// TODO: nemo must impl zremrangebyrank
 	return 0, nil
 }
 
 func (e *nemoZSetEngine) ZRemRangeByScore(key []byte, min float64, max float64) (int64, error) {
-	// TODO: nemo must impl
+	// TODO: nemo must impl zremrangebyscore
 	return 0, nil
 }
 

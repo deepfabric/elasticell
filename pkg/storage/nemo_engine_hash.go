@@ -31,8 +31,8 @@ func newNemoHashEngine(db *gonemo.NEMO) HashEngine {
 }
 
 func (e *nemoHashEngine) HSet(key, field, value []byte) (int64, error) {
-	// TODO: nemo must return a int64 value
-	return 1, e.db.HSet(key, field, value)
+	err, n := e.db.HSet(key, field, value)
+	return int64(n), err
 }
 
 func (e *nemoHashEngine) HGet(key, field []byte) ([]byte, error) {
@@ -40,13 +40,11 @@ func (e *nemoHashEngine) HGet(key, field []byte) ([]byte, error) {
 }
 
 func (e *nemoHashEngine) HDel(key []byte, fields ...[]byte) (int64, error) {
-	// TODO: nemo must support more fileds and return a int64 value
-	return 0, e.db.HDel(key, fields[0])
+	return e.db.HDel(key, fields...)
 }
 
 func (e *nemoHashEngine) HExists(key, field []byte) (bool, error) {
-	// TODO: nemo must return a error
-	return e.db.HExists(key, field), nil
+	return e.db.HExists(key, field)
 }
 
 func (e *nemoHashEngine) HKeys(key []byte) ([][]byte, error) {
@@ -79,8 +77,7 @@ func (e *nemoHashEngine) HGetAll(key []byte) ([]*raftcmdpb.FVPair, error) {
 }
 
 func (e *nemoHashEngine) HLen(key []byte) (int64, error) {
-	// TODO: nemo must return a error
-	return e.db.HLen(key), nil
+	return e.db.HLen(key)
 }
 
 func (e *nemoHashEngine) HMGet(key []byte, fields ...[]byte) ([][]byte, []error) {
@@ -88,17 +85,16 @@ func (e *nemoHashEngine) HMGet(key []byte, fields ...[]byte) ([][]byte, []error)
 }
 
 func (e *nemoHashEngine) HMSet(key []byte, fields, values [][]byte) error {
-	return e.db.HMSet(key, fields, values)
+	err, _ := e.db.HMSet(key, fields, values)
+	return err
 }
 
 func (e *nemoHashEngine) HSetNX(key, field, value []byte) (int64, error) {
-	// TODO: nemo must return a int64 value
-	return 0, e.db.HSetnx(key, field, value)
+	return e.db.HSetnx(key, field, value)
 }
 
 func (e *nemoHashEngine) HStrLen(key, field []byte) (int64, error) {
-	// TODO: nemo must return a error
-	return e.db.HStrlen(key, field), nil
+	return e.db.HStrlen(key, field)
 }
 
 func (e *nemoHashEngine) HIncrBy(key, field []byte, incrment int64) ([]byte, error) {

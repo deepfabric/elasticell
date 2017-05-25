@@ -28,9 +28,9 @@ import (
 
 // TODO: change every redis command apply to rocksdb
 type applyMetrics struct {
-	/// an inaccurate difference in region size since last reset.
+	// an inaccurate difference in cell size since last reset.
 	sizeDiffHint uint64
-	/// delete keys' count since last reset.
+	// delete keys' count since last reset.
 	deleteKeysHint uint64
 	writtenBytes   uint64
 	writtenKeys    uint64

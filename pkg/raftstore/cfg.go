@@ -13,7 +13,10 @@
 
 package raftstore
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 // Cfg for raftstore
 type Cfg struct {
@@ -31,12 +34,15 @@ type Cfg struct {
 	RaftLogGCSizeLimit  uint64 `json:"raftLogGCSizeLimit"`
 	RaftLogGCThreshold  uint64 `json:"raftLogGCThreshold"`
 
-	CellCheckSizeDiff          uint64 `json:"cellCheckSizeDiff"`
-	CellMaxSize                uint64 `json:"cellMaxSize"`
-	CellSplitSize              uint64 `json:"cellSplitSize"`
-	CellCompactDeleteKeysCount uint64 `json:"cellCompactDeleteKeysCount"`
+	CellCheckSizeDiff uint64 `json:"cellCheckSizeDiff"`
+	CellMaxSize       uint64 `json:"cellMaxSize"`
+	CellSplitSize     uint64 `json:"cellSplitSize"`
 
 	Raft *RaftCfg `json:"raft"`
+}
+
+func (c *Cfg) getSnapDir() string {
+	return fmt.Sprintf("%s/snap", c.StoreDataPath)
 }
 
 func (c *Cfg) getRaftGCLogDuration() time.Duration {

@@ -207,6 +207,8 @@ func (pr *PeerReplicate) handleRaftReadyApply(ctx *tempRaftContext, rd *raft.Rea
 
 func (pr *PeerReplicate) handleAppendSnapshot(ctx *tempRaftContext, rd *raft.Ready) {
 	if !raft.IsEmptySnap(rd.Snapshot) {
+		pr.store.reveivingSnapCount++
+
 		err := pr.getStore().doAppendSnapshot(ctx, rd.Snapshot)
 		if err != nil {
 			log.Fatalf("raftstore[cell-%d]: handle raft ready failure, errors:\n %+v",
@@ -597,11 +599,8 @@ func (pr *PeerReplicate) getHandlePolicy(req *raftcmdpb.RaftCMDRequest) (request
 
 	var isRead, isWrite bool
 	for _, r := range req.Requests {
-		// TODO: match redis command
-		switch r.Type {
-		case raftcmdpb.Get:
-			isRead = true
-		}
+		_, isRead = pr.store.redisReadHandles[r.Type]
+		_, isWrite = pr.store.redisWriteHandles[r.Type]
 	}
 
 	if isRead && isWrite {

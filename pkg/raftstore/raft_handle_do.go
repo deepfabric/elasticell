@@ -508,6 +508,7 @@ func (s *Store) doApplySplit(cellID uint64, result *splitResult) {
 	// since there is no leader established during one election timeout after the split.
 	if pr.isLeader() && len(right.Peers) > 1 {
 		// TODO: accelerate tick for first election timeout, it will most become leader
+
 	}
 
 	if pr.isLeader() {

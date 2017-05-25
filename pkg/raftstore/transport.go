@@ -18,10 +18,14 @@ import (
 	"sync"
 	"time"
 
+	"fmt"
+
+	"github.com/coreos/etcd/raft/raftpb"
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
 	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
 	"github.com/deepfabric/elasticell/pkg/pd"
+	"github.com/deepfabric/elasticell/pkg/util"
 	"github.com/fagongzi/goetty"
 	"golang.org/x/net/context"
 )
@@ -131,6 +135,43 @@ func (t *transport) send(storeID uint64, msg *mraft.RaftMessage) error {
 	conn, err := t.getConn(addr)
 	if err != nil {
 		return err
+	}
+
+	// if we are send a snapshot raft msg, we can send sst files to the target store before.
+	if msg.Message.Type == raftpb.MsgSnap {
+		snapData := &mraft.RaftSnapshotData{}
+		util.MustUnmarshal(snapData, msg.Message.Snapshot.Data)
+
+		if t.store.snapshotManager.Register(&snapData.Key, sendind) {
+			defer t.store.snapshotManager.Deregister(&snapData.Key, sendind)
+
+			if !t.store.snapshotManager.Exists(&snapData.Key) {
+				return fmt.Errorf("transport: missing snapshot file, key=<%+v>",
+					snapData.Key)
+			}
+
+			err = conn.Write(&snapData.Key)
+			if err != nil {
+				return err
+			}
+
+			size, err := t.store.snapshotManager.WriteTo(&snapData.Key, conn)
+			if err != nil {
+				return err
+			}
+
+			if snapData.FileSize != size {
+				return fmt.Errorf("transport: snapshot file size not match, size=<%d> sent=<%d>",
+					snapData.FileSize, size)
+			}
+
+			t.store.sendingSnapCount++
+
+			log.Debugf("transport: sent snapshot file complete, key=<%+v> size=<%d>",
+				snapData.Key,
+				size)
+		}
+
 	}
 
 	return conn.Write(msg)

@@ -16,14 +16,11 @@ package raftstore
 import (
 	"bytes"
 	"fmt"
-	"os"
 	"sync"
 	"sync/atomic"
 
-	"github.com/coreos/etcd/pkg/fileutil"
 	"github.com/coreos/etcd/raft"
 	"github.com/coreos/etcd/raft/raftpb"
-	"github.com/coreos/etcd/snap"
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
@@ -60,13 +57,13 @@ const (
 )
 
 type peerStorage struct {
-	store            *Store
-	cell             metapb.Cell
+	store *Store
+	cell  metapb.Cell
+
 	lastTerm         uint64
 	appliedIndexTerm uint64
 	lastReadyIndex   uint64
 	lastCompactIndex uint64
-	snapshortter     *snap.Snapshotter
 	raftState        mraft.RaftLocalState
 	applyState       mraft.RaftApplyState
 
@@ -83,8 +80,6 @@ func newPeerStorage(store *Store, cell metapb.Cell) (*peerStorage, error) {
 	s.store = store
 	s.cell = cell
 	s.appliedIndexTerm = raftInitLogTerm
-
-	s.initSnap()
 
 	err := s.initRaftState()
 	if err != nil {
@@ -103,23 +98,6 @@ func newPeerStorage(store *Store, cell metapb.Cell) (*peerStorage, error) {
 	s.pendingReads = new(readIndexQueue)
 
 	return s, nil
-}
-
-func (ps *peerStorage) initSnap() {
-	dir := ps.getSnapDir()
-	if !fileutil.Exist(dir) {
-		if err := os.Mkdir(dir, 0750); err != nil {
-			log.Fatalf("raftstore[cell-%d]: cannot create dir for snapshot, errors:\n %+v",
-				ps.getCell().ID,
-				err)
-		}
-	}
-
-	ps.snapshortter = snap.New(dir)
-}
-
-func (ps *peerStorage) getSnapDir() string {
-	return fmt.Sprintf("%s/snap/%d", ps.store.cfg.StoreDataPath, ps.getCell().ID)
 }
 
 func (ps *peerStorage) initRaftState() error {
@@ -355,21 +333,27 @@ func (ps *peerStorage) loadCellLocalState(job *util.Job) (*mraft.CellLocalState,
 	return stat, err
 }
 
-func (ps *peerStorage) loadSnapshot(job *util.Job) (*raftpb.Snapshot, error) {
+func (ps *peerStorage) applySnapshot(job *util.Job) error {
 	if nil != job &&
 		job.IsCancelling() {
-		return nil, util.ErrJobCancelled
+		return util.ErrJobCancelled
 	}
 
-	snapshot, err := ps.snapshortter.Load()
+	key := &mraft.SnapKey{
+		CellID: ps.getCell().ID,
+		Term:   ps.applyState.TruncatedState.Term,
+		Index:  ps.applyState.TruncatedState.Index,
+	}
+
+	err := ps.store.snapshotManager.Apply(key)
 	if err != nil {
-		log.Errorf("raftstore[cell-%d]: load snapshot failed, errors:\n %+v",
+		log.Errorf("raftstore[cell-%d]: apply snapshot failed, errors:\n %+v",
 			ps.getCell().ID,
 			err)
-		return nil, err
+		return err
 	}
 
-	return snapshot, nil
+	return nil
 }
 
 func (ps *peerStorage) loadApplyState() (*mraft.RaftApplyState, error) {
@@ -555,8 +539,7 @@ func (ps *peerStorage) deleteAllInRange(start, end []byte, job *util.Job) error 
 		return util.ErrJobCancelled
 	}
 
-	// TODO: impl
-	return nil
+	return ps.store.getDataEngine().RangeDelete(start, end)
 }
 
 func compactRaftLog(cellID uint64, state *mraft.RaftApplyState, compactIndex, compactTerm uint64) error {

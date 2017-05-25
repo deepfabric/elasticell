@@ -25,14 +25,11 @@ type WriteBatch interface {
 type Driver interface {
 	GetEngine() Engine
 	GetDataEngine() DataEngine
-
-	// TODO: impl redis data struct engine
 	GetKVEngine() KVEngine
 	GetHashEngine() HashEngine
 	GetSetEngine() SetEngine
 	GetZSetEngine() ZSetEngine
 	GetListEngine() ListEngine
-
 	NewWriteBatch() WriteBatch
 	Write(wb WriteBatch) error
 }
@@ -111,23 +108,41 @@ type ListEngine interface {
 	RPushX(key []byte, value []byte) (int64, error)
 }
 
-// DataEngine is the storage of redis data
-type DataEngine interface {
-	RangeDelete(start, end []byte) error
+// Seekable support seek
+type Seekable interface {
+	Seek(key []byte) ([]byte, []byte, error)
+}
+
+// Scanable support scan
+type Scanable interface {
 	// Scan scans the range and execute the handler fun.
 	// returns false means end the scan.
-	Scan(startKey []byte, endKey []byte, handler func(key, value []byte) (bool, error)) error
+	Scan(start, end []byte, handler func(key, value []byte) (bool, error)) error
+}
+
+// RangeDeleteable support range delete
+type RangeDeleteable interface {
+	RangeDelete(start, end []byte) error
+}
+
+// DataEngine is the storage of redis data
+type DataEngine interface {
+	RangeDeleteable
+
 	// Scan scans the range and execute the handler fun.
 	// returns false means end the scan.
 	ScanSize(startKey []byte, endKey []byte, handler func(key []byte, size uint64) (bool, error)) error
-	CompactRange(startKey []byte, endKey []byte) error
-	// Seek the first key >= given key, if no found, return None.
-	Seek(key []byte) ([]byte, []byte, error)
+	// CreateSnapshot create a snapshot file under the giving path
+	CreateSnapshot(path string, start, end []byte) error
+	// ApplySnapshot apply a snapshort file from giving path
+	ApplySnapshot(path string) error
 }
 
 // Engine is the storage of meta data
 type Engine interface {
-	DataEngine
+	Scanable
+	Seekable
+	RangeDeleteable
 
 	Set(key []byte, value []byte) error
 	Get(key []byte) ([]byte, error)

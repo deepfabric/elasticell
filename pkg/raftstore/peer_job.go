@@ -22,6 +22,7 @@ import (
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
 	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
+	"github.com/deepfabric/elasticell/pkg/util"
 )
 
 func (pr *PeerReplicate) startApplyingSnapJob() {
@@ -197,15 +198,14 @@ func (pr *PeerReplicate) doApplyingSnapshotJob() error {
 		return err
 	}
 
-	_, err = pr.ps.loadSnapshot(pr.ps.applySnapJob)
+	err = pr.ps.applySnapshot(pr.ps.applySnapJob)
 	if err != nil {
-		log.Errorf("raftstore[cell-%d]: apply snap load snapshot failed, errors:\n %+v",
+		log.Errorf("raftstore[cell-%d]: apply snap snapshot failed, errors:\n %+v",
 			pr.cellID,
 			err)
 		return err
 	}
 
-	// TODO: decode snapshot and set to local rocksdb.
 	err = pr.ps.updatePeerState(pr.ps.getCell(), mraft.Normal, nil)
 	if err != nil {
 		log.Errorf("raftstore[cell-%d]: apply snap update peer state failed, errors:\n %+v",
@@ -256,9 +256,15 @@ func (ps *peerStorage) doGenerateSnapshotJob() error {
 		return nil
 	}
 
+	key := mraft.SnapKey{
+		CellID: ps.getCell().ID,
+		Term:   term,
+		Index:  applyState.AppliedIndex,
+	}
+
 	snapshot := raftpb.Snapshot{}
-	snapshot.Metadata.Term = term
-	snapshot.Metadata.Index = applyState.AppliedIndex
+	snapshot.Metadata.Term = key.Term
+	snapshot.Metadata.Index = key.Index
 
 	confState := raftpb.ConfState{}
 	for _, peer := range ps.getCell().Peers {
@@ -266,31 +272,26 @@ func (ps *peerStorage) doGenerateSnapshotJob() error {
 	}
 	snapshot.Metadata.ConfState = confState
 
-	// snapData := mraft.RaftSnapshotData{}
-	// snapData.Cell = state.Cell
-	// snapData.Data = nil
+	snapData := &mraft.RaftSnapshotData{}
+	snapData.Cell = state.Cell
+	snapData.Key = key
 
-	// d, err := snapData.Marshal()
-	// if err != nil {
-	// 	log.Errorf("raftstore[cell-%d]: snapshot failure, errors:\n %+v",
-	// 		ps.cell.ID,
-	// 		err)
-	// 	ps.snapStateC <- nil
-	// 	return nil
-	// }
+	if ps.store.snapshotManager.Register(&key, creating) {
+		defer ps.store.snapshotManager.Deregister(&key, creating)
 
-	// TODO: impl snapshot data load from rocksdb and compact
-	// snapshot.Data = d
-
-	err = ps.snapshortter.SaveSnap(snapshot)
-	if err != nil {
-		log.Errorf("raftstore[cell-%d]: snapshot failure, errors:\n %+v",
-			ps.getCell().ID,
-			err)
-	} else {
-		log.Infof("raftstore[cell-%d]: snapshot complete", ps.getCell().ID)
-		ps.genSnapJob.SetResult(snapshot)
+		err = ps.store.snapshotManager.Create(snapData)
+		if err != nil {
+			log.Errorf("raftstore[cell-%d]: create snapshot file failure, errors:\n %+v",
+				ps.getCell().ID,
+				err)
+			return nil
+		}
 	}
+
+	snapshot.Data = util.MustMarshal(snapData)
+
+	log.Infof("raftstore[cell-%d]: snapshot complete", ps.getCell().ID)
+	ps.genSnapJob.SetResult(snapshot)
 
 	return nil
 }

@@ -11,9 +11,8 @@
 	It has these top-level messages:
 		RaftMessage
 		StoreIdent
-		KeyValue
-		SnapshotCFFile
-		SnapshotMeta
+		SnapKey
+		SnapshotData
 		RaftSnapshotData
 		CellLocalState
 		RaftLocalState
@@ -92,7 +91,7 @@ type RaftMessage struct {
 	CellEpoch metapb.CellEpoch `protobuf:"bytes,5,opt,name=cellEpoch" json:"cellEpoch"`
 	// true means to_peer is a tombstone peer and it should remove itself.
 	IsTombstone bool `protobuf:"varint,6,opt,name=isTombstone" json:"isTombstone"`
-	// Region key range [start_key, end_key).
+	// Cell key range [start_key, end_key).
 	Start            []byte `protobuf:"bytes,7,opt,name=start" json:"start,omitempty"`
 	End              []byte `protobuf:"bytes,8,opt,name=end" json:"end,omitempty"`
 	XXX_unrecognized []byte `json:"-"`
@@ -184,100 +183,89 @@ func (m *StoreIdent) GetStoreID() uint64 {
 	return 0
 }
 
-type KeyValue struct {
-	Key              []byte `protobuf:"bytes,1,opt,name=key" json:"key,omitempty"`
-	Value            []byte `protobuf:"bytes,2,opt,name=value" json:"value,omitempty"`
+type SnapKey struct {
+	CellID           uint64 `protobuf:"varint,1,opt,name=cellID" json:"cellID"`
+	Term             uint64 `protobuf:"varint,2,opt,name=term" json:"term"`
+	Index            uint64 `protobuf:"varint,3,opt,name=index" json:"index"`
 	XXX_unrecognized []byte `json:"-"`
 }
 
-func (m *KeyValue) Reset()                    { *m = KeyValue{} }
-func (m *KeyValue) String() string            { return proto.CompactTextString(m) }
-func (*KeyValue) ProtoMessage()               {}
-func (*KeyValue) Descriptor() ([]byte, []int) { return fileDescriptorMraft, []int{2} }
+func (m *SnapKey) Reset()                    { *m = SnapKey{} }
+func (m *SnapKey) String() string            { return proto.CompactTextString(m) }
+func (*SnapKey) ProtoMessage()               {}
+func (*SnapKey) Descriptor() ([]byte, []int) { return fileDescriptorMraft, []int{2} }
 
-func (m *KeyValue) GetKey() []byte {
+func (m *SnapKey) GetCellID() uint64 {
+	if m != nil {
+		return m.CellID
+	}
+	return 0
+}
+
+func (m *SnapKey) GetTerm() uint64 {
+	if m != nil {
+		return m.Term
+	}
+	return 0
+}
+
+func (m *SnapKey) GetIndex() uint64 {
+	if m != nil {
+		return m.Index
+	}
+	return 0
+}
+
+type SnapshotData struct {
+	Key              SnapKey `protobuf:"bytes,1,opt,name=key" json:"key"`
+	Data             []byte  `protobuf:"bytes,2,opt,name=data" json:"data,omitempty"`
+	XXX_unrecognized []byte  `json:"-"`
+}
+
+func (m *SnapshotData) Reset()                    { *m = SnapshotData{} }
+func (m *SnapshotData) String() string            { return proto.CompactTextString(m) }
+func (*SnapshotData) ProtoMessage()               {}
+func (*SnapshotData) Descriptor() ([]byte, []int) { return fileDescriptorMraft, []int{3} }
+
+func (m *SnapshotData) GetKey() SnapKey {
 	if m != nil {
 		return m.Key
 	}
-	return nil
+	return SnapKey{}
 }
 
-func (m *KeyValue) GetValue() []byte {
+func (m *SnapshotData) GetData() []byte {
 	if m != nil {
-		return m.Value
-	}
-	return nil
-}
-
-type SnapshotCFFile struct {
-	Cf               string `protobuf:"bytes,1,opt,name=cf" json:"cf"`
-	Size_            uint64 `protobuf:"varint,2,opt,name=size" json:"size"`
-	CheckSum         uint32 `protobuf:"varint,3,opt,name=checkSum" json:"checkSum"`
-	XXX_unrecognized []byte `json:"-"`
-}
-
-func (m *SnapshotCFFile) Reset()                    { *m = SnapshotCFFile{} }
-func (m *SnapshotCFFile) String() string            { return proto.CompactTextString(m) }
-func (*SnapshotCFFile) ProtoMessage()               {}
-func (*SnapshotCFFile) Descriptor() ([]byte, []int) { return fileDescriptorMraft, []int{3} }
-
-func (m *SnapshotCFFile) GetCf() string {
-	if m != nil {
-		return m.Cf
-	}
-	return ""
-}
-
-func (m *SnapshotCFFile) GetSize_() uint64 {
-	if m != nil {
-		return m.Size_
-	}
-	return 0
-}
-
-func (m *SnapshotCFFile) GetCheckSum() uint32 {
-	if m != nil {
-		return m.CheckSum
-	}
-	return 0
-}
-
-type SnapshotMeta struct {
-	Files            []SnapshotCFFile `protobuf:"bytes,1,rep,name=files" json:"files"`
-	XXX_unrecognized []byte           `json:"-"`
-}
-
-func (m *SnapshotMeta) Reset()                    { *m = SnapshotMeta{} }
-func (m *SnapshotMeta) String() string            { return proto.CompactTextString(m) }
-func (*SnapshotMeta) ProtoMessage()               {}
-func (*SnapshotMeta) Descriptor() ([]byte, []int) { return fileDescriptorMraft, []int{4} }
-
-func (m *SnapshotMeta) GetFiles() []SnapshotCFFile {
-	if m != nil {
-		return m.Files
+		return m.Data
 	}
 	return nil
 }
 
 type RaftSnapshotData struct {
-	Cell             metapb.Cell  `protobuf:"bytes,1,opt,name=cell" json:"cell"`
-	FileSize         uint64       `protobuf:"varint,2,opt,name=fileSize" json:"fileSize"`
-	Data             []KeyValue   `protobuf:"bytes,3,rep,name=data" json:"data"`
-	Version          uint64       `protobuf:"varint,4,opt,name=version" json:"version"`
-	Meta             SnapshotMeta `protobuf:"bytes,5,opt,name=meta" json:"meta"`
-	XXX_unrecognized []byte       `json:"-"`
+	Cell             metapb.Cell `protobuf:"bytes,1,opt,name=cell" json:"cell"`
+	Key              SnapKey     `protobuf:"bytes,2,opt,name=key" json:"key"`
+	FileSize         uint64      `protobuf:"varint,3,opt,name=fileSize" json:"fileSize"`
+	CheckSum         uint64      `protobuf:"varint,4,opt,name=checkSum" json:"checkSum"`
+	XXX_unrecognized []byte      `json:"-"`
 }
 
 func (m *RaftSnapshotData) Reset()                    { *m = RaftSnapshotData{} }
 func (m *RaftSnapshotData) String() string            { return proto.CompactTextString(m) }
 func (*RaftSnapshotData) ProtoMessage()               {}
-func (*RaftSnapshotData) Descriptor() ([]byte, []int) { return fileDescriptorMraft, []int{5} }
+func (*RaftSnapshotData) Descriptor() ([]byte, []int) { return fileDescriptorMraft, []int{4} }
 
 func (m *RaftSnapshotData) GetCell() metapb.Cell {
 	if m != nil {
 		return m.Cell
 	}
 	return metapb.Cell{}
+}
+
+func (m *RaftSnapshotData) GetKey() SnapKey {
+	if m != nil {
+		return m.Key
+	}
+	return SnapKey{}
 }
 
 func (m *RaftSnapshotData) GetFileSize() uint64 {
@@ -287,25 +275,11 @@ func (m *RaftSnapshotData) GetFileSize() uint64 {
 	return 0
 }
 
-func (m *RaftSnapshotData) GetData() []KeyValue {
+func (m *RaftSnapshotData) GetCheckSum() uint64 {
 	if m != nil {
-		return m.Data
-	}
-	return nil
-}
-
-func (m *RaftSnapshotData) GetVersion() uint64 {
-	if m != nil {
-		return m.Version
+		return m.CheckSum
 	}
 	return 0
-}
-
-func (m *RaftSnapshotData) GetMeta() SnapshotMeta {
-	if m != nil {
-		return m.Meta
-	}
-	return SnapshotMeta{}
 }
 
 type CellLocalState struct {
@@ -317,7 +291,7 @@ type CellLocalState struct {
 func (m *CellLocalState) Reset()                    { *m = CellLocalState{} }
 func (m *CellLocalState) String() string            { return proto.CompactTextString(m) }
 func (*CellLocalState) ProtoMessage()               {}
-func (*CellLocalState) Descriptor() ([]byte, []int) { return fileDescriptorMraft, []int{6} }
+func (*CellLocalState) Descriptor() ([]byte, []int) { return fileDescriptorMraft, []int{5} }
 
 func (m *CellLocalState) GetState() PeerState {
 	if m != nil {
@@ -342,7 +316,7 @@ type RaftLocalState struct {
 func (m *RaftLocalState) Reset()                    { *m = RaftLocalState{} }
 func (m *RaftLocalState) String() string            { return proto.CompactTextString(m) }
 func (*RaftLocalState) ProtoMessage()               {}
-func (*RaftLocalState) Descriptor() ([]byte, []int) { return fileDescriptorMraft, []int{7} }
+func (*RaftLocalState) Descriptor() ([]byte, []int) { return fileDescriptorMraft, []int{6} }
 
 func (m *RaftLocalState) GetHardState() raftpb.HardState {
 	if m != nil {
@@ -367,7 +341,7 @@ type RaftTruncatedState struct {
 func (m *RaftTruncatedState) Reset()                    { *m = RaftTruncatedState{} }
 func (m *RaftTruncatedState) String() string            { return proto.CompactTextString(m) }
 func (*RaftTruncatedState) ProtoMessage()               {}
-func (*RaftTruncatedState) Descriptor() ([]byte, []int) { return fileDescriptorMraft, []int{8} }
+func (*RaftTruncatedState) Descriptor() ([]byte, []int) { return fileDescriptorMraft, []int{7} }
 
 func (m *RaftTruncatedState) GetIndex() uint64 {
 	if m != nil {
@@ -392,7 +366,7 @@ type RaftApplyState struct {
 func (m *RaftApplyState) Reset()                    { *m = RaftApplyState{} }
 func (m *RaftApplyState) String() string            { return proto.CompactTextString(m) }
 func (*RaftApplyState) ProtoMessage()               {}
-func (*RaftApplyState) Descriptor() ([]byte, []int) { return fileDescriptorMraft, []int{9} }
+func (*RaftApplyState) Descriptor() ([]byte, []int) { return fileDescriptorMraft, []int{8} }
 
 func (m *RaftApplyState) GetAppliedIndex() uint64 {
 	if m != nil {
@@ -411,9 +385,8 @@ func (m *RaftApplyState) GetTruncatedState() RaftTruncatedState {
 func init() {
 	proto.RegisterType((*RaftMessage)(nil), "mraft.RaftMessage")
 	proto.RegisterType((*StoreIdent)(nil), "mraft.StoreIdent")
-	proto.RegisterType((*KeyValue)(nil), "mraft.KeyValue")
-	proto.RegisterType((*SnapshotCFFile)(nil), "mraft.SnapshotCFFile")
-	proto.RegisterType((*SnapshotMeta)(nil), "mraft.SnapshotMeta")
+	proto.RegisterType((*SnapKey)(nil), "mraft.SnapKey")
+	proto.RegisterType((*SnapshotData)(nil), "mraft.SnapshotData")
 	proto.RegisterType((*RaftSnapshotData)(nil), "mraft.RaftSnapshotData")
 	proto.RegisterType((*CellLocalState)(nil), "mraft.CellLocalState")
 	proto.RegisterType((*RaftLocalState)(nil), "mraft.RaftLocalState")
@@ -524,7 +497,7 @@ func (m *StoreIdent) MarshalTo(dAtA []byte) (int, error) {
 	return i, nil
 }
 
-func (m *KeyValue) Marshal() (dAtA []byte, err error) {
+func (m *SnapKey) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
 	n, err := m.MarshalTo(dAtA)
@@ -534,30 +507,27 @@ func (m *KeyValue) Marshal() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *KeyValue) MarshalTo(dAtA []byte) (int, error) {
+func (m *SnapKey) MarshalTo(dAtA []byte) (int, error) {
 	var i int
 	_ = i
 	var l int
 	_ = l
-	if m.Key != nil {
-		dAtA[i] = 0xa
-		i++
-		i = encodeVarintMraft(dAtA, i, uint64(len(m.Key)))
-		i += copy(dAtA[i:], m.Key)
-	}
-	if m.Value != nil {
-		dAtA[i] = 0x12
-		i++
-		i = encodeVarintMraft(dAtA, i, uint64(len(m.Value)))
-		i += copy(dAtA[i:], m.Value)
-	}
+	dAtA[i] = 0x8
+	i++
+	i = encodeVarintMraft(dAtA, i, uint64(m.CellID))
+	dAtA[i] = 0x10
+	i++
+	i = encodeVarintMraft(dAtA, i, uint64(m.Term))
+	dAtA[i] = 0x18
+	i++
+	i = encodeVarintMraft(dAtA, i, uint64(m.Index))
 	if m.XXX_unrecognized != nil {
 		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
 
-func (m *SnapshotCFFile) Marshal() (dAtA []byte, err error) {
+func (m *SnapshotData) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
 	n, err := m.MarshalTo(dAtA)
@@ -567,53 +537,24 @@ func (m *SnapshotCFFile) Marshal() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *SnapshotCFFile) MarshalTo(dAtA []byte) (int, error) {
+func (m *SnapshotData) MarshalTo(dAtA []byte) (int, error) {
 	var i int
 	_ = i
 	var l int
 	_ = l
 	dAtA[i] = 0xa
 	i++
-	i = encodeVarintMraft(dAtA, i, uint64(len(m.Cf)))
-	i += copy(dAtA[i:], m.Cf)
-	dAtA[i] = 0x10
-	i++
-	i = encodeVarintMraft(dAtA, i, uint64(m.Size_))
-	dAtA[i] = 0x18
-	i++
-	i = encodeVarintMraft(dAtA, i, uint64(m.CheckSum))
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
-	return i, nil
-}
-
-func (m *SnapshotMeta) Marshal() (dAtA []byte, err error) {
-	size := m.Size()
-	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	i = encodeVarintMraft(dAtA, i, uint64(m.Key.Size()))
+	n5, err := m.Key.MarshalTo(dAtA[i:])
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
-	return dAtA[:n], nil
-}
-
-func (m *SnapshotMeta) MarshalTo(dAtA []byte) (int, error) {
-	var i int
-	_ = i
-	var l int
-	_ = l
-	if len(m.Files) > 0 {
-		for _, msg := range m.Files {
-			dAtA[i] = 0xa
-			i++
-			i = encodeVarintMraft(dAtA, i, uint64(msg.Size()))
-			n, err := msg.MarshalTo(dAtA[i:])
-			if err != nil {
-				return 0, err
-			}
-			i += n
-		}
+	i += n5
+	if m.Data != nil {
+		dAtA[i] = 0x12
+		i++
+		i = encodeVarintMraft(dAtA, i, uint64(len(m.Data)))
+		i += copy(dAtA[i:], m.Data)
 	}
 	if m.XXX_unrecognized != nil {
 		i += copy(dAtA[i:], m.XXX_unrecognized)
@@ -639,37 +580,25 @@ func (m *RaftSnapshotData) MarshalTo(dAtA []byte) (int, error) {
 	dAtA[i] = 0xa
 	i++
 	i = encodeVarintMraft(dAtA, i, uint64(m.Cell.Size()))
-	n5, err := m.Cell.MarshalTo(dAtA[i:])
-	if err != nil {
-		return 0, err
-	}
-	i += n5
-	dAtA[i] = 0x10
-	i++
-	i = encodeVarintMraft(dAtA, i, uint64(m.FileSize))
-	if len(m.Data) > 0 {
-		for _, msg := range m.Data {
-			dAtA[i] = 0x1a
-			i++
-			i = encodeVarintMraft(dAtA, i, uint64(msg.Size()))
-			n, err := msg.MarshalTo(dAtA[i:])
-			if err != nil {
-				return 0, err
-			}
-			i += n
-		}
-	}
-	dAtA[i] = 0x20
-	i++
-	i = encodeVarintMraft(dAtA, i, uint64(m.Version))
-	dAtA[i] = 0x2a
-	i++
-	i = encodeVarintMraft(dAtA, i, uint64(m.Meta.Size()))
-	n6, err := m.Meta.MarshalTo(dAtA[i:])
+	n6, err := m.Cell.MarshalTo(dAtA[i:])
 	if err != nil {
 		return 0, err
 	}
 	i += n6
+	dAtA[i] = 0x12
+	i++
+	i = encodeVarintMraft(dAtA, i, uint64(m.Key.Size()))
+	n7, err := m.Key.MarshalTo(dAtA[i:])
+	if err != nil {
+		return 0, err
+	}
+	i += n7
+	dAtA[i] = 0x18
+	i++
+	i = encodeVarintMraft(dAtA, i, uint64(m.FileSize))
+	dAtA[i] = 0x20
+	i++
+	i = encodeVarintMraft(dAtA, i, uint64(m.CheckSum))
 	if m.XXX_unrecognized != nil {
 		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
@@ -697,11 +626,11 @@ func (m *CellLocalState) MarshalTo(dAtA []byte) (int, error) {
 	dAtA[i] = 0x12
 	i++
 	i = encodeVarintMraft(dAtA, i, uint64(m.Cell.Size()))
-	n7, err := m.Cell.MarshalTo(dAtA[i:])
+	n8, err := m.Cell.MarshalTo(dAtA[i:])
 	if err != nil {
 		return 0, err
 	}
-	i += n7
+	i += n8
 	if m.XXX_unrecognized != nil {
 		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
@@ -726,11 +655,11 @@ func (m *RaftLocalState) MarshalTo(dAtA []byte) (int, error) {
 	dAtA[i] = 0xa
 	i++
 	i = encodeVarintMraft(dAtA, i, uint64(m.HardState.Size()))
-	n8, err := m.HardState.MarshalTo(dAtA[i:])
+	n9, err := m.HardState.MarshalTo(dAtA[i:])
 	if err != nil {
 		return 0, err
 	}
-	i += n8
+	i += n9
 	dAtA[i] = 0x10
 	i++
 	i = encodeVarintMraft(dAtA, i, uint64(m.LastIndex))
@@ -788,11 +717,11 @@ func (m *RaftApplyState) MarshalTo(dAtA []byte) (int, error) {
 	dAtA[i] = 0x12
 	i++
 	i = encodeVarintMraft(dAtA, i, uint64(m.TruncatedState.Size()))
-	n9, err := m.TruncatedState.MarshalTo(dAtA[i:])
+	n10, err := m.TruncatedState.MarshalTo(dAtA[i:])
 	if err != nil {
 		return 0, err
 	}
-	i += n9
+	i += n10
 	if m.XXX_unrecognized != nil {
 		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
@@ -864,44 +793,26 @@ func (m *StoreIdent) Size() (n int) {
 	return n
 }
 
-func (m *KeyValue) Size() (n int) {
+func (m *SnapKey) Size() (n int) {
 	var l int
 	_ = l
-	if m.Key != nil {
-		l = len(m.Key)
-		n += 1 + l + sovMraft(uint64(l))
-	}
-	if m.Value != nil {
-		l = len(m.Value)
-		n += 1 + l + sovMraft(uint64(l))
-	}
+	n += 1 + sovMraft(uint64(m.CellID))
+	n += 1 + sovMraft(uint64(m.Term))
+	n += 1 + sovMraft(uint64(m.Index))
 	if m.XXX_unrecognized != nil {
 		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
 
-func (m *SnapshotCFFile) Size() (n int) {
+func (m *SnapshotData) Size() (n int) {
 	var l int
 	_ = l
-	l = len(m.Cf)
+	l = m.Key.Size()
 	n += 1 + l + sovMraft(uint64(l))
-	n += 1 + sovMraft(uint64(m.Size_))
-	n += 1 + sovMraft(uint64(m.CheckSum))
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
-	return n
-}
-
-func (m *SnapshotMeta) Size() (n int) {
-	var l int
-	_ = l
-	if len(m.Files) > 0 {
-		for _, e := range m.Files {
-			l = e.Size()
-			n += 1 + l + sovMraft(uint64(l))
-		}
+	if m.Data != nil {
+		l = len(m.Data)
+		n += 1 + l + sovMraft(uint64(l))
 	}
 	if m.XXX_unrecognized != nil {
 		n += len(m.XXX_unrecognized)
@@ -914,16 +825,10 @@ func (m *RaftSnapshotData) Size() (n int) {
 	_ = l
 	l = m.Cell.Size()
 	n += 1 + l + sovMraft(uint64(l))
-	n += 1 + sovMraft(uint64(m.FileSize))
-	if len(m.Data) > 0 {
-		for _, e := range m.Data {
-			l = e.Size()
-			n += 1 + l + sovMraft(uint64(l))
-		}
-	}
-	n += 1 + sovMraft(uint64(m.Version))
-	l = m.Meta.Size()
+	l = m.Key.Size()
 	n += 1 + l + sovMraft(uint64(l))
+	n += 1 + sovMraft(uint64(m.FileSize))
+	n += 1 + sovMraft(uint64(m.CheckSum))
 	if m.XXX_unrecognized != nil {
 		n += len(m.XXX_unrecognized)
 	}
@@ -1351,7 +1256,7 @@ func (m *StoreIdent) Unmarshal(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *KeyValue) Unmarshal(dAtA []byte) error {
+func (m *SnapKey) Unmarshal(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -1374,17 +1279,17 @@ func (m *KeyValue) Unmarshal(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: KeyValue: wiretype end group for non-group")
+			return fmt.Errorf("proto: SnapKey: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: KeyValue: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: SnapKey: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Key", wireType)
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field CellID", wireType)
 			}
-			var byteLen int
+			m.CellID = 0
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflowMraft
@@ -1394,139 +1299,16 @@ func (m *KeyValue) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				byteLen |= (int(b) & 0x7F) << shift
+				m.CellID |= (uint64(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
-			if byteLen < 0 {
-				return ErrInvalidLengthMraft
-			}
-			postIndex := iNdEx + byteLen
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.Key = append(m.Key[:0], dAtA[iNdEx:postIndex]...)
-			if m.Key == nil {
-				m.Key = []byte{}
-			}
-			iNdEx = postIndex
-		case 2:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Value", wireType)
-			}
-			var byteLen int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowMraft
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				byteLen |= (int(b) & 0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			if byteLen < 0 {
-				return ErrInvalidLengthMraft
-			}
-			postIndex := iNdEx + byteLen
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.Value = append(m.Value[:0], dAtA[iNdEx:postIndex]...)
-			if m.Value == nil {
-				m.Value = []byte{}
-			}
-			iNdEx = postIndex
-		default:
-			iNdEx = preIndex
-			skippy, err := skipMraft(dAtA[iNdEx:])
-			if err != nil {
-				return err
-			}
-			if skippy < 0 {
-				return ErrInvalidLengthMraft
-			}
-			if (iNdEx + skippy) > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
-			iNdEx += skippy
-		}
-	}
-
-	if iNdEx > l {
-		return io.ErrUnexpectedEOF
-	}
-	return nil
-}
-func (m *SnapshotCFFile) Unmarshal(dAtA []byte) error {
-	l := len(dAtA)
-	iNdEx := 0
-	for iNdEx < l {
-		preIndex := iNdEx
-		var wire uint64
-		for shift := uint(0); ; shift += 7 {
-			if shift >= 64 {
-				return ErrIntOverflowMraft
-			}
-			if iNdEx >= l {
-				return io.ErrUnexpectedEOF
-			}
-			b := dAtA[iNdEx]
-			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
-			if b < 0x80 {
-				break
-			}
-		}
-		fieldNum := int32(wire >> 3)
-		wireType := int(wire & 0x7)
-		if wireType == 4 {
-			return fmt.Errorf("proto: SnapshotCFFile: wiretype end group for non-group")
-		}
-		if fieldNum <= 0 {
-			return fmt.Errorf("proto: SnapshotCFFile: illegal tag %d (wire type %d)", fieldNum, wire)
-		}
-		switch fieldNum {
-		case 1:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Cf", wireType)
-			}
-			var stringLen uint64
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowMraft
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			intStringLen := int(stringLen)
-			if intStringLen < 0 {
-				return ErrInvalidLengthMraft
-			}
-			postIndex := iNdEx + intStringLen
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.Cf = string(dAtA[iNdEx:postIndex])
-			iNdEx = postIndex
 		case 2:
 			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Size_", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field Term", wireType)
 			}
-			m.Size_ = 0
+			m.Term = 0
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflowMraft
@@ -1536,16 +1318,16 @@ func (m *SnapshotCFFile) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.Size_ |= (uint64(b) & 0x7F) << shift
+				m.Term |= (uint64(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
 		case 3:
 			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field CheckSum", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field Index", wireType)
 			}
-			m.CheckSum = 0
+			m.Index = 0
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflowMraft
@@ -1555,7 +1337,7 @@ func (m *SnapshotCFFile) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.CheckSum |= (uint32(b) & 0x7F) << shift
+				m.Index |= (uint64(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -1582,7 +1364,7 @@ func (m *SnapshotCFFile) Unmarshal(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *SnapshotMeta) Unmarshal(dAtA []byte) error {
+func (m *SnapshotData) Unmarshal(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -1605,15 +1387,15 @@ func (m *SnapshotMeta) Unmarshal(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: SnapshotMeta: wiretype end group for non-group")
+			return fmt.Errorf("proto: SnapshotData: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: SnapshotMeta: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: SnapshotData: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Files", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field Key", wireType)
 			}
 			var msglen int
 			for shift := uint(0); ; shift += 7 {
@@ -1637,9 +1419,39 @@ func (m *SnapshotMeta) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Files = append(m.Files, SnapshotCFFile{})
-			if err := m.Files[len(m.Files)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+			if err := m.Key.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
+			}
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Data", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMraft
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthMraft
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Data = append(m.Data[:0], dAtA[iNdEx:postIndex]...)
+			if m.Data == nil {
+				m.Data = []byte{}
 			}
 			iNdEx = postIndex
 		default:
@@ -1724,6 +1536,36 @@ func (m *RaftSnapshotData) Unmarshal(dAtA []byte) error {
 			}
 			iNdEx = postIndex
 		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Key", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMraft
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthMraft
+			}
+			postIndex := iNdEx + msglen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if err := m.Key.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 3:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field FileSize", wireType)
 			}
@@ -1742,42 +1584,11 @@ func (m *RaftSnapshotData) Unmarshal(dAtA []byte) error {
 					break
 				}
 			}
-		case 3:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Data", wireType)
-			}
-			var msglen int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowMraft
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			if msglen < 0 {
-				return ErrInvalidLengthMraft
-			}
-			postIndex := iNdEx + msglen
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.Data = append(m.Data, KeyValue{})
-			if err := m.Data[len(m.Data)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
-				return err
-			}
-			iNdEx = postIndex
 		case 4:
 			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Version", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field CheckSum", wireType)
 			}
-			m.Version = 0
+			m.CheckSum = 0
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflowMraft
@@ -1787,41 +1598,11 @@ func (m *RaftSnapshotData) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.Version |= (uint64(b) & 0x7F) << shift
+				m.CheckSum |= (uint64(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
-		case 5:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Meta", wireType)
-			}
-			var msglen int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowMraft
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			if msglen < 0 {
-				return ErrInvalidLengthMraft
-			}
-			postIndex := iNdEx + msglen
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			if err := m.Meta.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
-				return err
-			}
-			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skipMraft(dAtA[iNdEx:])
@@ -2341,51 +2122,46 @@ var (
 func init() { proto.RegisterFile("mraft.proto", fileDescriptorMraft) }
 
 var fileDescriptorMraft = []byte{
-	// 726 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x7c, 0x54, 0xcd, 0x4e, 0xdb, 0x4a,
-	0x14, 0x8e, 0xf3, 0x47, 0x72, 0x12, 0x42, 0xee, 0xc0, 0x95, 0x7c, 0xd1, 0x55, 0x6e, 0xe4, 0x05,
-	0x0a, 0xe8, 0x62, 0xab, 0x51, 0x79, 0x00, 0x7e, 0x8a, 0xa0, 0x2d, 0x15, 0x4a, 0x50, 0xb7, 0x68,
-	0x62, 0x8f, 0x13, 0x0b, 0xdb, 0x63, 0xd9, 0x13, 0x54, 0xba, 0xef, 0x3b, 0xf4, 0x6d, 0xba, 0x65,
-	0xc9, 0xaa, 0xcb, 0xaa, 0xa5, 0x2f, 0x52, 0x9d, 0xf1, 0x8c, 0x93, 0x80, 0xda, 0x0d, 0xcc, 0x7c,
-	0xe7, 0x3b, 0xe7, 0x7c, 0x73, 0xce, 0xe7, 0x40, 0x2b, 0x4a, 0xa9, 0x2f, 0xec, 0x24, 0xe5, 0x82,
-	0x93, 0x9a, 0xbc, 0x6c, 0x6f, 0x46, 0x4c, 0xd0, 0x64, 0xe2, 0xe4, 0xff, 0xf2, 0xd8, 0xf6, 0xd6,
-	0x94, 0x4f, 0xb9, 0x3c, 0x3a, 0x78, 0x52, 0xe8, 0xfe, 0x34, 0x10, 0xb3, 0xf9, 0xc4, 0x76, 0x79,
-	0xe4, 0xb8, 0x3c, 0x65, 0x3c, 0x73, 0x98, 0x70, 0x3d, 0x07, 0xeb, 0xc8, 0x3f, 0xc9, 0xc4, 0x59,
-	0x34, 0xb0, 0xbe, 0x94, 0xa1, 0x35, 0xa2, 0xbe, 0xb8, 0x60, 0x59, 0x46, 0xa7, 0x8c, 0xfc, 0x0b,
-	0x75, 0x97, 0x85, 0xe1, 0xf9, 0x89, 0x69, 0xf4, 0x8d, 0x41, 0xf5, 0xa8, 0x7a, 0xff, 0xed, 0xbf,
-	0xd2, 0x48, 0x61, 0xc4, 0x86, 0x86, 0x9f, 0xf2, 0xe8, 0x92, 0xb1, 0xd4, 0x2c, 0xf7, 0x8d, 0x41,
-	0x6b, 0xd8, 0xb6, 0x95, 0x26, 0xc4, 0x14, 0xbb, 0xe0, 0x90, 0x3d, 0xa8, 0x0b, 0x2e, 0xd9, 0x95,
-	0xdf, 0xb2, 0x15, 0x83, 0x38, 0xb0, 0x16, 0xe5, 0x22, 0xcc, 0xaa, 0x24, 0x6f, 0xd8, 0xb9, 0x5c,
-	0x5b, 0x69, 0x53, 0x7c, 0xcd, 0x22, 0x07, 0xd0, 0x44, 0x59, 0xaf, 0x12, 0xee, 0xce, 0xcc, 0x9a,
-	0x4c, 0xf9, 0x4b, 0xd7, 0x3f, 0xd6, 0x01, 0x95, 0xb4, 0x60, 0x92, 0x1d, 0x68, 0x05, 0xd9, 0x15,
-	0x8f, 0x26, 0x99, 0xe0, 0x31, 0x33, 0xeb, 0x7d, 0x63, 0xd0, 0x50, 0xac, 0xe5, 0x00, 0xd9, 0x82,
-	0x5a, 0x26, 0x68, 0x2a, 0xcc, 0xb5, 0xbe, 0x31, 0x68, 0x8f, 0xf2, 0x0b, 0xe9, 0x42, 0x85, 0xc5,
-	0x9e, 0xd9, 0x90, 0x18, 0x1e, 0xad, 0x4b, 0x80, 0xb1, 0xe0, 0x29, 0x3b, 0xf7, 0x58, 0x2c, 0x88,
-	0x05, 0x4d, 0x37, 0x9c, 0x67, 0x82, 0xa5, 0x4f, 0x46, 0xb8, 0x80, 0x49, 0x0f, 0xd6, 0x32, 0x99,
-	0x71, 0x22, 0x87, 0xa8, 0x19, 0x1a, 0xb4, 0x86, 0xd0, 0x78, 0xc3, 0xee, 0xde, 0xd3, 0x70, 0xce,
-	0xb0, 0xdf, 0x0d, 0xbb, 0x93, 0x95, 0xda, 0x23, 0x3c, 0xa2, 0xae, 0x5b, 0x0c, 0xc9, 0xdc, 0xf6,
-	0x28, 0xbf, 0x58, 0x13, 0xe8, 0x8c, 0x63, 0x9a, 0x64, 0x33, 0x2e, 0x8e, 0x4f, 0x4f, 0x83, 0x10,
-	0xf5, 0x97, 0x5d, 0x5f, 0x26, 0x36, 0x55, 0x83, 0xb2, 0xeb, 0x13, 0x13, 0xaa, 0x59, 0xf0, 0x91,
-	0xad, 0x34, 0x96, 0x08, 0xe9, 0x43, 0xc3, 0x9d, 0x31, 0xf7, 0x66, 0x3c, 0x8f, 0xe4, 0xb6, 0xd6,
-	0xf5, 0x36, 0x35, 0x6a, 0x1d, 0x42, 0x5b, 0xf7, 0xb8, 0x60, 0x82, 0x92, 0x17, 0x50, 0xf3, 0x83,
-	0x90, 0x65, 0xa6, 0xd1, 0xaf, 0x0c, 0x5a, 0xc3, 0xbf, 0xed, 0xdc, 0xb9, 0xab, 0x3a, 0x54, 0x95,
-	0x9c, 0x69, 0x7d, 0x35, 0xa0, 0x8b, 0x76, 0xd3, 0x9c, 0x13, 0x2a, 0x28, 0xd9, 0x81, 0x2a, 0xae,
-	0x47, 0x6a, 0x5d, 0xf2, 0x08, 0xee, 0x50, 0x2b, 0xc4, 0x38, 0x2a, 0xc4, 0x2a, 0xe3, 0xa7, 0xfa,
-	0x0b, 0x94, 0xec, 0x42, 0xd5, 0xa3, 0x82, 0x9a, 0x15, 0x29, 0x68, 0x43, 0x09, 0xd2, 0xc3, 0xd4,
-	0xc5, 0x90, 0x82, 0x4b, 0xb8, 0x65, 0x69, 0x16, 0xf0, 0x58, 0xda, 0xad, 0x58, 0x82, 0x02, 0xc9,
-	0x3e, 0x54, 0x51, 0x87, 0x32, 0xd6, 0xe6, 0x93, 0xb7, 0xe1, 0xfb, 0x75, 0x39, 0xa4, 0x59, 0x3e,
-	0x74, 0x50, 0xef, 0x5b, 0xee, 0xd2, 0x70, 0x2c, 0xa8, 0x60, 0xe4, 0x7f, 0xe9, 0x1f, 0xc1, 0xe4,
-	0xb3, 0x3a, 0xc3, 0xae, 0xaa, 0x80, 0x5e, 0x97, 0x04, 0x3d, 0x18, 0x49, 0x2a, 0x66, 0x50, 0xfe,
-	0xf3, 0x0c, 0xac, 0x1b, 0xe8, 0xe0, 0xfc, 0x96, 0xfa, 0x1c, 0x40, 0x73, 0x46, 0x53, 0x6f, 0x5c,
-	0xf4, 0xc2, 0xcf, 0x40, 0x7d, 0x39, 0x67, 0x3a, 0xa0, 0x4d, 0x58, 0x30, 0xd1, 0xa8, 0x21, 0xcd,
-	0xc4, 0x79, 0xec, 0xb1, 0x0f, 0x2b, 0xd3, 0x5c, 0xc0, 0xd6, 0x6b, 0x20, 0xd8, 0xec, 0x2a, 0x9d,
-	0xc7, 0x2e, 0x15, 0x4c, 0x65, 0x6e, 0x43, 0x2d, 0x90, 0x59, 0xcb, 0xf6, 0xce, 0x21, 0xb4, 0x97,
-	0x60, 0x69, 0xb4, 0x6a, 0x2f, 0x44, 0xac, 0x4f, 0x46, 0xae, 0xfc, 0x30, 0x49, 0xc2, 0xbb, 0xbc,
-	0xd0, 0x2e, 0xac, 0xd3, 0x24, 0x09, 0x03, 0xe6, 0x5d, 0x3f, 0x2f, 0xd8, 0x56, 0x21, 0xa9, 0x84,
-	0x9c, 0xc1, 0x86, 0xd0, 0x2a, 0xae, 0xf3, 0xb1, 0xe6, 0x93, 0xfa, 0x47, 0x8d, 0xf5, 0xb9, 0x4e,
-	0x55, 0xa7, 0x23, 0x56, 0xd0, 0xbd, 0x97, 0xd0, 0x2c, 0x56, 0x40, 0x00, 0xea, 0xef, 0x78, 0x1a,
-	0xd1, 0xb0, 0x5b, 0x22, 0x6d, 0x68, 0x48, 0x6d, 0x41, 0x3c, 0xed, 0x1a, 0x64, 0x1d, 0x9a, 0xc5,
-	0x4f, 0x41, 0xb7, 0x7c, 0xb4, 0xf5, 0xf0, 0xa3, 0x57, 0xba, 0x7f, 0xec, 0x19, 0x0f, 0x8f, 0x3d,
-	0xe3, 0xfb, 0x63, 0xcf, 0xf8, 0xfc, 0xb3, 0x57, 0xfa, 0x15, 0x00, 0x00, 0xff, 0xff, 0xe4, 0x46,
-	0x31, 0x07, 0xab, 0x05, 0x00, 0x00,
+	// 648 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x84, 0x53, 0xdd, 0x4e, 0xdb, 0x4c,
+	0x10, 0x8d, 0x43, 0x7e, 0x27, 0x26, 0xe4, 0xdb, 0x8f, 0x0b, 0x17, 0x55, 0x69, 0xe4, 0x0b, 0x94,
+	0xa2, 0xd6, 0x96, 0x50, 0x79, 0x80, 0x52, 0x2a, 0x01, 0xfd, 0x11, 0x4a, 0xb8, 0xad, 0xd0, 0xc6,
+	0xde, 0x24, 0x16, 0xb6, 0xd7, 0x5a, 0x4f, 0xa4, 0xd2, 0xfb, 0xbe, 0x43, 0x9f, 0xa0, 0xaf, 0xd1,
+	0x5b, 0x2e, 0x79, 0x82, 0xaa, 0xa5, 0x2f, 0x52, 0xed, 0x7a, 0xd7, 0x09, 0x44, 0x94, 0x9b, 0x64,
+	0xf7, 0xcc, 0x99, 0x39, 0x67, 0x67, 0xc6, 0xd0, 0x49, 0x04, 0x9d, 0xa2, 0x97, 0x09, 0x8e, 0x9c,
+	0xd4, 0xd5, 0x65, 0xe7, 0xff, 0x84, 0x21, 0xcd, 0x26, 0x7e, 0xf1, 0x57, 0xc4, 0x76, 0xb6, 0x67,
+	0x7c, 0xc6, 0xd5, 0xd1, 0x97, 0x27, 0x8d, 0xbe, 0x9c, 0x45, 0x38, 0x5f, 0x4c, 0xbc, 0x80, 0x27,
+	0x7e, 0xc0, 0x05, 0xe3, 0xb9, 0xcf, 0x30, 0x08, 0x7d, 0x59, 0x47, 0xfd, 0x64, 0x13, 0x7f, 0x29,
+	0xe0, 0xfe, 0xa8, 0x42, 0x67, 0x44, 0xa7, 0xf8, 0x81, 0xe5, 0x39, 0x9d, 0x31, 0xf2, 0x14, 0x1a,
+	0x01, 0x8b, 0xe3, 0x93, 0x23, 0xc7, 0x1a, 0x58, 0xc3, 0xda, 0x61, 0xed, 0xfa, 0xe7, 0xb3, 0xca,
+	0x48, 0x63, 0xc4, 0x83, 0xd6, 0x54, 0xf0, 0xe4, 0x8c, 0x31, 0xe1, 0x54, 0x07, 0xd6, 0xb0, 0xb3,
+	0x6f, 0x7b, 0xda, 0x93, 0xc4, 0x34, 0xbb, 0xe4, 0x90, 0x3d, 0x68, 0x20, 0x57, 0xec, 0x8d, 0x07,
+	0xd9, 0x9a, 0x41, 0x7c, 0x68, 0x26, 0x85, 0x09, 0xa7, 0xa6, 0xc8, 0x5b, 0x5e, 0x61, 0xd7, 0xd3,
+	0xde, 0x34, 0xdf, 0xb0, 0xc8, 0x01, 0xb4, 0xa5, 0xad, 0xb7, 0x19, 0x0f, 0xe6, 0x4e, 0x5d, 0xa5,
+	0xfc, 0x67, 0xea, 0xbf, 0x31, 0x01, 0x9d, 0xb4, 0x64, 0x92, 0x5d, 0xe8, 0x44, 0xf9, 0x39, 0x4f,
+	0x26, 0x39, 0xf2, 0x94, 0x39, 0x8d, 0x81, 0x35, 0x6c, 0x69, 0xd6, 0x6a, 0x80, 0x6c, 0x43, 0x3d,
+	0x47, 0x2a, 0xd0, 0x69, 0x0e, 0xac, 0xa1, 0x3d, 0x2a, 0x2e, 0xa4, 0x07, 0x1b, 0x2c, 0x0d, 0x9d,
+	0x96, 0xc2, 0xe4, 0xd1, 0x3d, 0x03, 0x18, 0x23, 0x17, 0xec, 0x24, 0x64, 0x29, 0x12, 0x17, 0xda,
+	0x41, 0xbc, 0xc8, 0x91, 0x89, 0x7b, 0x2d, 0x5c, 0xc2, 0xa4, 0x0f, 0xcd, 0x5c, 0x65, 0x1c, 0xa9,
+	0x26, 0x1a, 0x86, 0x01, 0xdd, 0x4f, 0xd0, 0x1c, 0xa7, 0x34, 0x7b, 0xc7, 0xae, 0x1e, 0x19, 0x87,
+	0x03, 0x35, 0x64, 0x22, 0xb9, 0x53, 0x45, 0x21, 0x64, 0x07, 0xea, 0x51, 0x1a, 0xb2, 0xcf, 0xaa,
+	0xef, 0x26, 0x54, 0x40, 0xee, 0x29, 0xd8, 0xb2, 0x7c, 0x3e, 0xe7, 0x78, 0x44, 0x91, 0x92, 0x5d,
+	0xd8, 0xb8, 0x64, 0x57, 0x4a, 0xa0, 0xb3, 0xdf, 0xf5, 0x8a, 0xf5, 0xd3, 0x06, 0x74, 0xa6, 0x24,
+	0x10, 0x02, 0xb5, 0x90, 0x22, 0x55, 0x6a, 0xf6, 0x48, 0x9d, 0xdd, 0xef, 0x16, 0xf4, 0xe4, 0xfa,
+	0xdc, 0x2b, 0x58, 0x93, 0x06, 0x75, 0x45, 0x7b, 0x75, 0x26, 0xc6, 0xa4, 0x8c, 0x1b, 0xe1, 0xea,
+	0x63, 0xc2, 0x03, 0x68, 0x4d, 0xa3, 0x98, 0x8d, 0xa3, 0x2f, 0xec, 0xce, 0x7b, 0x4a, 0x54, 0x32,
+	0x82, 0x39, 0x0b, 0x2e, 0xc7, 0x8b, 0x44, 0x2d, 0x4f, 0xc9, 0x30, 0xa8, 0x3b, 0x85, 0xae, 0xd4,
+	0x7f, 0xcf, 0x03, 0x1a, 0x8f, 0x91, 0x22, 0x23, 0x2f, 0xd4, 0x7c, 0x91, 0x29, 0x9b, 0xdd, 0xfd,
+	0x9e, 0xd6, 0x97, 0xbb, 0xa8, 0x08, 0xa6, 0x69, 0x8a, 0x54, 0xbe, 0xa9, 0xfa, 0xef, 0x37, 0xb9,
+	0x97, 0xd0, 0x95, 0xfd, 0x58, 0xd1, 0x39, 0x80, 0xf6, 0x9c, 0x8a, 0x70, 0x5c, 0x6a, 0xc9, 0x35,
+	0xd5, 0x9b, 0x7d, 0x6c, 0x02, 0x66, 0x49, 0x4a, 0xa6, 0x5c, 0xa4, 0x98, 0xe6, 0x78, 0xa2, 0xa6,
+	0xb8, 0x3a, 0xe0, 0x25, 0xec, 0x9e, 0x02, 0x91, 0x62, 0xe7, 0x62, 0x91, 0x06, 0x14, 0x99, 0xce,
+	0x2c, 0x67, 0x6f, 0xad, 0xcd, 0xfe, 0xe1, 0x8d, 0x71, 0xbf, 0x5a, 0x85, 0xf3, 0xd7, 0x59, 0x16,
+	0x5f, 0x15, 0x85, 0x9e, 0xc3, 0x26, 0xcd, 0xb2, 0x38, 0x62, 0xe1, 0xc5, 0x7a, 0x41, 0x5b, 0x87,
+	0x94, 0x13, 0x72, 0x0c, 0x5b, 0x68, 0x5c, 0x5c, 0x14, 0x6d, 0x2d, 0x3a, 0xf5, 0x44, 0xb7, 0x75,
+	0xdd, 0xa7, 0xae, 0xd3, 0xc5, 0x3b, 0xe8, 0xde, 0x2b, 0x68, 0x97, 0x23, 0x20, 0x00, 0x8d, 0x8f,
+	0x5c, 0x24, 0x34, 0xee, 0x55, 0x88, 0x0d, 0x2d, 0xe5, 0x2d, 0x4a, 0x67, 0x3d, 0x8b, 0x6c, 0x42,
+	0xbb, 0xfc, 0x54, 0x7b, 0xd5, 0xc3, 0xed, 0x9b, 0xdf, 0xfd, 0xca, 0xf5, 0x6d, 0xdf, 0xba, 0xb9,
+	0xed, 0x5b, 0xbf, 0x6e, 0xfb, 0xd6, 0xb7, 0x3f, 0xfd, 0xca, 0xdf, 0x00, 0x00, 0x00, 0xff, 0xff,
+	0xf1, 0x55, 0xf8, 0x0b, 0x4b, 0x05, 0x00, 0x00,
 }

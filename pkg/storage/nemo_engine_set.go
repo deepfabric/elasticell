@@ -30,18 +30,15 @@ func newNemoSetEngine(db *gonemo.NEMO) SetEngine {
 }
 
 func (e *nemoSetEngine) SAdd(key []byte, members ...[]byte) (int64, error) {
-	// TODO: nemo must support more members
-	return e.db.SAdd(key, members[0])
+	return e.db.SAdd(key, members...)
 }
 
 func (e *nemoSetEngine) SRem(key []byte, members ...[]byte) (int64, error) {
-	// TODO: nemo must support more members
-	return e.db.SRem(key, members[0])
+	return e.db.SRem(key, members...)
 }
 
 func (e *nemoSetEngine) SCard(key []byte) (int64, error) {
-	// TODO: nemo must return a error
-	return e.db.SCard(key), nil
+	return e.db.SCard(key)
 }
 
 func (e *nemoSetEngine) SMembers(key []byte) ([][]byte, error) {
@@ -49,13 +46,13 @@ func (e *nemoSetEngine) SMembers(key []byte) ([][]byte, error) {
 }
 
 func (e *nemoSetEngine) SIsMember(key []byte, member []byte) (int64, error) {
-	yes := e.db.SIsMember(key, member)
+	yes, err := e.db.SIsMember(key, member)
 	var value int64
 	if yes {
 		value = 1
 	}
-	// TODO: nemo must return a error
-	return value, nil
+
+	return value, err
 }
 
 func (e *nemoSetEngine) SPop(key []byte) ([]byte, error) {

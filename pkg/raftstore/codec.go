@@ -14,13 +14,21 @@
 package raftstore
 
 import (
+	"fmt"
+
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
+	"github.com/deepfabric/elasticell/pkg/util"
 	"github.com/fagongzi/goetty"
 )
 
 var (
 	decoder = goetty.NewIntLengthFieldBasedDecoder(newRaftDecoder())
 	encoder = newRaftEncoder()
+)
+
+const (
+	typeRaft = 1
+	typeSnap = 3
 )
 
 type raftDecoder struct {
@@ -38,28 +46,42 @@ func newRaftEncoder() *raftEncoder {
 }
 
 func (decoder raftDecoder) Decode(in *goetty.ByteBuf) (bool, interface{}, error) {
+	t, err := in.ReadByte()
+	if err != nil {
+		return true, nil, err
+	}
+
 	_, data, err := in.ReadMarkedBytes()
 	if err != nil {
 		return true, nil, err
 	}
 
-	msg := &mraft.RaftMessage{}
-	err = msg.Unmarshal(data)
-	if err != nil {
-		return true, nil, err
+	switch t {
+	case typeSnap:
+		msg := &mraft.SnapshotData{}
+		util.MustUnmarshal(msg, data)
+		return true, msg, nil
+	case typeRaft:
+		msg := &mraft.RaftMessage{}
+		util.MustUnmarshal(msg, data)
+		return true, msg, nil
 	}
 
-	return true, msg, nil
+	return true, nil, fmt.Errorf("decoder: not support msg type, type=<%d>", t)
 }
 
 func (e raftEncoder) Encode(data interface{}, out *goetty.ByteBuf) error {
-	msg := data.(*mraft.RaftMessage)
-	d, err := msg.Marshal()
-	if err != nil {
-		return err
+	if msg, ok := data.(*mraft.RaftMessage); ok {
+		d := util.MustMarshal(msg)
+		out.WriteInt(len(d))
+		out.WriteByte(typeRaft)
+		out.Write(d)
+	} else if msg, ok := data.(*mraft.SnapshotData); ok {
+		d := util.MustMarshal(msg)
+		out.WriteInt(len(d))
+		out.WriteByte(typeSnap)
+		out.Write(d)
 	}
 
-	out.WriteInt(len(d))
-	out.Write(d)
 	return nil
 }

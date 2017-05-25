@@ -56,6 +56,8 @@ type Store struct {
 	startAt   uint32
 	meta      metapb.Store
 
+	snapshotManager SnapshotManager
+
 	pdClient *pd.Client
 
 	replicatesMap *cellPeersMap // cellid -> peer replicate
@@ -71,6 +73,9 @@ type Store struct {
 
 	redisReadHandles  map[raftcmdpb.CMDType]func(*raftcmdpb.Request) *raftcmdpb.Response
 	redisWriteHandles map[raftcmdpb.CMDType]func(*raftcmdpb.Request) *raftcmdpb.Response
+
+	sendingSnapCount   uint32
+	reveivingSnapCount uint32
 }
 
 // NewStore returns store
@@ -83,6 +88,7 @@ func NewStore(clusterID uint64, pdClient *pd.Client, meta metapb.Store, engine s
 	s.engine = engine
 	s.cfg = cfg
 	s.pdClient = pdClient
+	s.snapshotManager = newDefaultSnapshotManager(cfg, engine.GetDataEngine())
 
 	s.trans = newTransport(s, pdClient, s.notify)
 	s.notifyChan = make(chan interface{}, defaultNotifyChanSize)
@@ -202,7 +208,6 @@ func (s *Store) Start() {
 	s.startCellHeartbeatTask()
 	s.startGCTask()
 	s.startCellSplitCheckTask()
-	s.startCompactTask()
 }
 
 func (s *Store) startTransfer() {
@@ -226,6 +231,8 @@ func (s *Store) startHandleNotifyMsg() {
 					s.onRaftCMD(msg)
 				} else if msg, ok := n.(*splitCheckResult); ok {
 					s.onSplitCheckResult(msg)
+				} else if msg, ok := n.(*mraft.SnapshotData); ok {
+					s.snapshotManager.WriteSnapData(msg)
 				}
 			}
 		}
@@ -274,23 +281,6 @@ func (s *Store) startCellHeartbeatTask() {
 				return
 			case <-ticker.C:
 				s.handleCellHeartbeat()
-			}
-		}
-	})
-}
-
-func (s *Store) startCompactTask() {
-	s.runner.RunCancelableTask(func(ctx context.Context) {
-		ticker := time.NewTicker(s.cfg.getCellCompactCheckIntervalDuration())
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-ctx.Done():
-				log.Infof("stop: cell compect check job stopped")
-				return
-			case <-ticker.C:
-				s.handleCellCompactCheck()
 			}
 		}
 	})
@@ -726,15 +716,12 @@ func (s *Store) addNamedJob(worker string, task func() error) (*util.Job, error)
 }
 
 func (s *Store) handleStoreHeartbeat() error {
-	// TODO: impl sending and receiving snap count collect
-	var sendingSnapCount, reveivingSnapCount, applySnapCount uint32
-
 	stats, err := util.DiskStats(s.cfg.StoreDataPath)
 	if err != nil {
 		return err
 	}
 
-	applySnapCount, err = s.getApplySnapshotCount()
+	applySnapCount, err := s.getApplySnapshotCount()
 	if err != nil {
 		return err
 	}
@@ -748,8 +735,8 @@ func (s *Store) handleStoreHeartbeat() error {
 		Available:          stats.Free,
 		UsedSize:           stats.Used,
 		CellCount:          s.replicatesMap.size(),
-		SendingSnapCount:   sendingSnapCount,
-		ReceivingSnapCount: reveivingSnapCount,
+		SendingSnapCount:   s.sendingSnapCount,
+		ReceivingSnapCount: s.reveivingSnapCount,
 		ApplyingSnapCount:  applySnapCount,
 		IsBusy:             false,
 		BytesWritten:       0,
@@ -785,24 +772,6 @@ func (s *Store) handleCellHeartbeat() {
 	for _, p := range s.replicatesMap.values() {
 		p.handleHeartbeat()
 	}
-}
-
-func (s *Store) handleCellCompactCheck() {
-	s.replicatesMap.foreach(func(pr *PeerReplicate) (bool, error) {
-		if pr.deleteKeysHint >= s.cfg.CellCompactDeleteKeysCount {
-			_, err := s.addCompactJob(pr.doCompact)
-			if err != nil {
-				log.Errorf("compact: add compact job failed, errors:\n %+v", err)
-			} else {
-				pr.deleteKeysHint = 0
-			}
-
-			// Compact only 1 cell each check in case compact task accumulates.
-			return false, nil
-		}
-
-		return true, nil
-	})
 }
 
 func (s *Store) handleCellSplitCheck() {

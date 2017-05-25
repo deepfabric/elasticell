@@ -16,14 +16,12 @@
 package storage
 
 import (
-	"errors"
-
 	gonemo "github.com/deepfabric/go-nemo"
 )
 
 type nemoMetaEngine struct {
 	db      *gonemo.NEMO
-	handler *gonemo.DBWithTTL
+	handler *gonemo.DBNemo
 }
 
 func newNemoMetaEngine(db *gonemo.NEMO) Engine {
@@ -42,15 +40,11 @@ func (e *nemoMetaEngine) Get(key []byte) ([]byte, error) {
 }
 
 func (e *nemoMetaEngine) Delete(key []byte) error {
-	e.db.GetWithHandle(e.handler, key)
-	// TODO: rocksdb must return a error
-	return nil
+	return e.db.DeleteWithHandle(e.handler, key)
 }
 
 func (e *nemoMetaEngine) RangeDelete(start, end []byte) error {
-	e.db.RangeDelWithHandle(e.handler, start, end, 0)
-	// TODO: rocksdb must return a error
-	return nil
+	return e.db.RangeDelWithHandle(e.handler, start, end)
 }
 
 // Scan scans the range and execute the handler fun.
@@ -59,7 +53,7 @@ func (e *nemoMetaEngine) Scan(startKey []byte, endKey []byte, handler func(key, 
 	var err error
 	c := false
 
-	it := e.db.KScanWithHandle(e.handler, startKey, endKey, 0)
+	it := e.db.KScanWithHandle(e.handler, startKey, endKey, true)
 	for ; it.Valid(); it.Next() {
 		c, err = handler(it.Key(), it.Value())
 		if err != nil || !c {
@@ -71,17 +65,7 @@ func (e *nemoMetaEngine) Scan(startKey []byte, endKey []byte, handler func(key, 
 	return err
 }
 
-func (e *nemoMetaEngine) ScanSize(startKey []byte, endKey []byte, handler func(key []byte, size uint64) (bool, error)) error {
-	return errors.New("meta engine not implement ScanSize")
-}
-
-func (e *nemoMetaEngine) CompactRange(startKey []byte, endKey []byte) error {
-	// TODO: impl
-	return nil
-}
-
 // Seek the first key >= given key, if no found, return None.
 func (e *nemoMetaEngine) Seek(key []byte) ([]byte, []byte, error) {
-	// TODO: impl
-	return nil, nil, nil
+	return e.db.SeekWithHandle(e.handler, key)
 }

@@ -16,8 +16,6 @@
 package storage
 
 import (
-	"errors"
-
 	gonemo "github.com/deepfabric/go-nemo"
 )
 
@@ -32,22 +30,14 @@ func newNemoDataEngine(db *gonemo.NEMO) DataEngine {
 }
 
 func (e *nemoDataEngine) RangeDelete(start, end []byte) error {
-	e.db.RangeDel(start, end, 0)
-	// TODO: rocksdb must return a error
-	return nil
-}
-
-// Scan scans the range and execute the handler fun.
-// returns false means end the scan.
-func (e *nemoDataEngine) Scan(startKey []byte, endKey []byte, handler func(key, value []byte) (bool, error)) error {
-	return errors.New("data engine not implement Scan")
+	return e.db.RangeDel(start, end)
 }
 
 func (e *nemoDataEngine) ScanSize(startKey []byte, endKey []byte, handler func(key []byte, size uint64) (bool, error)) error {
 	var err error
 	c := false
 
-	it := e.db.NewVolumeIterator(startKey, endKey, 0)
+	it := e.db.NewVolumeIterator(startKey, endKey)
 	for ; it.Valid(); it.Next() {
 		c, err = handler(it.Key(), uint64(it.Value()))
 		if err != nil || !c {
@@ -59,13 +49,12 @@ func (e *nemoDataEngine) ScanSize(startKey []byte, endKey []byte, handler func(k
 	return err
 }
 
-func (e *nemoDataEngine) CompactRange(startKey []byte, endKey []byte) error {
-	// TODO: impl
-	return nil
+// CreateSnapshot create a snapshot file under the giving path
+func (e *nemoDataEngine) CreateSnapshot(path string, start, end []byte) error {
+	return e.db.RawScanSaveRange(path, start, end, true)
 }
 
-// Seek the first key >= given key, if no found, return None.
-func (e *nemoDataEngine) Seek(key []byte) ([]byte, []byte, error) {
-	// TODO: impl
-	return nil, nil, nil
+// ApplySnapshot apply a snapshort file from giving path
+func (e *nemoDataEngine) ApplySnapshot(path string) error {
+	return e.db.IngestFile(path)
 }
