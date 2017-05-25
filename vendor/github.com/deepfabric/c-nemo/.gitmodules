@@ -1,0 +1,3 @@
+[submodule "internal/3rdparty/nemo-rocksdb/rocksdb"]
+	path = internal/3rdparty/nemo-rocksdb/rocksdb
+	url = https://github.com/facebook/rocksdb.git
