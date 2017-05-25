@@ -314,15 +314,6 @@
 			"Rev": "1c941d73110817a80b9fa6e14d5d2b00d977ce2a"
 		},
 		{
-			"ImportPath": "github.com/deepfabric/c-nemo",
-			"Comment": "nemo-v0.1.2-81-g9604ad1",
-			"Rev": "9604ad107e1c8f58ae81c6ddc65aa213063f16eb"
-		},
-		{
-			"ImportPath": "github.com/deepfabric/go-nemo",
-			"Rev": "eb1198ee64987d16fbe6acdbfabb55de26daf721"
-		},
-		{
 			"ImportPath": "github.com/fagongzi/goetty",
 			"Rev": "905b7ab7ce6f1fea0505fde704d105fb7b1b7d80"
 		},

@@ -30,7 +30,8 @@ type nemoDrvier struct {
 	zsetEngine ZSetEngine
 }
 
-func newNemoDriver(path string) (Driver, error) {
+// NewNemoDriver return a driver implemention by nemo
+func NewNemoDriver(path string) (Driver, error) {
 	opts := gonemo.NewDefaultOptions()
 	db := gonemo.OpenNemo(opts, path)
 

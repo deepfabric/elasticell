@@ -151,6 +151,5 @@ func (s *Server) initNode() {
 }
 
 func (s *Server) initDriver() (storage.Driver, error) {
-	// TODO: impl rocksdb driver. use column family
-	return nil, nil
+	return storage.NewNemoDriver(s.cfg.Node.RaftStore.StoreDataPath)
 }
