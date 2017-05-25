@@ -9,14 +9,16 @@
         "clusterID": 0,
         "labels": [],
         "pdRPCAddr": [
-            ":20800",
-            ":20801",
-            ":20802"
+            "127.0.0.1:20800",
+            "127.0.0.1:20801",
+            "127.0.0.1:20802"
         ],
         "raftStore": {
             "storeAddr": "127.0.0.1:10800",
             "storeAdvertiseAddr": "127.0.0.1:10800",
-            "storeDataPath": "",
+            "storeDataPath": "/kv/data",
+            "storeHeartbeatIntervalMs": 2000,
+            "cellHeartbeatIntervalMs": 1000,
             "maxPeerDownSec": 300,
             "splitCellCheckIntervalMs": 10000,
             "raftGCLogIntervalMs": 10000,
@@ -26,21 +28,15 @@
             "cellCheckSizeDiff": 8388608,
             "cellMaxSize": 83886080,
             "cellSplitSize": 67108864,
-            "storeHeartbeatIntervalMs": 2000,
-            "cellHeartbeatIntervalMs": 1000,
+            
             "raft": {
                 "electionTick": 2,
                 "heartbeatTick": 10,
                 "maxSizePerMsg": 1048576,
                 "maxInflightMsgs": 256,
                 "maxSizePerEntry": 8388608,
-                "baseTick": 1000
+                "baseTick": 100
             }
         }
-    },
-
-    "storage": {
-        "diskPartitionPath": "/",
-        "peerURL": "127.0.0.1:9998"
     }
 }

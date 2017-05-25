@@ -206,7 +206,7 @@ func (m *defaultSnapshotManager) WriteSnapData(data *mraft.SnapshotData) error {
 
 func (m *defaultSnapshotManager) Apply(key *mraft.SnapKey) error {
 	file := m.getPathOfSnapKeyGZ(key)
-	defer os.Remove(file)
+	defer os.RemoveAll(file)
 
 	if !m.Exists(key) {
 		return fmt.Errorf("missing snapshot file, path=%s", file)
