@@ -376,7 +376,7 @@ func (s *Store) execZScore(req *raftcmdpb.Request) *raftcmdpb.Response {
 
 	has := true
 	return &raftcmdpb.Response{
-		BulkResult:         util.FormatFloat64ToBytes(value),
+		BulkResult:         value,
 		HasEmptyBulkResult: &has,
 	}
 }

@@ -184,15 +184,24 @@ func (s *testNemoHashSuite) TestHMGet(c *C) {
 	field2 := []byte("f2")
 	value2 := []byte("v2")
 
-	values, err := s.driver.GetHashEngine().HMGet(key, field1, field2)
-	c.Assert(err, IsNil)
-	c.Assert(len(values), Equals, 0)
+	values, errs := s.driver.GetHashEngine().HMGet(key, field1, field2)
+	c.Assert(len(errs), Equals, 2)
+	for i := 0; i < 2; i++ {
+		c.Assert(errs[i], IsNil)
+	}
+	c.Assert(len(values), Equals, 2)
+	for i := 0; i < 2; i++ {
+		c.Assert(len(values[i]), Equals, 0)
+	}
 
 	s.driver.GetHashEngine().HSet(key, field1, value1)
 	s.driver.GetHashEngine().HSet(key, field2, value2)
 
-	values, err = s.driver.GetHashEngine().HMGet(key, field1, field2)
-	c.Assert(err, IsNil)
+	values, errs = s.driver.GetHashEngine().HMGet(key, field1, field2)
+	c.Assert(len(errs), Equals, 2)
+	for i := 0; i < 2; i++ {
+		c.Assert(errs[i], IsNil)
+	}
 	c.Assert(len(values), Equals, 2)
 }
 

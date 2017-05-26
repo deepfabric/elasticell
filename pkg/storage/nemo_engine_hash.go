@@ -31,7 +31,7 @@ func newNemoHashEngine(db *gonemo.NEMO) HashEngine {
 }
 
 func (e *nemoHashEngine) HSet(key, field, value []byte) (int64, error) {
-	err, n := e.db.HSet(key, field, value)
+	n, err := e.db.HSet(key, field, value)
 	return int64(n), err
 }
 
@@ -85,7 +85,7 @@ func (e *nemoHashEngine) HMGet(key []byte, fields ...[]byte) ([][]byte, []error)
 }
 
 func (e *nemoHashEngine) HMSet(key []byte, fields, values [][]byte) error {
-	err, _ := e.db.HMSet(key, fields, values)
+	_, err := e.db.HMSet(key, fields, values)
 	return err
 }
 

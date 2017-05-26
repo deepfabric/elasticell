@@ -88,7 +88,7 @@ type ZSetEngine interface {
 	ZRemRangeByLex(key []byte, min []byte, max []byte) (int64, error)
 	ZRemRangeByRank(key []byte, start int64, stop int64) (int64, error)
 	ZRemRangeByScore(key []byte, min float64, max float64) (int64, error)
-	ZScore(key []byte, member []byte) (float64, error)
+	ZScore(key []byte, member []byte) ([]byte, error)
 }
 
 // ListEngine is the storage of List

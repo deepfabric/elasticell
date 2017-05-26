@@ -18,6 +18,7 @@ package storage
 import (
 	"os"
 
+	"github.com/deepfabric/elasticell/pkg/util"
 	. "github.com/pingcap/check"
 )
 
@@ -37,19 +38,72 @@ func (s *testNemoZSetSuite) TearDownSuite(c *C) {
 }
 
 func (s *testNemoZSetSuite) TestZAdd(c *C) {
+	key := []byte("TestZAdd")
+	score := 10.0
+	m1 := []byte("m1")
 
+	n, err := s.driver.GetZSetEngine().ZAdd(key, score, m1)
+	c.Assert(err, IsNil)
+	c.Assert(n, Equals, int64(1))
 }
 
 func (s *testNemoZSetSuite) TestZCard(c *C) {
+	key := []byte("TestZCard")
+	score := 10.0
+	m1 := []byte("m1")
 
+	n, err := s.driver.GetZSetEngine().ZCard(key)
+	c.Assert(err, IsNil)
+	c.Assert(n, Equals, int64(0))
+
+	n, err = s.driver.GetZSetEngine().ZAdd(key, score, m1)
+	c.Assert(err, IsNil)
+	c.Assert(n, Equals, int64(1))
+
+	n, err = s.driver.GetZSetEngine().ZCard(key)
+	c.Assert(err, IsNil)
+	c.Assert(n, Equals, int64(1))
 }
 
 func (s *testNemoZSetSuite) TestZCount(c *C) {
+	key := []byte("TestZCount")
+	score1 := 1.0
+	m1 := []byte("m1")
 
+	score2 := 2.0
+	m2 := []byte("m2")
+
+	score3 := 3.0
+	m3 := []byte("m3")
+
+	n, err := s.driver.GetZSetEngine().ZCount(key, score1, score3)
+	c.Assert(err, IsNil)
+	c.Assert(n, Equals, int64(0))
+
+	s.driver.GetZSetEngine().ZAdd(key, score1, m1)
+	s.driver.GetZSetEngine().ZAdd(key, score2, m2)
+	s.driver.GetZSetEngine().ZAdd(key, score2, m3)
+
+	n, err = s.driver.GetZSetEngine().ZCount(key, score1, score3)
+	c.Assert(err, IsNil)
+	c.Assert(n, Equals, int64(3))
 }
 
 func (s *testNemoZSetSuite) TestZIncrBy(c *C) {
+	key := []byte("TestZIncrBy")
+	score := 1.0
+	m1 := []byte("m1")
 
+	v, err := s.driver.GetZSetEngine().ZIncrBy(key, m1, 1.0)
+	c.Assert(err, IsNil)
+	vf, _ := util.StrFloat64(v)
+	c.Assert(int(vf), Equals, 1)
+
+	s.driver.GetZSetEngine().ZAdd(key, score, m1)
+	v, err = s.driver.GetZSetEngine().ZIncrBy(key, m1, 1.0)
+	c.Assert(err, IsNil)
+	vf, _ = util.StrFloat64(v)
+	c.Assert(int(vf), Equals, 2)
 }
 
 func (s *testNemoZSetSuite) TestZLexCount(c *C) {
@@ -57,7 +111,39 @@ func (s *testNemoZSetSuite) TestZLexCount(c *C) {
 }
 
 func (s *testNemoZSetSuite) TestZRange(c *C) {
+	key := []byte("TestZRange")
+	score1 := 1.0
+	m1 := []byte("m1")
 
+	score2 := 2.0
+	m2 := []byte("m2")
+
+	score3 := 3.0
+	m3 := []byte("m3")
+
+	values, err := s.driver.GetZSetEngine().ZRange(key, 0, -1)
+	c.Assert(err, IsNil)
+	c.Assert(len(values), Equals, 0)
+
+	s.driver.GetZSetEngine().ZAdd(key, score1, m1)
+	s.driver.GetZSetEngine().ZAdd(key, score2, m2)
+	s.driver.GetZSetEngine().ZAdd(key, score3, m3)
+
+	values, err = s.driver.GetZSetEngine().ZRange(key, 0, -1)
+	c.Assert(err, IsNil)
+	c.Assert(len(values), Equals, 3)
+
+	values, err = s.driver.GetZSetEngine().ZRange(key, 1, -1)
+	c.Assert(err, IsNil)
+	c.Assert(len(values), Equals, 2)
+
+	values, err = s.driver.GetZSetEngine().ZRange(key, 2, -1)
+	c.Assert(err, IsNil)
+	c.Assert(len(values), Equals, 1)
+
+	values, err = s.driver.GetZSetEngine().ZRange(key, 3, -1)
+	c.Assert(err, IsNil)
+	c.Assert(len(values), Equals, 0)
 }
 
 func (s *testNemoZSetSuite) TestZRangeByLex(c *C) {
@@ -65,7 +151,15 @@ func (s *testNemoZSetSuite) TestZRangeByLex(c *C) {
 }
 
 func (s *testNemoZSetSuite) TestZRangeByScore(c *C) {
+	// key := []byte("TestZRangeByScore")
+	// score1 := 1.0
+	// m1 := []byte("m1")
 
+	// score2 := 2.0
+	// m2 := []byte("m2")
+
+	// score3 := 3.0
+	// m3 := []byte("m3")
 }
 
 func (s *testNemoZSetSuite) TestZRank(c *C) {

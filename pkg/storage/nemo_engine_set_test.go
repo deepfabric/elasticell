@@ -37,25 +37,99 @@ func (s *testNemoSetSuite) TearDownSuite(c *C) {
 }
 
 func (s *testNemoSetSuite) TestSAdd(c *C) {
+	key := []byte("TestSAdd")
+	m1 := []byte("m1")
+	m2 := []byte("m2")
 
+	n, err := s.driver.GetSetEngine().SAdd(key, m1, m2)
+	c.Assert(err, IsNil)
+	c.Assert(n, Equals, int64(2))
 }
 
 func (s *testNemoSetSuite) TestSRem(c *C) {
+	key := []byte("TestSRem")
+	m1 := []byte("m1")
+	m2 := []byte("m2")
 
+	s.driver.GetSetEngine().SAdd(key, m1, m2)
+
+	n, err := s.driver.GetSetEngine().SRem(key, m1, m2)
+	c.Assert(err, IsNil)
+	c.Assert(n, Equals, int64(2))
 }
 
 func (s *testNemoSetSuite) TestSCard(c *C) {
+	key := []byte("TestSCard")
+	m1 := []byte("m1")
+	m2 := []byte("m2")
 
+	n, err := s.driver.GetSetEngine().SCard(key)
+	c.Assert(err, IsNil)
+	c.Assert(n, Equals, int64(0))
+
+	s.driver.GetSetEngine().SAdd(key, m1, m2)
+
+	n, err = s.driver.GetSetEngine().SCard(key)
+	c.Assert(err, IsNil)
+	c.Assert(n, Equals, int64(2))
 }
 
 func (s *testNemoSetSuite) TestSMembers(c *C) {
+	key := []byte("TestSMembers")
+	m1 := []byte("m1")
+	m2 := []byte("m2")
 
+	values, err := s.driver.GetSetEngine().SMembers(key)
+	c.Assert(err, IsNil)
+	c.Assert(len(values), Equals, 0)
+
+	s.driver.GetSetEngine().SAdd(key, m1, m2)
+
+	values, err = s.driver.GetSetEngine().SMembers(key)
+	c.Assert(err, IsNil)
+	c.Assert(len(values), Equals, 2)
 }
 
 func (s *testNemoSetSuite) TestSIsMember(c *C) {
+	key := []byte("TestSIsMember")
+	m1 := []byte("m1")
+	m2 := []byte("m2")
 
+	n, err := s.driver.GetSetEngine().SIsMember(key, m1)
+	c.Assert(err, IsNil)
+	c.Assert(n, Equals, int64(0))
+
+	s.driver.GetSetEngine().SAdd(key, m1, m2)
+
+	n, err = s.driver.GetSetEngine().SIsMember(key, m1)
+	c.Assert(err, IsNil)
+	c.Assert(n, Equals, int64(1))
+
+	n, err = s.driver.GetSetEngine().SIsMember(key, m2)
+	c.Assert(err, IsNil)
+	c.Assert(n, Equals, int64(1))
 }
 
 func (s *testNemoSetSuite) TestSPop(c *C) {
+	key := []byte("TestSPop")
+	m1 := []byte("m1")
+	m2 := []byte("m2")
 
+	v, err := s.driver.GetSetEngine().SPop(key)
+	c.Assert(err, IsNil)
+	c.Assert(len(v), Equals, 0)
+
+	s.driver.GetSetEngine().SAdd(key, m1, m2)
+
+	v, err = s.driver.GetSetEngine().SPop(key)
+	c.Assert(err, IsNil)
+	c.Assert(len(v) > 0, IsTrue)
+
+	v, err = s.driver.GetSetEngine().SPop(key)
+	c.Assert(err, IsNil)
+	c.Assert(len(v) > 0, IsTrue)
+
+	v, err = s.driver.GetSetEngine().SPop(key)
+	c.Assert(err, IsNil)
+	c.Assert(len(v), Equals, 0)
 }

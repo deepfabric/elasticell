@@ -17,6 +17,7 @@ package storage
 
 import (
 	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
+	"github.com/deepfabric/elasticell/pkg/util"
 	gonemo "github.com/deepfabric/go-nemo"
 )
 
@@ -47,8 +48,7 @@ func (e *nemoZSetEngine) ZIncrBy(key []byte, member []byte, by float64) ([]byte,
 }
 
 func (e *nemoZSetEngine) ZLexCount(key []byte, min []byte, max []byte) (int64, error) {
-	// TODO: nemo must impl zlexcount
-	return 0, nil
+	return e.db.ZLexcount(key, min, max)
 }
 
 func (e *nemoZSetEngine) ZRange(key []byte, start int64, stop int64) ([]*raftcmdpb.ScorePair, error) {
@@ -70,8 +70,7 @@ func (e *nemoZSetEngine) ZRange(key []byte, start int64, stop int64) ([]*raftcmd
 }
 
 func (e *nemoZSetEngine) ZRangeByLex(key []byte, min []byte, max []byte) ([][]byte, error) {
-	// TODO: nemo must impl zrangebylex
-	return nil, nil
+	return e.db.ZRangebylex(key, min, max)
 }
 
 func (e *nemoZSetEngine) ZRangeByScore(key []byte, min float64, max float64) ([]*raftcmdpb.ScorePair, error) {
@@ -101,20 +100,22 @@ func (e *nemoZSetEngine) ZRem(key []byte, members ...[]byte) (int64, error) {
 }
 
 func (e *nemoZSetEngine) ZRemRangeByLex(key []byte, min []byte, max []byte) (int64, error) {
-	// TODO: nemo must impl zremrangebylex
-	return 0, nil
+	return e.db.ZRemrangebylex(key, min, max, false, false)
 }
 
 func (e *nemoZSetEngine) ZRemRangeByRank(key []byte, start int64, stop int64) (int64, error) {
-	// TODO: nemo must impl zremrangebyrank
-	return 0, nil
+	return e.db.ZRemrangebyrank(key, start, stop)
 }
 
 func (e *nemoZSetEngine) ZRemRangeByScore(key []byte, min float64, max float64) (int64, error) {
-	// TODO: nemo must impl zremrangebyscore
-	return 0, nil
+	return e.db.ZRemrangebyscore(key, min, max, false, false)
 }
 
-func (e *nemoZSetEngine) ZScore(key []byte, member []byte) (float64, error) {
-	return e.db.ZScore(key, member)
+func (e *nemoZSetEngine) ZScore(key []byte, member []byte) ([]byte, error) {
+	exists, value, err := e.db.ZScore(key, member)
+	if !exists {
+		return nil, err
+	}
+
+	return util.FormatFloat64ToBytes(value), err
 }

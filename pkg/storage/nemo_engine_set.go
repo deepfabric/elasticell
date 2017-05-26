@@ -56,5 +56,10 @@ func (e *nemoSetEngine) SIsMember(key []byte, member []byte) (int64, error) {
 }
 
 func (e *nemoSetEngine) SPop(key []byte) ([]byte, error) {
-	return e.db.SPop(key)
+	exists, value, err := e.db.SPop(key)
+	if !exists {
+		return nil, err
+	}
+
+	return value, err
 }

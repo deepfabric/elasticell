@@ -21,13 +21,15 @@ import (
 	. "github.com/pingcap/check"
 )
 
-var _ = Suite(&testNemoDataSuite{})
-var _ = Suite(&testNemoHashSuite{})
 var _ = Suite(&testNemoKVSuite{})
+var _ = Suite(&testNemoHashSuite{})
 var _ = Suite(&testNemoListSuite{})
-var _ = Suite(&testNemoMetaSuite{})
 var _ = Suite(&testNemoSetSuite{})
 var _ = Suite(&testNemoZSetSuite{})
+
+var _ = Suite(&testNemoDataSuite{})
+var _ = Suite(&testNemoMetaSuite{})
+
 var _ = Suite(&testNemoWBSuite{})
 
 func TestNemo(t *testing.T) {

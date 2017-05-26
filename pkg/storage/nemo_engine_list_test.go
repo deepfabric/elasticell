@@ -73,15 +73,16 @@ func (s *testNemoListSuite) TestLInsert(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(n, Equals, int64(0))
 
-	s.driver.GetListEngine().LPush(key, pivot, member)
+	s.driver.GetListEngine().LPush(key, pivot)
+	s.driver.GetListEngine().LPush(key, member)
 
 	n, err = s.driver.GetListEngine().LInsert(key, before, pivot, insert)
 	c.Assert(err, IsNil)
-	c.Assert(n, Equals, int64(1))
+	c.Assert(n, Equals, int64(3))
 
 	n, err = s.driver.GetListEngine().LInsert(key, after, pivot, insert2)
 	c.Assert(err, IsNil)
-	c.Assert(n, Equals, int64(1))
+	c.Assert(n, Equals, int64(4))
 
 	v, _ := s.driver.GetListEngine().LIndex(key, 1)
 	c.Assert(string(v), Equals, string(insert))
@@ -99,7 +100,8 @@ func (s *testNemoListSuite) TestLLen(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(n, Equals, int64(0))
 
-	s.driver.GetListEngine().LPush(key, member2, member1)
+	s.driver.GetListEngine().LPush(key, member2)
+	s.driver.GetListEngine().LPush(key, member1)
 
 	n, err = s.driver.GetListEngine().LLen(key)
 	c.Assert(err, IsNil)
@@ -115,7 +117,8 @@ func (s *testNemoListSuite) TestLPop(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(len(v), Equals, 0)
 
-	s.driver.GetListEngine().LPush(key, member2, member1)
+	s.driver.GetListEngine().LPush(key, member2)
+	s.driver.GetListEngine().LPush(key, member1)
 
 	v, err = s.driver.GetListEngine().LPop(key)
 	c.Assert(err, IsNil)
@@ -194,7 +197,8 @@ func (s *testNemoListSuite) TestLRange(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(len(values), Equals, 0)
 
-	s.driver.GetListEngine().LPush(key, member2, member1)
+	s.driver.GetListEngine().LPush(key, member2)
+	s.driver.GetListEngine().LPush(key, member1)
 
 	values, err = s.driver.GetListEngine().LRange(key, 0, 0)
 	c.Assert(err, IsNil)
@@ -215,7 +219,9 @@ func (s *testNemoListSuite) TestLRem(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(n, Equals, int64(0))
 
-	s.driver.GetListEngine().LPush(key, member3, member2, member1)
+	s.driver.GetListEngine().LPush(key, member3)
+	s.driver.GetListEngine().LPush(key, member2)
+	s.driver.GetListEngine().LPush(key, member1)
 
 	n, err = s.driver.GetListEngine().LRem(key, 1, member2)
 	c.Assert(err, IsNil)
@@ -248,10 +254,11 @@ func (s *testNemoListSuite) TestLTrim(c *C) {
 	err := s.driver.GetListEngine().LTrim(key, 1, -1)
 	c.Assert(err, IsNil)
 
-	s.driver.GetListEngine().LPush(key, member2, member1)
+	s.driver.GetListEngine().LPush(key, member2)
+	s.driver.GetListEngine().LPush(key, member1)
 
 	err = s.driver.GetListEngine().LTrim(key, 1, -1)
-	c.Assert(err, NotNil)
+	c.Assert(err, IsNil)
 
 	n, _ := s.driver.GetListEngine().LLen(key)
 	c.Assert(n, Equals, int64(1))
@@ -266,7 +273,8 @@ func (s *testNemoListSuite) TestRPop(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(len(v), Equals, 0)
 
-	s.driver.GetListEngine().RPush(key, member2, member1)
+	s.driver.GetListEngine().RPush(key, member2)
+	s.driver.GetListEngine().RPush(key, member1)
 
 	v, err = s.driver.GetListEngine().RPop(key)
 	c.Assert(err, IsNil)
