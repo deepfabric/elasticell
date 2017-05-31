@@ -61,21 +61,7 @@ func (s *Store) execZCount(req *raftcmdpb.Request) *raftcmdpb.Response {
 		return redis.ErrInvalidCommandResp
 	}
 
-	begin, err := util.StrFloat64(args[1])
-	if err != nil {
-		return &raftcmdpb.Response{
-			ErrorResult: util.StringToSlice(err.Error()),
-		}
-	}
-
-	end, err := util.StrFloat64(args[2])
-	if err != nil {
-		return &raftcmdpb.Response{
-			ErrorResult: util.StringToSlice(err.Error()),
-		}
-	}
-
-	value, err := s.getZSetEngine().ZCount(args[0], begin, end)
+	value, err := s.getZSetEngine().ZCount(args[0], args[1], args[2])
 	if err != nil {
 		return &raftcmdpb.Response{
 			ErrorResult: util.StringToSlice(err.Error()),
@@ -203,21 +189,7 @@ func (s *Store) execZRangeByScore(req *raftcmdpb.Request) *raftcmdpb.Response {
 		return redis.ErrInvalidCommandResp
 	}
 
-	begin, err := util.StrFloat64(args[1])
-	if err != nil {
-		return &raftcmdpb.Response{
-			ErrorResult: util.StringToSlice(err.Error()),
-		}
-	}
-
-	end, err := util.StrFloat64(args[2])
-	if err != nil {
-		return &raftcmdpb.Response{
-			ErrorResult: util.StringToSlice(err.Error()),
-		}
-	}
-
-	value, err := s.getZSetEngine().ZRangeByScore(args[0], begin, end)
+	value, err := s.getZSetEngine().ZRangeByScore(args[0], args[1], args[2])
 	if err != nil {
 		return &raftcmdpb.Response{
 			ErrorResult: util.StringToSlice(err.Error()),
@@ -243,6 +215,14 @@ func (s *Store) execZRank(req *raftcmdpb.Request) *raftcmdpb.Response {
 	if err != nil {
 		return &raftcmdpb.Response{
 			ErrorResult: util.StringToSlice(err.Error()),
+		}
+	}
+
+	if value < 0 {
+		has := true
+		return &raftcmdpb.Response{
+			BulkResult:         nil,
+			HasEmptyBulkResult: &has,
 		}
 	}
 
@@ -333,21 +313,7 @@ func (s *Store) execZRemRangeByScore(req *raftcmdpb.Request) *raftcmdpb.Response
 		return redis.ErrInvalidCommandResp
 	}
 
-	begin, err := util.StrFloat64(args[1])
-	if err != nil {
-		return &raftcmdpb.Response{
-			ErrorResult: util.StringToSlice(err.Error()),
-		}
-	}
-
-	end, err := util.StrFloat64(args[2])
-	if err != nil {
-		return &raftcmdpb.Response{
-			ErrorResult: util.StringToSlice(err.Error()),
-		}
-	}
-
-	value, err := s.getZSetEngine().ZRemRangeByScore(args[0], begin, end)
+	value, err := s.getZSetEngine().ZRemRangeByScore(args[0], args[1], args[2])
 	if err != nil {
 		return &raftcmdpb.Response{
 			ErrorResult: util.StringToSlice(err.Error()),

@@ -36,10 +36,44 @@ func (s *testNemoWBSuite) TearDownSuite(c *C) {
 	c.Assert(err, IsNil)
 }
 
-func (s *testNemoWBSuite) TestDelete(c *C) {
+func (s *testNemoWBSuite) TestWB(c *C) {
+	key1 := []byte("key1")
+	key2 := []byte("key2")
+	key3 := []byte("key3")
 
+	wb := s.driver.NewWriteBatch()
+	s.set(wb, key1, c)
+	s.set(wb, key2, c)
+	s.set(wb, key3, c)
+	s.delete(wb, key1, c)
+
+	err := s.driver.Write(wb)
+	c.Assert(err, IsNil)
+
+	s.checkNotExists(key1, c)
+	s.checkExists(key2, c)
+	s.checkExists(key3, c)
 }
 
-func (s *testNemoWBSuite) TestSet(c *C) {
+func (s *testNemoWBSuite) set(wb WriteBatch, key []byte, c *C) {
+	value := []byte("kv-value")
+	err := wb.Set(key, value)
+	c.Assert(err, IsNil)
+}
 
+func (s *testNemoWBSuite) delete(wb WriteBatch, key []byte, c *C) {
+	err := wb.Delete(key)
+	c.Assert(err, IsNil)
+}
+
+func (s *testNemoWBSuite) checkExists(key []byte, c *C) {
+	v, err := s.driver.GetEngine().Get(key)
+	c.Assert(err, IsNil)
+	c.Assert(len(v) > 0, IsTrue)
+}
+
+func (s *testNemoWBSuite) checkNotExists(key []byte, c *C) {
+	v, err := s.driver.GetEngine().Get(key)
+	c.Assert(err, IsNil)
+	c.Assert(len(v) == 0, IsTrue)
 }

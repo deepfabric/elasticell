@@ -77,17 +77,17 @@ type SetEngine interface {
 type ZSetEngine interface {
 	ZAdd(key []byte, score float64, member []byte) (int64, error)
 	ZCard(key []byte) (int64, error)
-	ZCount(key []byte, begin float64, end float64) (int64, error)
+	ZCount(key []byte, min []byte, max []byte) (int64, error)
 	ZIncrBy(key []byte, member []byte, by float64) ([]byte, error)
 	ZLexCount(key []byte, min []byte, max []byte) (int64, error)
 	ZRange(key []byte, start int64, stop int64) ([]*raftcmdpb.ScorePair, error)
 	ZRangeByLex(key []byte, min []byte, max []byte) ([][]byte, error)
-	ZRangeByScore(key []byte, min float64, max float64) ([]*raftcmdpb.ScorePair, error)
+	ZRangeByScore(key []byte, min []byte, max []byte) ([]*raftcmdpb.ScorePair, error)
 	ZRank(key []byte, member []byte) (int64, error)
 	ZRem(key []byte, members ...[]byte) (int64, error)
 	ZRemRangeByLex(key []byte, min []byte, max []byte) (int64, error)
 	ZRemRangeByRank(key []byte, start int64, stop int64) (int64, error)
-	ZRemRangeByScore(key []byte, min float64, max float64) (int64, error)
+	ZRemRangeByScore(key []byte, min []byte, max []byte) (int64, error)
 	ZScore(key []byte, member []byte) ([]byte, error)
 }
 

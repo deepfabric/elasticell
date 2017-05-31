@@ -212,7 +212,7 @@ func (m *defaultSnapshotManager) Apply(key *mraft.SnapKey) error {
 		return fmt.Errorf("missing snapshot file, path=%s", file)
 	}
 
-	err := util.UnGZIP(file)
+	err := util.UnGZIP(file, m.dir)
 	if err != nil {
 		return err
 	}

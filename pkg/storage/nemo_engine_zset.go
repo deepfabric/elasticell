@@ -16,6 +16,9 @@
 package storage
 
 import (
+	"bytes"
+	"math"
+
 	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
 	"github.com/deepfabric/elasticell/pkg/util"
 	gonemo "github.com/deepfabric/go-nemo"
@@ -39,8 +42,18 @@ func (e *nemoZSetEngine) ZCard(key []byte) (int64, error) {
 	return e.db.ZCard(key)
 }
 
-func (e *nemoZSetEngine) ZCount(key []byte, begin float64, end float64) (int64, error) {
-	return e.db.ZCount(key, begin, end, false, false)
+func (e *nemoZSetEngine) ZCount(key []byte, min []byte, max []byte) (int64, error) {
+	minF, includeMin, err := parseInclude(min)
+	if err != nil {
+		return 0, err
+	}
+
+	maxF, includeMax, err := parseInclude(max)
+	if err != nil {
+		return 0, err
+	}
+
+	return e.db.ZCount(key, minF, maxF, includeMin, includeMax)
 }
 
 func (e *nemoZSetEngine) ZIncrBy(key []byte, member []byte, by float64) ([]byte, error) {
@@ -48,7 +61,10 @@ func (e *nemoZSetEngine) ZIncrBy(key []byte, member []byte, by float64) ([]byte,
 }
 
 func (e *nemoZSetEngine) ZLexCount(key []byte, min []byte, max []byte) (int64, error) {
-	return e.db.ZLexcount(key, min, max)
+	min, includeMin := isInclude(min)
+	max, includeMax := isInclude(max)
+
+	return e.db.ZLexcount(key, min, max, includeMin, includeMax)
 }
 
 func (e *nemoZSetEngine) ZRange(key []byte, start int64, stop int64) ([]*raftcmdpb.ScorePair, error) {
@@ -70,11 +86,28 @@ func (e *nemoZSetEngine) ZRange(key []byte, start int64, stop int64) ([]*raftcmd
 }
 
 func (e *nemoZSetEngine) ZRangeByLex(key []byte, min []byte, max []byte) ([][]byte, error) {
-	return e.db.ZRangebylex(key, min, max)
+	min, includeMin := isInclude(min)
+	max, includeMax := isInclude(max)
+
+	if len(max) == 1 && max[0] == '+' {
+		max[0] = byte('z' + 1)
+	}
+
+	return e.db.ZRangebylex(key, min, max, includeMin, includeMax)
 }
 
-func (e *nemoZSetEngine) ZRangeByScore(key []byte, min float64, max float64) ([]*raftcmdpb.ScorePair, error) {
-	scores, values, err := e.db.ZRangebyScore(key, min, max, false, false)
+func (e *nemoZSetEngine) ZRangeByScore(key []byte, min []byte, max []byte) ([]*raftcmdpb.ScorePair, error) {
+	minF, includeMin, err := parseInclude(min)
+	if err != nil {
+		return nil, err
+	}
+
+	maxF, includeMax, err := parseInclude(max)
+	if err != nil {
+		return nil, err
+	}
+
+	scores, values, err := e.db.ZRangebyScore(key, minF, maxF, includeMin, includeMax)
 	if err != nil {
 		return nil, err
 	}
@@ -100,15 +133,28 @@ func (e *nemoZSetEngine) ZRem(key []byte, members ...[]byte) (int64, error) {
 }
 
 func (e *nemoZSetEngine) ZRemRangeByLex(key []byte, min []byte, max []byte) (int64, error) {
-	return e.db.ZRemrangebylex(key, min, max, false, false)
+	min, includeMin := isInclude(min)
+	max, includeMax := isInclude(max)
+
+	return e.db.ZRemrangebylex(key, min, max, includeMin, includeMax)
 }
 
 func (e *nemoZSetEngine) ZRemRangeByRank(key []byte, start int64, stop int64) (int64, error) {
 	return e.db.ZRemrangebyrank(key, start, stop)
 }
 
-func (e *nemoZSetEngine) ZRemRangeByScore(key []byte, min float64, max float64) (int64, error) {
-	return e.db.ZRemrangebyscore(key, min, max, false, false)
+func (e *nemoZSetEngine) ZRemRangeByScore(key []byte, min []byte, max []byte) (int64, error) {
+	minF, includeMin, err := parseInclude(min)
+	if err != nil {
+		return 0, err
+	}
+
+	maxF, includeMax, err := parseInclude(max)
+	if err != nil {
+		return 0, err
+	}
+
+	return e.db.ZRemrangebyscore(key, minF, maxF, includeMin, includeMax)
 }
 
 func (e *nemoZSetEngine) ZScore(key []byte, member []byte) ([]byte, error) {
@@ -118,4 +164,30 @@ func (e *nemoZSetEngine) ZScore(key []byte, member []byte) ([]byte, error) {
 	}
 
 	return util.FormatFloat64ToBytes(value), err
+}
+
+func isInclude(value []byte) ([]byte, bool) {
+	include := value[0] != '('
+	if value[0] == '(' || value[0] == '[' {
+		value = value[1:]
+	}
+
+	return value, !include
+}
+
+var (
+	max = []byte("+inf")
+	min = []byte("-inf")
+)
+
+func parseInclude(value []byte) (float64, bool, error) {
+	value, include := isInclude(value)
+	if bytes.Compare(value, max) == 0 {
+		return math.MaxFloat64, include, nil
+	} else if bytes.Compare(value, min) == 0 {
+		return math.SmallestNonzeroFloat64, include, nil
+	}
+
+	valueF, err := util.StrFloat64(value)
+	return valueF, include, err
 }
