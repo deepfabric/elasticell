@@ -87,7 +87,10 @@ func GetMinKey() []byte {
 }
 
 func decodeCellMetaKey(key []byte) (uint64, byte, error) {
-	if len(cellMetaPrefixKey)+9 != len(key) {
+	prefixLen := len(cellMetaPrefixKey)
+	keyLen := len(key)
+
+	if prefixLen+9 != len(key) {
 		return 0, 0, fmt.Errorf("invalid cell meta key length for key %v", key)
 	}
 
@@ -95,7 +98,7 @@ func decodeCellMetaKey(key []byte) (uint64, byte, error) {
 		return 0, 0, fmt.Errorf("invalid region meta prefix for key %v", key)
 	}
 
-	return binary.BigEndian.Uint64(key[len(cellMetaPrefixKey)+1:]), key[len(cellMetaPrefixKey)], nil
+	return binary.BigEndian.Uint64(key[prefixLen:keyLen]), key[keyLen-1], nil
 }
 
 func getCellStateKey(cellID uint64) []byte {
@@ -103,7 +106,8 @@ func getCellStateKey(cellID uint64) []byte {
 }
 
 func getCellMetaKey(cellID uint64, suffix byte) []byte {
-	buf := goetty.NewByteBuf(9)
+	buf := goetty.NewByteBuf(9 + len(cellMetaPrefixKey))
+	buf.Write(cellMetaPrefixKey)
 	buf.WriteInt64(int64(cellID))
 	buf.WriteByte(suffix)
 	_, data, _ := buf.ReadBytes(buf.Readable())

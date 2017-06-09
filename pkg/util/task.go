@@ -65,6 +65,7 @@ const (
 // Job is do for something with state
 type Job struct {
 	sync.RWMutex
+	worker string
 	fun    func() error
 	state  JobState
 	result interface{}
@@ -204,7 +205,7 @@ func (s *Runner) AddNamedWorker(name string, cap uint64) error {
 	}
 	s.Unlock()
 
-	return s.startWorker(q)
+	return s.startWorker(name, q)
 }
 
 // IsNamedWorkerBusy returns true if named queue is not empty
@@ -215,7 +216,7 @@ func (s *Runner) IsNamedWorkerBusy(worker string) bool {
 	return len(s.getNamedQueue(worker)) > 0
 }
 
-func (s *Runner) startWorker(q chan *Job) error {
+func (s *Runner) startWorker(name string, q chan *Job) error {
 	return s.RunCancelableTask(func(ctx context.Context) {
 		for {
 			select {
@@ -256,16 +257,7 @@ func (s *Runner) startWorker(q chan *Job) error {
 
 // RunJob run a job
 func (s *Runner) RunJob(task func() error) (*Job, error) {
-	s.RLock()
-	defer s.RUnlock()
-
-	if s.state != running {
-		return nil, errUnavailable
-	}
-
-	job := newJob(task)
-	s.getDefaultQueue() <- job
-	return job, nil
+	return s.RunJobWithNamedWorker(defaultQueueName, task)
 }
 
 // RunJobWithNamedWorker run a job in a named worker
@@ -278,7 +270,7 @@ func (s *Runner) RunJobWithNamedWorker(worker string, task func() error) (*Job, 
 	}
 
 	job := newJob(task)
-	s.getDefaultQueue() <- job
+	s.getNamedQueue(worker) <- job
 	return job, nil
 }
 

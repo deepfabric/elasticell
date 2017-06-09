@@ -95,3 +95,32 @@ func TestTask(t *testing.T) {
 		return
 	}
 }
+
+func TestNamedTask(t *testing.T) {
+	runner := NewRunner()
+	runner.AddNamedWorker("apply", 64)
+
+	cnt := 0
+	complete := make(chan struct{}, 1)
+	runner.RunJobWithNamedWorker("apply", func() error {
+		cnt++
+		complete <- struct{}{}
+		return nil
+	})
+
+	<-complete
+	if cnt != 1 {
+		t.Errorf("run named job failed. expect=<%d>, actual=<%d>", 1, cnt)
+	}
+
+	runner.RunJobWithNamedWorker("apply", func() error {
+		cnt++
+		complete <- struct{}{}
+		return nil
+	})
+
+	<-complete
+	if cnt != 2 {
+		t.Errorf("run named job failed. expect=<%d>, actual=<%d>", 2, cnt)
+	}
+}

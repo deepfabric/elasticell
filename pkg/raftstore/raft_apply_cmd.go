@@ -59,6 +59,7 @@ func (d *applyDelegate) doApplyRaftCMD(req *raftcmdpb.RaftCMDRequest, term uint6
 		req:        req,
 		index:      index,
 		term:       term,
+		wb:         d.store.engine.NewWriteBatch(),
 	}
 
 	if !d.checkEpoch(req) {
@@ -134,6 +135,7 @@ func (d *applyDelegate) doExecChangePeer(ctx *execContext) (*raftcmdpb.RaftCMDRe
 		d.cell.Epoch)
 
 	exists := findPeer(&d.cell, req.Peer.StoreID)
+	d.cell.Epoch.ConfVer++
 
 	switch req.ChangeType {
 	case pdpb.AddNode:
@@ -174,8 +176,6 @@ func (d *applyDelegate) doExecChangePeer(ctx *execContext) (*raftcmdpb.RaftCMDRe
 			d.cell.ID,
 			err)
 	}
-
-	d.cell.Epoch.ConfVer++
 
 	resp := newAdminRaftCMDResponse(raftcmdpb.ChangePeer, &raftcmdpb.ChangePeerResponse{
 		Cell: d.cell,

@@ -237,7 +237,7 @@ func (c *cache) doCellHeartbeat(source *cellRuntimeInfo) error {
 		return c.doSave(source)
 	}
 
-	if current.leader.ID != source.leader.ID {
+	if current.leader != nil && current.leader.ID != source.leader.ID {
 		log.Infof("cell-heartbeat[%d]: update cell leader, from=<%v> to=<%+v>",
 			current.getID(),
 			current,

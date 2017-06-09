@@ -16,20 +16,21 @@ package raftstore
 import (
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"sync"
 
 	"github.com/coreos/etcd/pkg/fileutil"
+	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
 	"github.com/deepfabric/elasticell/pkg/storage"
 	"github.com/deepfabric/elasticell/pkg/util"
 	"github.com/fagongzi/goetty"
+	"github.com/pkg/errors"
 )
 
 var (
 	creating = 1
-	sendind  = 2
+	sending  = 2
 
 	writeBuff = 1024 * 1024 // 1mb
 )
@@ -110,21 +111,54 @@ func (m *defaultSnapshotManager) Deregister(key *mraft.SnapKey, step int) {
 	delete(m.registry, fkey)
 }
 
+func (m *defaultSnapshotManager) inRegistry(key *mraft.SnapKey, step int) bool {
+	m.RLock()
+	defer m.RUnlock()
+
+	fkey := formatKeyStep(key, step)
+	_, ok := m.registry[fkey]
+
+	return ok
+}
+
 func (m *defaultSnapshotManager) Create(snap *mraft.RaftSnapshotData) error {
 	path := m.getPathOfSnapKey(&snap.Key)
 	start := encStartKey(&snap.Cell)
 	end := encEndKey(&snap.Cell)
 
 	if fileutil.Exist(path) {
-		return fmt.Errorf("create snapshot file path=<%s> already exists", path)
+		if !m.inRegistry(&snap.Key, sending) {
+			err := os.RemoveAll(path)
+			if err != nil {
+				return errors.Wrapf(err, "remove exists snap dir: %s", path)
+			}
+
+			log.Debugf("raftstore-snap[cell-%d]: remove exists old snap data, key=<%+v> path=<%s>",
+				snap.Key.CellID,
+				snap,
+				path)
+		} else {
+			return fmt.Errorf("create snapshot file path=<%s> already exists", path)
+		}
 	}
 
 	err := m.db.CreateSnapshot(path, start, end)
 	if err != nil {
-		return err
+		return errors.Wrapf(err, "")
 	}
 
-	return util.GZIP(path)
+	err = util.GZIP(path)
+	if err != nil {
+		return errors.Wrapf(err, "")
+	}
+
+	info, err := os.Stat(fmt.Sprintf("%s.gz", path))
+	if err != nil {
+		return errors.Wrapf(err, "")
+	}
+
+	snap.FileSize = uint64(info.Size())
+	return nil
 }
 
 func (m *defaultSnapshotManager) Exists(key *mraft.SnapKey) bool {

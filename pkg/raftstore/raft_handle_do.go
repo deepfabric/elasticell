@@ -263,7 +263,6 @@ func (pr *PeerReplicate) applyCommittedEntries(rd *raft.Ready) bool {
 					pr.ps.getCell().ID,
 					err)
 			}
-
 			return true
 		}
 	}
@@ -766,7 +765,7 @@ func (ps *peerStorage) Snapshot() (raftpb.Snapshot, error) {
 	}
 
 	if ps.isGenSnapJobComplete() {
-		result := ps.applySnapJob.GetResult()
+		result := ps.genSnapJob.GetResult()
 		// snapshot failure, we will continue try do snapshot
 		if nil == result {
 			log.Warnf("raftstore[cell-%d]: snapshot generating failed, triedCnt=<%d>",
@@ -774,11 +773,10 @@ func (ps *peerStorage) Snapshot() (raftpb.Snapshot, error) {
 				ps.snapTriedCnt)
 			ps.snapTriedCnt++
 		} else {
-			snap := result.(*raftpb.Snapshot)
-			ps.snapTriedCnt = 0
-			if ps.validateSnap(snap) {
+			snap := result.(raftpb.Snapshot)
+			if ps.validateSnap(&snap) {
 				ps.resetGenSnapJob()
-				return *snap, nil
+				return snap, nil
 			}
 		}
 	}
@@ -791,7 +789,9 @@ func (ps *peerStorage) Snapshot() (raftpb.Snapshot, error) {
 			cnt)
 	}
 
-	log.Infof("raftstore[cell-%d]: start snapshot", ps.getCell().ID)
+	log.Infof("raftstore[cell-%d]: start snapshot, epoch=<%+v>",
+		ps.getCell().ID,
+		ps.getCell().Epoch)
 	ps.snapTriedCnt++
 
 	job, err := ps.store.addSnapJob(ps.doGenerateSnapshotJob)

@@ -73,14 +73,17 @@ func createPeerReplicate(store *Store, cell *metapb.Cell) (*PeerReplicate, error
 // The peer can be created from another node with raft membership changes, and we only
 // know the cell_id and peer_id when creating this replicated peer, the cell info
 // will be retrieved later after applying snapshot.
-func doReplicate(store *Store, cellID, peerID uint64) (*PeerReplicate, error) {
+func doReplicate(store *Store, msg *mraft.RaftMessage, peerID uint64) (*PeerReplicate, error) {
 	// We will remove tombstone key when apply snapshot
 	log.Infof("raftstore[cell-%d]: replicate peer, peerID=<%d>",
-		cellID,
+		msg.CellID,
 		peerID)
 
 	cell := &metapb.Cell{
-		ID: cellID,
+		ID:    msg.CellID,
+		Epoch: msg.CellEpoch,
+		Start: msg.Start,
+		End:   msg.End,
 	}
 
 	return newPeerReplicate(store, cell, peerID)
@@ -125,8 +128,12 @@ func newPeerReplicate(store *Store, cell *metapb.Cell, peerID uint64) (*PeerRepl
 		if err != nil {
 			return nil, err
 		}
+
+		log.Debugf("raft-cell[%d]: try to campaign leader",
+			pr.cellID)
 	}
 
+	store.runner.RunCancelableTask(pr.readyToServeRaft)
 	return pr, nil
 }
 
@@ -208,7 +215,7 @@ func (pr *PeerReplicate) collectDownPeers(maxDuration time.Duration) []pdpb.Peer
 	now := time.Now()
 	var downPeers []pdpb.PeerStats
 	for _, p := range pr.getCell().Peers {
-		if p.ID == pr.cellID {
+		if p.ID == pr.peer.ID {
 			continue
 		}
 

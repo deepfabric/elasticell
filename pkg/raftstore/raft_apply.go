@@ -73,7 +73,7 @@ type pendingCmd struct {
 }
 
 func (res *asyncApplyResult) hasSplitExecResult() bool {
-	return res.result.splitResult != nil
+	return nil != res.result && res.result.splitResult != nil
 }
 
 type applyDelegate struct {
@@ -157,7 +157,7 @@ func (d *applyDelegate) setPedingChangePeerCMD(term uint64, cmd *cmd) {
 func (d *applyDelegate) getPendingChangePeerCMD() *pendingCmd {
 	d.RLock()
 	cmd := d.pendingChangePeerCMD
-	d.RLock()
+	d.RUnlock()
 
 	return cmd
 }
@@ -210,10 +210,11 @@ func (d *applyDelegate) applyCommittedEntries(commitedEntries []raftpb.Entry) {
 
 		expectIndex := d.applyState.AppliedIndex + 1
 		if expectIndex != entry.Index {
-			log.Fatalf("raftstore-apply[cell-%d]: index not match, expect=<%d> get=<%d>",
+			log.Fatalf("raftstore-apply[cell-%d]: index not match, expect=<%d> get=<%d> state=<%+v>",
 				d.cell.ID,
 				expectIndex,
-				entry.Index)
+				entry.Index,
+				d.applyState)
 		}
 
 		var result *execResult
@@ -262,7 +263,7 @@ func (d *applyDelegate) applyEntry(entry *raftpb.Entry) *execResult {
 			err)
 	}
 
-	d.applyState = state
+	d.applyState.AppliedIndex = entry.Index
 	d.appliedIndexTerm = entry.Term
 	if entry.Term <= 0 {
 		panic("error empty entry term.")

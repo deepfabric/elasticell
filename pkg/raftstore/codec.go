@@ -73,12 +73,12 @@ func (decoder raftDecoder) Decode(in *goetty.ByteBuf) (bool, interface{}, error)
 func (e raftEncoder) Encode(data interface{}, out *goetty.ByteBuf) error {
 	if msg, ok := data.(*mraft.RaftMessage); ok {
 		d := util.MustMarshal(msg)
-		out.WriteInt(len(d))
+		out.WriteInt(len(d) + 1)
 		out.WriteByte(typeRaft)
 		out.Write(d)
 	} else if msg, ok := data.(*mraft.SnapshotData); ok {
 		d := util.MustMarshal(msg)
-		out.WriteInt(len(d))
+		out.WriteInt(len(d) + 1)
 		out.WriteByte(typeSnap)
 		out.Write(d)
 	}

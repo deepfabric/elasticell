@@ -106,12 +106,18 @@ func (ps *peerStorage) initRaftState() error {
 		return errors.Wrap(err, "")
 	}
 
-	s := &mraft.RaftLocalState{}
-	err = s.Unmarshal(v)
-	if err != nil {
-		return errors.Wrap(err, "")
+	if len(v) > 0 {
+		s := &mraft.RaftLocalState{}
+		err = s.Unmarshal(v)
+		if err != nil {
+			return errors.Wrap(err, "")
+		}
+
+		ps.raftState = *s
+		return nil
 	}
 
+	s := &mraft.RaftLocalState{}
 	if len(ps.getCell().Peers) > 0 {
 		s.LastIndex = raftInitLogIndex
 	}
@@ -126,7 +132,7 @@ func (ps *peerStorage) initApplyState() error {
 		return errors.Wrap(err, "")
 	}
 
-	if nil == v && len(ps.getCell().Peers) > 0 {
+	if len(v) > 0 && len(ps.getCell().Peers) > 0 {
 		ps.applyState.AppliedIndex = raftInitLogIndex
 		ps.applyState.TruncatedState.Index = raftInitLogIndex
 		ps.applyState.TruncatedState.Term = raftInitLogTerm
@@ -316,21 +322,7 @@ func (ps *peerStorage) loadCellLocalState(job *util.Job) (*mraft.CellLocalState,
 		return nil, util.ErrJobCancelled
 	}
 
-	key := getCellStateKey(ps.getCell().ID)
-	v, err := ps.store.getMetaEngine().Get(key)
-	if err != nil {
-		log.Errorf("raftstore[cell-%d]: load raft state failed, errors:\n %+v",
-			ps.getCell().ID,
-			err)
-		return nil, err
-	} else if v == nil {
-		return nil, errors.New("cell state not found")
-	}
-
-	stat := &mraft.CellLocalState{}
-	err = stat.Unmarshal(v)
-
-	return stat, err
+	return loadCellLocalState(ps.getCell().ID, ps.store.engine, false)
 }
 
 func (ps *peerStorage) applySnapshot(job *util.Job) error {
@@ -557,4 +549,26 @@ func compactRaftLog(cellID uint64, state *mraft.RaftApplyState, compactIndex, co
 	state.TruncatedState.Term = compactTerm
 
 	return nil
+}
+
+func loadCellLocalState(cellID uint64, driver storage.Driver, allowNotFound bool) (*mraft.CellLocalState, error) {
+	key := getCellStateKey(cellID)
+	v, err := driver.GetEngine().Get(key)
+	if err != nil {
+		log.Errorf("raftstore[cell-%d]: load raft state failed, errors:\n %+v",
+			cellID,
+			err)
+		return nil, err
+	} else if len(v) == 0 {
+		if allowNotFound {
+			return nil, nil
+		}
+
+		return nil, errors.New("cell state not found")
+	}
+
+	stat := &mraft.CellLocalState{}
+	err = stat.Unmarshal(v)
+
+	return stat, err
 }

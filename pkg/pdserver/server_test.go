@@ -15,6 +15,8 @@ package pdserver
 
 import (
 	"context"
+	"io/ioutil"
+	"os"
 	"sync"
 	"testing"
 
@@ -60,6 +62,7 @@ func (s *testServerSuite) stopMultiPDServers(c *C) {
 	if s.servers != nil {
 		for _, s := range s.servers {
 			s.Stop()
+			os.RemoveAll(s.GetCfg().DataDir)
 		}
 
 		s.servers = nil
@@ -68,6 +71,10 @@ func (s *testServerSuite) stopMultiPDServers(c *C) {
 
 func (s *testServerSuite) restartMultiPDServer(c *C, count int) {
 	s.stopMultiPDServers(c)
+	file, _ := ioutil.TempDir("", "ectd-log")
+	f, err := os.Open(file)
+	c.Assert(err, IsNil)
+	RedirectEmbedEctdLog(f)
 
 	s.servers = NewTestMultiServers(count)
 	var addrs []string
@@ -83,7 +90,6 @@ func (s *testServerSuite) restartMultiPDServer(c *C, count int) {
 
 	wg.Wait()
 
-	var err error
 	s.client, err = pd.NewClient("test-pd-cli", addrs...)
 	c.Assert(err, IsNil)
 }

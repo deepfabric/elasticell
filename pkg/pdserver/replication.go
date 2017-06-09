@@ -89,7 +89,7 @@ func (r *replicaChecker) checkDownPeer(cell *cellRuntimeInfo) Operator {
 
 func (r *replicaChecker) checkOfflinePeer(cell *cellRuntimeInfo) Operator {
 	for _, peer := range cell.cell.Peers {
-		store := r.cache.getStore(peer.ID)
+		store := r.cache.getStore(peer.StoreID)
 
 		if store != nil && store.isUp() {
 			continue

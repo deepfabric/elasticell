@@ -48,7 +48,7 @@ func (n *Node) checkStore() uint64 {
 		log.Fatalf("bootstrap: check store failed, errors:\n %+v", err)
 	}
 
-	if data == nil {
+	if len(data) == 0 {
 		return pd.ZeroID
 	}
 
@@ -131,7 +131,7 @@ func (n *Node) bootstrapFirstCell() metapb.Cell {
 
 func (n *Node) bootstrapCluster(cell metapb.Cell) {
 	req := &pdpb.BootstrapClusterReq{
-		Store: n.store.GetMeta(),
+		Store: n.storeMeta,
 		Cell:  cell,
 	}
 
@@ -168,6 +168,7 @@ func (n *Node) startStore() {
 func (n *Node) putStore() {
 	req := new(pdpb.PutStoreReq)
 	req.Header.ClusterID = n.clusterID
+	req.Store = n.storeMeta
 	_, err := n.pdClient.PutStore(context.TODO(), req)
 	if err != nil {
 		log.Fatalf("bootstrap: put store to pd failed, errors:\n %+v", err)

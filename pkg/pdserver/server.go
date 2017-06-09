@@ -63,7 +63,6 @@ func NewServer(cfg *Cfg) *Server {
 	s.cfg = cfg
 	s.stopC = make(chan interface{})
 	s.isLeaderValue = 0
-	s.cluster = newCellCluster(s)
 	s.complete = make(chan struct{})
 
 	return s
@@ -116,6 +115,11 @@ func (s *Server) notifyElectionComplete() {
 	}
 }
 
+// GetCfg returns cfg, just for test
+func (s *Server) GetCfg() *Cfg {
+	return s.cfg
+}
+
 func (s *Server) printStartENV() {
 	// TODO: print env
 	// info := `
@@ -155,6 +159,8 @@ func (s *Server) initCluster() {
 	s.idAlloc = newIDAllocator(s.store, func() string {
 		return s.leaderSignature
 	})
+
+	s.cluster = newCellCluster(s)
 }
 
 func (s *Server) isClosed() bool {

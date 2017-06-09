@@ -14,7 +14,6 @@
 package raftstore
 
 import (
-	"errors"
 	"sync"
 	"time"
 
@@ -27,6 +26,7 @@ import (
 	"github.com/deepfabric/elasticell/pkg/pd"
 	"github.com/deepfabric/elasticell/pkg/util"
 	"github.com/fagongzi/goetty"
+	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 )
 
@@ -40,7 +40,7 @@ var (
 
 const (
 	defaultConnectTimeout = time.Second * 5
-	defaultWriteIdle      = time.Second
+	defaultWriteIdle      = time.Second * 30
 )
 
 type transport struct {
@@ -52,6 +52,8 @@ type transport struct {
 	handler func(interface{})
 	client  *pd.Client
 
+	getStoreAddrFun func(storeID uint64) (string, error)
+
 	conns map[string]*goetty.Connector
 	addrs map[uint64]string
 }
@@ -62,16 +64,22 @@ func newTransport(store *Store, client *pd.Client, handler func(interface{})) *t
 		addr = store.cfg.StoreAdvertiseAddr
 	}
 
-	return &transport{
+	t := &transport{
 		server:  goetty.NewServer(addr, decoder, encoder, goetty.NewUUIDV4IdGenerator()),
 		conns:   make(map[string]*goetty.Connector),
 		addrs:   make(map[uint64]string),
 		handler: handler,
 		client:  client,
+		store:   store,
 	}
+
+	t.getStoreAddrFun = t.getStoreAddr
+
+	return t
 }
 
 func (t *transport) start() error {
+	tw.Start()
 	return t.server.Start(t.doConnection)
 }
 
@@ -83,11 +91,11 @@ func (t *transport) doConnection(session goetty.IOSession) error {
 	for {
 		msg, err := session.Read()
 		if err != nil {
+			log.Warnf("read error from conn-%s, errors:\n%+v", session.RemoteAddr(), err)
 			return err
 		}
 
 		t.handler(msg)
-		return nil
 	}
 }
 
@@ -127,14 +135,14 @@ func (t *transport) send(storeID uint64, msg *mraft.RaftMessage) error {
 		return nil
 	}
 
-	addr, err := t.getStoreAddr(storeID)
+	addr, err := t.getStoreAddrFun(storeID)
 	if err != nil {
-		return err
+		return errors.Wrapf(err, "getStoreAddr")
 	}
 
 	conn, err := t.getConn(addr)
 	if err != nil {
-		return err
+		return errors.Wrapf(err, "getConn")
 	}
 
 	// if we are send a snapshot raft msg, we can send sst files to the target store before.
@@ -142,8 +150,8 @@ func (t *transport) send(storeID uint64, msg *mraft.RaftMessage) error {
 		snapData := &mraft.RaftSnapshotData{}
 		util.MustUnmarshal(snapData, msg.Message.Snapshot.Data)
 
-		if t.store.snapshotManager.Register(&snapData.Key, sendind) {
-			defer t.store.snapshotManager.Deregister(&snapData.Key, sendind)
+		if t.store.snapshotManager.Register(&snapData.Key, sending) {
+			defer t.store.snapshotManager.Deregister(&snapData.Key, sending)
 
 			if !t.store.snapshotManager.Exists(&snapData.Key) {
 				return fmt.Errorf("transport: missing snapshot file, key=<%+v>",
@@ -152,12 +160,12 @@ func (t *transport) send(storeID uint64, msg *mraft.RaftMessage) error {
 
 			err = conn.Write(&snapData.Key)
 			if err != nil {
-				return err
+				return errors.Wrapf(err, "")
 			}
 
 			size, err := t.store.snapshotManager.WriteTo(&snapData.Key, conn)
 			if err != nil {
-				return err
+				return errors.Wrapf(err, "")
 			}
 
 			if snapData.FileSize != size {
@@ -174,7 +182,12 @@ func (t *transport) send(storeID uint64, msg *mraft.RaftMessage) error {
 
 	}
 
-	return conn.Write(msg)
+	err = conn.Write(msg)
+	if err != nil {
+		return errors.Wrapf(err, "write")
+	}
+
+	return nil
 }
 
 func (t *transport) getConn(addr string) (*goetty.Connector, error) {

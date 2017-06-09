@@ -68,7 +68,7 @@ func (s *Server) putStore(req *pdpb.PutStoreReq) (*pdpb.PutStoreRsp, error) {
 		return nil, err
 	}
 
-	log.Info("cell-cluster: put store ok, store=<%+v>", req.Store)
+	log.Debugf("cell-cluster: put store ok, store=<%+v>", req.Store)
 
 	return &pdpb.PutStoreRsp{}, nil
 }

@@ -41,7 +41,6 @@ const (
 	snapWorker             = "snap-work"
 	pdWorker               = "pd-work"
 	splitWorker            = "split-work"
-	compactWorker          = "compact-worker"
 	raftGCWorker           = "raft-gc-worker"
 	defaultWorkerQueueSize = 64
 	defaultNotifyChanSize  = 1024
@@ -103,7 +102,6 @@ func NewStore(clusterID uint64, pdClient *pd.Client, meta metapb.Store, engine s
 	s.runner.AddNamedWorker(applyWorker, defaultWorkerQueueSize)
 	s.runner.AddNamedWorker(pdWorker, defaultWorkerQueueSize)
 	s.runner.AddNamedWorker(splitWorker, defaultWorkerQueueSize)
-	s.runner.AddNamedWorker(compactWorker, defaultWorkerQueueSize)
 
 	s.redisReadHandles = make(map[raftcmdpb.CMDType]func(*raftcmdpb.Request) *raftcmdpb.Response)
 	s.redisWriteHandles = make(map[raftcmdpb.CMDType]func(*raftcmdpb.Request) *raftcmdpb.Response)
@@ -151,6 +149,8 @@ func (s *Store) init() {
 			pr.startApplyingSnapJob()
 		}
 
+		pr.startRegistrationJob()
+
 		s.keyRanges.Update(localState.Cell)
 		s.replicatesMap.put(cellID, pr)
 
@@ -161,7 +161,7 @@ func (s *Store) init() {
 		log.Fatalf("bootstrap: init store failed, errors:\n %+v", err)
 	}
 
-	log.Infof("bootstrap: starts with %d cells, including %d tombstones and %d applying	cells",
+	log.Infof("bootstrap: starts with %d cells, including %d tombstones and %d applying cells",
 		totalCount,
 		tomebstoneCount,
 		applyingCount)
@@ -404,10 +404,16 @@ func (s *Store) onRaftMessage(msg *mraft.RaftMessage) {
 
 	yes, err := s.isMsgStale(msg)
 	if err != nil || yes {
+		log.Errorf("raftstore[store-%d]: check msg stale failed, errors:\n%+v",
+			s.id,
+			err)
 		return
 	}
 
 	if !s.tryToCreatePeerReplicate(msg.CellID, msg) {
+		log.Warnf("raftstore[store-%d]: try to create peer failed. cell=<%d>",
+			s.id,
+			msg.CellID)
 		return
 	}
 
@@ -630,7 +636,7 @@ func (s *Store) tryToCreatePeerReplicate(cellID uint64, msg *mraft.RaftMessage) 
 	}
 
 	// now we can create a replicate
-	peerReplicate, err := doReplicate(s, cellID, target.ID)
+	peerReplicate, err := doReplicate(s, msg, target.ID)
 	if err != nil {
 		log.Errorf("raftstore[cell-%d]: replicate peer failure, errors:\n %+v",
 			cellID,
@@ -638,9 +644,13 @@ func (s *Store) tryToCreatePeerReplicate(cellID uint64, msg *mraft.RaftMessage) 
 		return false
 	}
 
+	peerReplicate.ps.cell.Peers = append(peerReplicate.ps.cell.Peers, &msg.ToPeer)
+	peerReplicate.ps.cell.Peers = append(peerReplicate.ps.cell.Peers, &msg.FromPeer)
+	s.keyRanges.Update(peerReplicate.ps.cell)
+
 	// following snapshot may overlap, should insert into keyRanges after
 	// snapshot is applied.
-	s.keyRanges.Update(peerReplicate.getCell())
+	s.replicatesMap.put(cellID, peerReplicate)
 	return true
 }
 
@@ -691,10 +701,6 @@ func (s *Store) addPDJob(task func() error) (*util.Job, error) {
 	return s.addNamedJob(pdWorker, task)
 }
 
-func (s *Store) addCompactJob(task func() error) (*util.Job, error) {
-	return s.addNamedJob(compactWorker, task)
-}
-
 func (s *Store) addRaftLogGCJob(task func() error) (*util.Job, error) {
 	return s.addNamedJob(raftGCWorker, task)
 }
@@ -703,7 +709,7 @@ func (s *Store) addSnapJob(task func() error) (*util.Job, error) {
 	return s.addNamedJob(snapWorker, task)
 }
 
-func (s *Store) addApplyJob(task func() error) (*util.Job, error) {
+func (s *Store) addApplyJob(name string, task func() error) (*util.Job, error) {
 	return s.addNamedJob(applyWorker, task)
 }
 

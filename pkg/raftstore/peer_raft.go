@@ -101,17 +101,19 @@ func (q *proposalQueue) clear() {
 	q.queue = make([]*proposalMeta, 0, 1024)
 }
 
-func (pr *PeerReplicate) serveRaft() error {
+func (pr *PeerReplicate) readyToServeRaft(ctx context.Context) {
 	for {
 		select {
+		case <-ctx.Done():
+			return
 		case <-pr.raftTicker.C:
 			pr.rn.Tick()
 
 		case rd := <-pr.rn.Ready():
 			ctx := &tempRaftContext{
-				raftState:  mraft.RaftLocalState{},
-				applyState: mraft.RaftApplyState{},
-				lastTerm:   0,
+				raftState:  pr.ps.raftState,
+				applyState: pr.ps.applyState,
+				lastTerm:   pr.ps.lastTerm,
 			}
 
 			pr.handleRaftReadyAppend(ctx, &rd)
@@ -135,7 +137,7 @@ func (pr *PeerReplicate) handleRaftReadyAppend(ctx *tempRaftContext, rd *raft.Re
 	if !raft.IsEmptySnap(rd.Snapshot) &&
 		!pr.ps.isApplyComplete() {
 		log.Debugf("raftstore[cell-%d]: apply index and committed index not match, skip applying snapshot, apply=<%d> commit=<%d>",
-			pr.ps.getCell().ID,
+			pr.cellID,
 			pr.ps.getAppliedIndex(),
 			pr.ps.raftState.HardState.Commit)
 		return
@@ -144,6 +146,8 @@ func (pr *PeerReplicate) handleRaftReadyAppend(ctx *tempRaftContext, rd *raft.Re
 	// If we become leader, send heartbeat to pd
 	if rd.SoftState != nil {
 		if rd.SoftState.RaftState == raft.StateLeader {
+			log.Infof("raftstore[cell-%d]: become leader now",
+				pr.cellID)
 			pr.handleHeartbeat()
 		}
 	}
@@ -181,7 +185,6 @@ func (pr *PeerReplicate) handleRaftReadyApply(ctx *tempRaftContext, rd *raft.Rea
 	}
 
 	result := pr.doApplySnap(ctx)
-
 	if !pr.isLeader() {
 		pr.send(rd.Messages)
 	}
@@ -286,7 +289,9 @@ func (pr *PeerReplicate) propose(meta *proposalMeta) {
 		return
 	}
 
-	log.Debugf("raftstore[cell-%d]: propose command, uuid=<%v>", meta.uuid)
+	log.Debugf("raftstore[cell-%d]: propose command, uuid=<%v>",
+		pr.cellID,
+		meta.uuid)
 
 	isConfChange := false
 	policy, err := pr.getHandlePolicy(meta.cmd.req)
@@ -571,9 +576,11 @@ func (pr *PeerReplicate) sendRaftMsg(msg raftpb.Message) error {
 	sendMsg.Message = msg
 	err := pr.store.trans.send(sendMsg.ToPeer.StoreID, &sendMsg)
 	if err != nil {
-		log.Warnf("raftstore[cell-%d]: failed to send msg, from=<%d> to=<%d>",
+		log.Warnf("raftstore[cell-%d]: failed to send msg, from=<%d> to=<%d> errors:\n%+v",
+			pr.cellID,
 			sendMsg.FromPeer.ID,
-			sendMsg.ToPeer.ID)
+			sendMsg.ToPeer.ID,
+			err)
 
 		pr.rn.ReportUnreachable(sendMsg.ToPeer.ID)
 

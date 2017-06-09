@@ -75,7 +75,7 @@ func (s *Store) isMsgStale(msg *mraft.RaftMessage) (bool, error) {
 	}
 
 	// no exist, check with tombstone key.
-	localState, err := peers.ps.loadCellLocalState(nil)
+	localState, err := loadCellLocalState(cellID, s.engine, true)
 	if err != nil {
 		return false, err
 	}
