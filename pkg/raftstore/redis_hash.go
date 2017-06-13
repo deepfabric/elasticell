@@ -19,7 +19,7 @@ import (
 	"github.com/deepfabric/elasticell/pkg/util"
 )
 
-func (s *Store) execHSet(req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execHSet(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
@@ -34,12 +34,19 @@ func (s *Store) execHSet(req *raftcmdpb.Request) *raftcmdpb.Response {
 		}
 	}
 
+	if n > 0 {
+		size := int64(len(args[1]) + len(args[2]))
+		ctx.metrics.writtenKeys++
+		ctx.metrics.writtenBytes += size
+		ctx.metrics.sizeDiffHint += size
+	}
+
 	return &raftcmdpb.Response{
 		IntegerResult: &n,
 	}
 }
 
-func (s *Store) execHDel(req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execHDel(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
@@ -54,14 +61,25 @@ func (s *Store) execHDel(req *raftcmdpb.Request) *raftcmdpb.Response {
 		}
 	}
 
+	if n > 0 {
+		var size int64
+
+		for _, arg := range args[1:] {
+			size += int64(len(arg))
+		}
+
+		ctx.metrics.sizeDiffHint -= size
+	}
+
 	return &raftcmdpb.Response{
 		IntegerResult: &n,
 	}
 }
 
-func (s *Store) execHMSet(req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execHMSet(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
+	var size int64
 
 	l := len(args)
 	if l < 3 || l%2 == 0 {
@@ -77,6 +95,9 @@ func (s *Store) execHMSet(req *raftcmdpb.Request) *raftcmdpb.Response {
 	for i := 0; i < len(kvs); i++ {
 		fields[i] = kvs[2*i]
 		values[i] = kvs[2*i+1]
+
+		size += int64(len(fields[i]))
+		size += int64(len(values[i]))
 	}
 
 	err := s.getHashEngine().HMSet(key, fields, values)
@@ -86,10 +107,14 @@ func (s *Store) execHMSet(req *raftcmdpb.Request) *raftcmdpb.Response {
 		}
 	}
 
+	ctx.metrics.writtenKeys++
+	ctx.metrics.writtenBytes += size
+	ctx.metrics.sizeDiffHint += size
+
 	return redis.OKStatusResp
 }
 
-func (s *Store) execHSetNX(req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execHSetNX(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
@@ -104,12 +129,18 @@ func (s *Store) execHSetNX(req *raftcmdpb.Request) *raftcmdpb.Response {
 		}
 	}
 
+	if value > 0 {
+		size := int64(len(args[1]) + len(args[2]))
+		ctx.metrics.writtenBytes += size
+		ctx.metrics.sizeDiffHint += size
+	}
+
 	return &raftcmdpb.Response{
 		IntegerResult: &value,
 	}
 }
 
-func (s *Store) execHIncrBy(req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execHIncrBy(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 

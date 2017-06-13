@@ -26,9 +26,9 @@ type memoryDataEngine struct {
 	kv *util.KVTree
 }
 
-func newMemoryDataEngine() DataEngine {
+func newMemoryDataEngine(kv *util.KVTree) DataEngine {
 	return &memoryDataEngine{
-		kv: util.NewKVTree(),
+		kv: kv,
 	}
 }
 

@@ -6,7 +6,7 @@ import (
 	"github.com/deepfabric/elasticell/pkg/util"
 )
 
-func (s *Store) execSAdd(req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execSAdd(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
@@ -21,12 +21,27 @@ func (s *Store) execSAdd(req *raftcmdpb.Request) *raftcmdpb.Response {
 		}
 	}
 
+	if value > 0 {
+		var size int64
+		for _, arg := range args[1:] {
+			size += int64(len(arg))
+		}
+
+		if value == 1 {
+			size += int64(len(args[0]))
+			ctx.metrics.writtenKeys++
+		}
+
+		ctx.metrics.writtenBytes += size
+		ctx.metrics.sizeDiffHint += size
+	}
+
 	return &raftcmdpb.Response{
 		IntegerResult: &value,
 	}
 }
 
-func (s *Store) execSRem(req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execSRem(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
@@ -40,6 +55,17 @@ func (s *Store) execSRem(req *raftcmdpb.Request) *raftcmdpb.Response {
 			ErrorResult: util.StringToSlice(err.Error()),
 		}
 	}
+
+	if value == 0 {
+		ctx.metrics.deleteKeysHint++
+	}
+
+	var size int64
+	for _, arg := range args[1:] {
+		size += int64(len(arg))
+	}
+
+	ctx.metrics.sizeDiffHint -= size
 
 	return &raftcmdpb.Response{
 		IntegerResult: &value,

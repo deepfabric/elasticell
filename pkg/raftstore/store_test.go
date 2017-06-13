@@ -220,9 +220,9 @@ func newTestStoreCfg(id uint64) *Cfg {
 
 	c.CellSplitSize = 96 * 1024 * 1024
 	c.RaftLogGCCountLimit = c.CellSplitSize * 3 / 4 / 1024
-	c.RaftLogGCSizeLimit = c.CellSplitSize * 3 / 4
+	c.RaftLogGCSizeLimit = int64(c.CellSplitSize) * 3 / 4
 	c.RaftLogGCThreshold = 50
-	c.CellCheckSizeDiff = c.CellSplitSize / 8
+	c.CellCheckSizeDiff = int64(c.CellSplitSize) / 8
 	c.CellMaxSize = c.CellSplitSize / 2 * 3
 
 	c.Raft = new(RaftCfg)
@@ -239,6 +239,8 @@ func newTestStoreCfg(id uint64) *Cfg {
 	c.CellHeartbeatIntervalMs = 200
 	c.Raft.BaseTick = 100
 	c.CellSplitSize = 1024
+	c.CellMaxSize = 1024
+	c.CellCheckSizeDiff = 1024
 
 	return c
 }

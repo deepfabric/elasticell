@@ -54,7 +54,7 @@ type PeerReplicate struct {
 
 	writtenKeys     uint64
 	writtenBytes    uint64
-	sizeDiffHint    uint64
+	sizeDiffHint    int64
 	raftLogSizeHint uint64
 	deleteKeysHint  uint64
 }

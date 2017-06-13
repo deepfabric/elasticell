@@ -32,13 +32,14 @@ type execContext struct {
 	req        *raftcmdpb.RaftCMDRequest
 	index      uint64
 	term       uint64
+	metrics    applyMetrics
 }
 
 func (d *applyDelegate) checkEpoch(req *raftcmdpb.RaftCMDRequest) bool {
 	return checkEpoch(d.cell, req)
 }
 
-func (d *applyDelegate) doApplyRaftCMD(req *raftcmdpb.RaftCMDRequest, term uint64, index uint64) *execResult {
+func (d *applyDelegate) doApplyRaftCMD(req *raftcmdpb.RaftCMDRequest, term uint64, index uint64) (*execContext, *execResult) {
 	if index == 0 {
 		log.Fatalf("raftstore-apply[cell-%d]: apply raft command needs a none zero index",
 			d.cell.ID)
@@ -108,7 +109,7 @@ func (d *applyDelegate) doApplyRaftCMD(req *raftcmdpb.RaftCMDRequest, term uint6
 		cb(resp)
 	}
 
-	return result
+	return ctx, result
 }
 
 func (d *applyDelegate) execAdminRequest(ctx *execContext) (*raftcmdpb.RaftCMDResponse, *execResult, error) {
@@ -203,6 +204,8 @@ func (d *applyDelegate) doExecSplit(ctx *execContext) (*raftcmdpb.RaftCMDRespons
 		return nil, nil, errors.New("missing split key")
 	}
 
+	req.SplitKey = getOriginKey(req.SplitKey)
+
 	// splitKey < cell.Startkey
 	if bytes.Compare(req.SplitKey, d.cell.Start) < 0 {
 		log.Errorf("raftstore-apply[cell-%d]: invalid split key, split=<%+v> cell-start=<%+v>",
@@ -212,11 +215,11 @@ func (d *applyDelegate) doExecSplit(ctx *execContext) (*raftcmdpb.RaftCMDRespons
 		return nil, nil, nil
 	}
 
-	perr := checkKeyInCell(req.SplitKey, &d.cell)
-	if perr != nil {
+	peer := checkKeyInCell(req.SplitKey, &d.cell)
+	if peer != nil {
 		log.Errorf("raftstore-apply[cell-%d]: split key not in cell, errors:\n %+v",
 			d.cell.ID,
-			perr)
+			peer)
 		return nil, nil, nil
 	}
 
@@ -236,10 +239,12 @@ func (d *applyDelegate) doExecSplit(ctx *execContext) (*raftcmdpb.RaftCMDRespons
 
 	// After split, the origin cell key range is [start_key, split_key),
 	// the new split cell is [split_key, end).
-	newCell := d.cell
-	newCell.Peers = make([]*metapb.Peer, len(req.NewPeerIDs))
-
-	newCell.Start = req.SplitKey
+	newCell := metapb.Cell{
+		ID:    req.NewCellID,
+		Epoch: d.cell.Epoch,
+		Start: req.SplitKey,
+		End:   d.cell.End,
+	}
 	d.cell.End = req.SplitKey
 
 	for idx, id := range req.NewPeerIDs {
@@ -253,11 +258,11 @@ func (d *applyDelegate) doExecSplit(ctx *execContext) (*raftcmdpb.RaftCMDRespons
 	newCell.Epoch.CellVer = d.cell.Epoch.CellVer
 
 	err := d.ps.updatePeerState(d.cell, mraft.Normal, ctx.wb)
-	if err != nil {
+	if err == nil {
 		err = d.ps.updatePeerState(newCell, mraft.Normal, ctx.wb)
 	}
 
-	if err != nil {
+	if err == nil {
 		err = d.ps.writeInitialState(newCell.ID, ctx.wb)
 	}
 
@@ -329,7 +334,7 @@ func (d *applyDelegate) execWriteRequest(ctx *execContext) *raftcmdpb.RaftCMDRes
 
 	for _, req := range ctx.req.Requests {
 		if h, ok := d.store.redisWriteHandles[req.Type]; ok {
-			resp.Responses = append(resp.Responses, h(req))
+			resp.Responses = append(resp.Responses, h(ctx, req))
 		}
 	}
 

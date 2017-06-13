@@ -6,7 +6,7 @@ import (
 	"github.com/deepfabric/elasticell/pkg/util"
 )
 
-func (s *Store) execZAdd(req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execZAdd(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
@@ -26,6 +26,21 @@ func (s *Store) execZAdd(req *raftcmdpb.Request) *raftcmdpb.Response {
 		return &raftcmdpb.Response{
 			ErrorResult: util.StringToSlice(err.Error()),
 		}
+	}
+
+	if value > 0 {
+		var size int64
+
+		if value == 1 {
+			ctx.metrics.writtenKeys++
+			size += int64(len(args[0]))
+		}
+
+		size += int64(len(args[2]))
+		size += int64(len(args[1]))
+
+		ctx.metrics.writtenBytes += size
+		ctx.metrics.sizeDiffHint += size
 	}
 
 	return &raftcmdpb.Response{
@@ -73,7 +88,7 @@ func (s *Store) execZCount(req *raftcmdpb.Request) *raftcmdpb.Response {
 	}
 }
 
-func (s *Store) execZIncrBy(req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execZIncrBy(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
@@ -231,7 +246,7 @@ func (s *Store) execZRank(req *raftcmdpb.Request) *raftcmdpb.Response {
 	}
 }
 
-func (s *Store) execZRem(req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execZRem(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
@@ -246,12 +261,22 @@ func (s *Store) execZRem(req *raftcmdpb.Request) *raftcmdpb.Response {
 		}
 	}
 
+	if value > 0 {
+		var size int64
+
+		for _, arg := range args[1:] {
+			size += int64(len(arg))
+		}
+
+		ctx.metrics.sizeDiffHint -= size
+	}
+
 	return &raftcmdpb.Response{
 		IntegerResult: &value,
 	}
 }
 
-func (s *Store) execZRemRangeByLex(req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execZRemRangeByLex(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
@@ -271,7 +296,7 @@ func (s *Store) execZRemRangeByLex(req *raftcmdpb.Request) *raftcmdpb.Response {
 	}
 }
 
-func (s *Store) execZRemRangeByRank(req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execZRemRangeByRank(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
@@ -305,7 +330,7 @@ func (s *Store) execZRemRangeByRank(req *raftcmdpb.Request) *raftcmdpb.Response 
 	}
 }
 
-func (s *Store) execZRemRangeByScore(req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execZRemRangeByScore(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 

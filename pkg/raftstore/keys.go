@@ -131,6 +131,10 @@ func getDataKey(key []byte) []byte {
 	return data
 }
 
+func getOriginKey(key []byte) []byte {
+	return key[len(dataPrefixKey):]
+}
+
 func getDataEndKey(endKey []byte) []byte {
 	if len(endKey) == 0 {
 		return dataMaxKey

@@ -16,6 +16,10 @@ package raftstore
 import (
 	"time"
 
+	"fmt"
+
+	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
+	"github.com/deepfabric/elasticell/pkg/redis"
 	. "github.com/pingcap/check"
 )
 
@@ -65,4 +69,42 @@ func (s *testStoreSuite) TestFirstGroup(c *C) {
 	}()
 
 	s.checkPeers(c, 3, stores)
+}
+
+func (s *testStoreSuite) TestSplit(c *C) {
+	stores := s.startFirstRaftGroup(c, 3)
+
+	defer func() {
+		for _, store := range stores {
+			store.Stop()
+		}
+		s.stopMultiPDServers(c)
+	}()
+
+	leader := s.checkPeers(c, 3, stores)
+	for index := 0; index < 2; index++ {
+		key := fmt.Sprintf("key-%d", index)
+		value := make([]byte, 512)
+
+		complete := make(chan struct{}, 1)
+		defer close(complete)
+
+		cmd := [][]byte{[]byte("set"), []byte(key), value}
+		leader.OnRedisCommand(raftcmdpb.Set, redis.Command(cmd), func(resp *raftcmdpb.RaftCMDResponse) {
+			c.Assert(len(resp.Responses), Equals, 1)
+			c.Assert(resp.Responses[0].StatusResult, NotNil)
+			complete <- struct{}{}
+		})
+
+		select {
+		case <-complete:
+		case <-time.After(time.Second):
+			c.Fatal("set command timeout")
+		}
+	}
+
+	time.Sleep(leader.cfg.getSplitCellCheckDuration() * 2)
+	time.Sleep(leader.cfg.getCellHeartbeatDuration() * 3)
+
+	c.Assert(leader.replicatesMap.size(), Equals, uint32(2))
 }

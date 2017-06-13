@@ -105,6 +105,17 @@ func (s *testNemoDataSuite) TestScanSize(c *C) {
 
 	c.Assert(err, IsNil)
 	c.Assert(total > 0, IsTrue)
+
+	cnt = 0
+	total = 0
+	err = s.driver.GetDataEngine().ScanSize([]byte{0}, []byte{255}, func(key []byte, size uint64) (bool, error) {
+		cnt++
+		total = total + size
+		return true, nil
+	})
+
+	c.Assert(err, IsNil)
+	c.Assert(total > 0, IsTrue)
 }
 
 func (s *testNemoDataSuite) CreateSnapshot(c *C) {

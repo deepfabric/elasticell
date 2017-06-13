@@ -104,7 +104,7 @@ func (s *Store) execLRange(req *raftcmdpb.Request) *raftcmdpb.Response {
 	}
 }
 
-func (s *Store) execLInsert(req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execLInsert(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
@@ -126,12 +126,24 @@ func (s *Store) execLInsert(req *raftcmdpb.Request) *raftcmdpb.Response {
 		}
 	}
 
+	if value > 0 {
+		size := int64(len(args[3]))
+
+		if value == 0 {
+			size += int64(len(args[0]))
+			ctx.metrics.writtenKeys++
+		}
+
+		ctx.metrics.writtenBytes += size
+		ctx.metrics.sizeDiffHint += size
+	}
+
 	return &raftcmdpb.Response{
 		IntegerResult: &value,
 	}
 }
 
-func (s *Store) execLPop(req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execLPop(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
@@ -146,6 +158,9 @@ func (s *Store) execLPop(req *raftcmdpb.Request) *raftcmdpb.Response {
 		}
 	}
 
+	size := int64(len(value))
+	ctx.metrics.sizeDiffHint -= size
+
 	has := true
 	return &raftcmdpb.Response{
 		BulkResult:         value,
@@ -153,7 +168,7 @@ func (s *Store) execLPop(req *raftcmdpb.Request) *raftcmdpb.Response {
 	}
 }
 
-func (s *Store) execLPush(req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execLPush(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
@@ -168,12 +183,27 @@ func (s *Store) execLPush(req *raftcmdpb.Request) *raftcmdpb.Response {
 		}
 	}
 
+	if value > 0 {
+		var size int64
+		for _, arg := range args[1:] {
+			size += int64(len(arg))
+		}
+
+		if value == 1 {
+			size += int64(len(args[0]))
+			ctx.metrics.writtenKeys++
+		}
+
+		ctx.metrics.writtenBytes += size
+		ctx.metrics.sizeDiffHint += size
+	}
+
 	return &raftcmdpb.Response{
 		IntegerResult: &value,
 	}
 }
 
-func (s *Store) execLPushX(req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execLPushX(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
@@ -188,12 +218,25 @@ func (s *Store) execLPushX(req *raftcmdpb.Request) *raftcmdpb.Response {
 		}
 	}
 
+	if value > 0 {
+		var size int64
+
+		size += int64(len(args[1]))
+		if value == 1 {
+			size += int64(len(args[0]))
+			ctx.metrics.writtenKeys++
+		}
+
+		ctx.metrics.writtenBytes += size
+		ctx.metrics.sizeDiffHint += size
+	}
+
 	return &raftcmdpb.Response{
 		IntegerResult: &value,
 	}
 }
 
-func (s *Store) execLRem(req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execLRem(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
@@ -215,12 +258,17 @@ func (s *Store) execLRem(req *raftcmdpb.Request) *raftcmdpb.Response {
 		}
 	}
 
+	if value > 0 {
+		size := int64(len(args[2])) * value
+		ctx.metrics.sizeDiffHint += size
+	}
+
 	return &raftcmdpb.Response{
 		IntegerResult: &value,
 	}
 }
 
-func (s *Store) execLSet(req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execLSet(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
@@ -245,7 +293,7 @@ func (s *Store) execLSet(req *raftcmdpb.Request) *raftcmdpb.Response {
 	return redis.OKStatusResp
 }
 
-func (s *Store) execLTrim(req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execLTrim(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
@@ -277,7 +325,7 @@ func (s *Store) execLTrim(req *raftcmdpb.Request) *raftcmdpb.Response {
 	return redis.OKStatusResp
 }
 
-func (s *Store) execRPop(req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execRPop(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
@@ -292,6 +340,9 @@ func (s *Store) execRPop(req *raftcmdpb.Request) *raftcmdpb.Response {
 		}
 	}
 
+	size := int64(len(value))
+	ctx.metrics.sizeDiffHint -= size
+
 	has := true
 	return &raftcmdpb.Response{
 		BulkResult:         value,
@@ -299,7 +350,7 @@ func (s *Store) execRPop(req *raftcmdpb.Request) *raftcmdpb.Response {
 	}
 }
 
-func (s *Store) execRPush(req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execRPush(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
@@ -314,12 +365,27 @@ func (s *Store) execRPush(req *raftcmdpb.Request) *raftcmdpb.Response {
 		}
 	}
 
+	if value > 0 {
+		var size int64
+		for _, arg := range args[1:] {
+			size += int64(len(arg))
+		}
+
+		if value == 1 {
+			size += int64(len(args[0]))
+			ctx.metrics.writtenKeys++
+		}
+
+		ctx.metrics.writtenBytes += size
+		ctx.metrics.sizeDiffHint += size
+	}
+
 	return &raftcmdpb.Response{
 		IntegerResult: &value,
 	}
 }
 
-func (s *Store) execRPushX(req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execRPushX(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
@@ -332,6 +398,19 @@ func (s *Store) execRPushX(req *raftcmdpb.Request) *raftcmdpb.Response {
 		return &raftcmdpb.Response{
 			ErrorResult: util.StringToSlice(err.Error()),
 		}
+	}
+
+	if value > 0 {
+		var size int64
+
+		size += int64(len(args[1]))
+		if value == 1 {
+			size += int64(len(args[0]))
+			ctx.metrics.writtenKeys++
+		}
+
+		ctx.metrics.writtenBytes += size
+		ctx.metrics.sizeDiffHint += size
 	}
 
 	return &raftcmdpb.Response{

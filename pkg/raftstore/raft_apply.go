@@ -29,10 +29,10 @@ import (
 // TODO: change every redis command apply to rocksdb
 type applyMetrics struct {
 	// an inaccurate difference in cell size since last reset.
-	sizeDiffHint uint64
+	sizeDiffHint int64
 	// delete keys' count since last reset.
 	deleteKeysHint uint64
-	writtenBytes   uint64
+	writtenBytes   int64
 	writtenKeys    uint64
 }
 
@@ -40,8 +40,8 @@ type asyncApplyResult struct {
 	cellID           uint64
 	appliedIndexTerm uint64
 	applyState       mraft.RaftApplyState
-	metrics          applyMetrics
 	result           *execResult
+	metrics          applyMetrics
 }
 
 type changePeer struct {
@@ -218,12 +218,13 @@ func (d *applyDelegate) applyCommittedEntries(commitedEntries []raftpb.Entry) {
 		}
 
 		var result *execResult
+		var ctx *execContext
 
 		switch entry.Type {
 		case raftpb.EntryNormal:
-			result = d.applyEntry(&entry)
+			ctx, result = d.applyEntry(&entry)
 		case raftpb.EntryConfChange:
-			result = d.applyConfChange(&entry)
+			ctx, result = d.applyConfChange(&entry)
 		}
 
 		asyncResult := &asyncApplyResult{
@@ -231,6 +232,10 @@ func (d *applyDelegate) applyCommittedEntries(commitedEntries []raftpb.Entry) {
 			appliedIndexTerm: d.appliedIndexTerm,
 			applyState:       d.applyState,
 			result:           result,
+		}
+
+		if ctx != nil {
+			asyncResult.metrics = ctx.metrics
 		}
 
 		pr := d.store.replicatesMap.get(d.cell.ID)
@@ -244,7 +249,7 @@ func (d *applyDelegate) applyCommittedEntries(commitedEntries []raftpb.Entry) {
 	}
 }
 
-func (d *applyDelegate) applyEntry(entry *raftpb.Entry) *execResult {
+func (d *applyDelegate) applyEntry(entry *raftpb.Entry) (*execContext, *execResult) {
 	if len(entry.Data) > 0 {
 		req := &raftcmdpb.RaftCMDRequest{}
 		util.MustUnmarshal(req, entry.Data)
@@ -272,7 +277,7 @@ func (d *applyDelegate) applyEntry(entry *raftpb.Entry) *execResult {
 	for {
 		cmd := d.popPendingCMD(entry.Term - 1)
 		if cmd == nil {
-			return nil
+			return nil, nil
 		}
 
 		// apprently, all the callbacks whose term is less than entry's term are stale.
@@ -280,7 +285,7 @@ func (d *applyDelegate) applyEntry(entry *raftpb.Entry) *execResult {
 	}
 }
 
-func (d *applyDelegate) applyConfChange(entry *raftpb.Entry) *execResult {
+func (d *applyDelegate) applyConfChange(entry *raftpb.Entry) (*execContext, *execResult) {
 	index := entry.Index
 	term := entry.Term
 	cc := new(raftpb.ConfChange)
@@ -289,16 +294,16 @@ func (d *applyDelegate) applyConfChange(entry *raftpb.Entry) *execResult {
 	req := new(raftcmdpb.RaftCMDRequest)
 	util.MustUnmarshal(req, cc.Context)
 
-	result := d.doApplyRaftCMD(req, term, index)
+	ctx, result := d.doApplyRaftCMD(req, term, index)
 	if nil == result {
-		return &execResult{
+		return nil, &execResult{
 			adminType:  raftcmdpb.ChangePeer,
 			changePeer: &changePeer{},
 		}
 	}
 
 	result.changePeer.confChange = *cc
-	return result
+	return ctx, result
 }
 
 func (d *applyDelegate) destroy() {

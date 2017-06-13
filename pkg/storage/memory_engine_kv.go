@@ -21,9 +21,9 @@ type memoryKVEngine struct {
 	kv *util.KVTree
 }
 
-func newMemoryKVEngine() KVEngine {
+func newMemoryKVEngine(kv *util.KVTree) KVEngine {
 	return &memoryKVEngine{
-		kv: util.NewKVTree(),
+		kv: kv,
 	}
 }
 

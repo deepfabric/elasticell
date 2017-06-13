@@ -19,7 +19,7 @@ import (
 	"github.com/deepfabric/elasticell/pkg/util"
 )
 
-func (s *Store) execKVSet(req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execKVSet(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
@@ -33,6 +33,11 @@ func (s *Store) execKVSet(req *raftcmdpb.Request) *raftcmdpb.Response {
 			ErrorResult: util.StringToSlice(err.Error()),
 		}
 	}
+
+	size := int64(len(args[0]) + len(args[1]))
+	ctx.metrics.writtenKeys++
+	ctx.metrics.writtenBytes += size
+	ctx.metrics.sizeDiffHint += size
 
 	return redis.OKStatusResp
 }
@@ -77,7 +82,7 @@ func (s *Store) execKVStrLen(req *raftcmdpb.Request) *raftcmdpb.Response {
 	}
 }
 
-func (s *Store) execKVIncrBy(req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execKVIncrBy(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
@@ -102,7 +107,7 @@ func (s *Store) execKVIncrBy(req *raftcmdpb.Request) *raftcmdpb.Response {
 	}
 }
 
-func (s *Store) execKVIncr(req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execKVIncr(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
@@ -122,7 +127,7 @@ func (s *Store) execKVIncr(req *raftcmdpb.Request) *raftcmdpb.Response {
 	}
 }
 
-func (s *Store) execKVDecrby(req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execKVDecrby(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
@@ -147,7 +152,7 @@ func (s *Store) execKVDecrby(req *raftcmdpb.Request) *raftcmdpb.Response {
 	}
 }
 
-func (s *Store) execKVDecr(req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execKVDecr(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
@@ -167,7 +172,7 @@ func (s *Store) execKVDecr(req *raftcmdpb.Request) *raftcmdpb.Response {
 	}
 }
 
-func (s *Store) execKVGetSet(req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execKVGetSet(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
@@ -187,7 +192,7 @@ func (s *Store) execKVGetSet(req *raftcmdpb.Request) *raftcmdpb.Response {
 	}
 }
 
-func (s *Store) execKVAppend(req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execKVAppend(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
@@ -202,12 +207,16 @@ func (s *Store) execKVAppend(req *raftcmdpb.Request) *raftcmdpb.Response {
 		}
 	}
 
+	size := int64(len(args[1]))
+	ctx.metrics.writtenBytes += size
+	ctx.metrics.sizeDiffHint += size
+
 	return &raftcmdpb.Response{
 		IntegerResult: &n,
 	}
 }
 
-func (s *Store) execKVSetNX(req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execKVSetNX(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
@@ -220,6 +229,13 @@ func (s *Store) execKVSetNX(req *raftcmdpb.Request) *raftcmdpb.Response {
 		return &raftcmdpb.Response{
 			ErrorResult: util.StringToSlice(err.Error()),
 		}
+	}
+
+	if n > 0 {
+		size := int64(len(args[0]) + len(args[1]))
+		ctx.metrics.writtenKeys++
+		ctx.metrics.writtenBytes += size
+		ctx.metrics.sizeDiffHint += size
 	}
 
 	return &raftcmdpb.Response{

@@ -71,7 +71,7 @@ type Store struct {
 	notifyChan chan interface{}
 
 	redisReadHandles  map[raftcmdpb.CMDType]func(*raftcmdpb.Request) *raftcmdpb.Response
-	redisWriteHandles map[raftcmdpb.CMDType]func(*raftcmdpb.Request) *raftcmdpb.Response
+	redisWriteHandles map[raftcmdpb.CMDType]func(*execContext, *raftcmdpb.Request) *raftcmdpb.Response
 
 	sendingSnapCount   uint32
 	reveivingSnapCount uint32
@@ -104,7 +104,7 @@ func NewStore(clusterID uint64, pdClient *pd.Client, meta metapb.Store, engine s
 	s.runner.AddNamedWorker(splitWorker, defaultWorkerQueueSize)
 
 	s.redisReadHandles = make(map[raftcmdpb.CMDType]func(*raftcmdpb.Request) *raftcmdpb.Response)
-	s.redisWriteHandles = make(map[raftcmdpb.CMDType]func(*raftcmdpb.Request) *raftcmdpb.Response)
+	s.redisWriteHandles = make(map[raftcmdpb.CMDType]func(*execContext, *raftcmdpb.Request) *raftcmdpb.Response)
 
 	s.initRedisHandle()
 	s.init()
@@ -369,6 +369,8 @@ func (s *Store) OnRedisCommand(cmdType raftcmdpb.CMDType, cmd redis.Command, cb 
 		UUID:       uuid.NewV4().Bytes(),
 		CellEpoch:  cell.Epoch,
 	}
+
+	cmd.Args()[0] = getDataKey(key)
 
 	req.Requests = append(req.Requests, &raftcmdpb.Request{
 		Type: cmdType,

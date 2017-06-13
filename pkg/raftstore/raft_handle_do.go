@@ -303,7 +303,7 @@ func (pr *PeerReplicate) doSplitCheck(epoch metapb.CellEpoch, startKey, endKey [
 	err := pr.store.getDataEngine().ScanSize(startKey, endKey, func(key []byte, keySize uint64) (bool, error) {
 		size += keySize
 
-		if len(splitKey) == 0 && size > pr.store.cfg.CellSplitSize {
+		if len(splitKey) == 0 && size >= pr.store.cfg.CellSplitSize {
 			splitKey = key
 		}
 
@@ -322,12 +322,17 @@ func (pr *PeerReplicate) doSplitCheck(epoch metapb.CellEpoch, startKey, endKey [
 	}
 
 	if size < pr.store.cfg.CellMaxSize {
-		log.Debugf("raftstore-split[cell-%d]: no need to split, size=<%d> max=<%d>",
+		log.Infof("raftstore-split[cell-%d]: no need to split, size=<%d> max=<%d>",
 			pr.cellID,
 			size,
 			pr.store.cfg.CellMaxSize)
 		return nil
 	}
+
+	log.Infof("raftstore-split[cell-%d]: try to split, size=<%d> splitKey=<%+v>",
+		pr.cellID,
+		size,
+		splitKey)
 
 	pr.store.notify(&splitCheckResult{
 		cellID:   pr.cellID,
@@ -345,7 +350,7 @@ func (pr *PeerReplicate) doAskSplit(cell metapb.Cell, peer metapb.Peer, splitKey
 
 	rsp, err := pr.store.pdClient.AskSplit(context.TODO(), req)
 	if err != nil {
-		log.Debugf("raftstore-split[cell-%d]: ask split to pd failed, error:\n %+v",
+		log.Errorf("raftstore-split[cell-%d]: ask split to pd failed, error:\n %+v",
 			pr.cellID,
 			err)
 		return err
@@ -374,7 +379,8 @@ func (pr *PeerReplicate) doPostApply(result *asyncApplyResult) {
 
 	pr.ps.setApplyState(&result.applyState)
 	pr.ps.setAppliedIndexTerm(result.appliedIndexTerm)
-	pr.writtenBytes += result.metrics.writtenBytes
+
+	pr.writtenBytes += uint64(result.metrics.writtenBytes)
 	pr.writtenKeys += result.metrics.writtenKeys
 
 	if result.hasSplitExecResult() {
@@ -520,21 +526,24 @@ func (s *Store) doApplySplit(cellID uint64, result *splitResult) {
 		newPR.handleHeartbeat()
 
 		err := s.startReportSpltJob(left, right)
-		log.Errorf("raftstore-apply[cell-%d]: add report split job failed, errors:\n %+v",
-			cellID,
-			err)
+		if err != nil {
+			log.Errorf("raftstore-apply[cell-%d]: add report split job failed, errors:\n %+v",
+				cellID,
+				err)
+		}
 	}
 
-	log.Infof("raftstore-apply[cell-%d]: insert new cell, left=<%+v> right <%+v>",
-		cellID,
-		left,
-		right)
 	s.keyRanges.Update(left)
 	s.keyRanges.Update(right)
 
 	newPR.sizeDiffHint = s.cfg.CellCheckSizeDiff
 	newPR.startRegistrationJob()
 	s.replicatesMap.put(newPR.cellID, newPR)
+
+	log.Infof("raftstore-apply[cell-%d]: new cell added, left=<%+v> right=<%+v>",
+		cellID,
+		left,
+		right)
 }
 
 func (s *Store) doApplyRaftLogGC(cellID uint64, result *raftGCResult) {

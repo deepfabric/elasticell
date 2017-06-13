@@ -13,7 +13,11 @@
 
 package storage
 
-import "sync"
+import (
+	"sync"
+
+	"github.com/deepfabric/elasticell/pkg/util"
+)
 
 type opt struct {
 	key      []byte
@@ -67,10 +71,11 @@ type memoryDriver struct {
 
 // NewMemoryDriver returns Driver with memory implemention
 func NewMemoryDriver() Driver {
+	kv := util.NewKVTree()
 	return &memoryDriver{
 		metaEngine: newMemoryMetaEngine(),
-		dataEngine: newMemoryDataEngine(),
-		kvEngine:   newMemoryKVEngine(),
+		kvEngine:   newMemoryKVEngine(kv),
+		dataEngine: newMemoryDataEngine(kv),
 	}
 }
 

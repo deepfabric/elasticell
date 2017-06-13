@@ -70,9 +70,7 @@ func (s *session) writeLoop() {
 		case <-s.ctx.Done():
 			return
 		case resp := <-s.resps:
-			if resp == nil {
-				log.Fatalf("bug: resp can not be nil")
-			} else {
+			if resp != nil {
 				s.doResp(resp)
 			}
 		}

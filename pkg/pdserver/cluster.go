@@ -129,10 +129,6 @@ func (s *Server) storeHeartbeat(req *pdpb.StoreHeartbeatReq) (*pdpb.StoreHeartbe
 }
 
 func (s *Server) askSplit(req *pdpb.AskSplitReq) (*pdpb.AskSplitRsp, error) {
-	if nil == req.Cell.Start || len(req.Cell.Start) == 0 {
-		return nil, errors.New("missing cell start key for split")
-	}
-
 	c := s.GetCellCluster()
 	if c == nil {
 		return nil, errNotBootstrapped
