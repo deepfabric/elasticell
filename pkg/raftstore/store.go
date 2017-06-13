@@ -384,14 +384,6 @@ func (s *Store) notify(msg interface{}) {
 }
 
 func (s *Store) onRaftMessage(msg *mraft.RaftMessage) {
-	if log.DebugEnabled() {
-		log.Debugf("raftstore[store-%d]: receive a raft message, fromPeer=<%d> toPeer=<%d> msg=<%s>",
-			s.id,
-			msg.FromPeer.ID,
-			msg.ToPeer.ID,
-			msg.String())
-	}
-
 	if !s.isRaftMsgValid(msg) {
 		return
 	}

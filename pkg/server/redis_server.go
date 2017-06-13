@@ -16,6 +16,9 @@ package server
 import (
 	"strings"
 
+	"io"
+
+	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
 	"github.com/deepfabric/elasticell/pkg/raftstore"
 	"github.com/deepfabric/elasticell/pkg/redis"
@@ -46,7 +49,7 @@ func (s *RedisServer) init() {
 	s.handlers = make(map[raftcmdpb.CMDType]func(raftcmdpb.CMDType, redis.Command, *session) error)
 	s.typeMapping = make(map[string]raftcmdpb.CMDType)
 
-	for k, v := range raftcmdpb.AdminCmdType_value {
+	for k, v := range raftcmdpb.CMDType_value {
 		s.typeMapping[strings.ToLower(k)] = raftcmdpb.CMDType(v)
 	}
 
@@ -121,6 +124,9 @@ func (s *RedisServer) init() {
 }
 
 func (s *RedisServer) doConnection(session goetty.IOSession) error {
+	addr := session.RemoteAddr()
+	log.Debugf("redis-[%s]: connected", addr)
+
 	// every client has 2 goroutines, read and write
 	rs := newSession(session)
 	go rs.writeLoop()
@@ -129,6 +135,13 @@ func (s *RedisServer) doConnection(session goetty.IOSession) error {
 	for {
 		req, err := session.Read()
 		if err != nil {
+			if err == io.EOF {
+				return nil
+			}
+
+			log.Errorf("redis-[%s]: read from cli failed, errors\n %+v",
+				addr,
+				err)
 			return err
 		}
 
@@ -143,6 +156,7 @@ func (s *RedisServer) doConnection(session goetty.IOSession) error {
 
 func (s *RedisServer) onRedisCommand(cmd redis.Command, session *session) error {
 	t := s.typeMapping[cmd.CmdString()]
+
 	h, ok := s.handlers[t]
 	if !ok {
 		session.onResp(redis.ErrNotSupportCommand)

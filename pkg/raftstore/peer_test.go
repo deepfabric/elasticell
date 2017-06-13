@@ -19,37 +19,50 @@ import (
 	. "github.com/pingcap/check"
 )
 
-func (s *testStoreSuite) TestPeer(c *C) {
-	clusterID := s.restartMultiPDServer(c, 3)
+func (s *testStoreSuite) startFirstRaftGroup(c *C, num int) []*Store {
+	clusterID := s.restartMultiPDServer(c, num)
 
-	store := s.bootstrap(c, clusterID, s.AllocID(c))
-	store2 := s.startNewStore(c, clusterID, s.newStoreDriver())
-	store3 := s.startNewStore(c, clusterID, s.newStoreDriver())
+	var stores []*Store
+	stores = append(stores, s.bootstrap(c, clusterID, s.AllocID(c)))
+
+	for index := 0; index < num-1; index++ {
+		stores = append(stores, s.startNewStore(c, clusterID, s.newStoreDriver()))
+	}
+
+	return stores
+}
+
+func (s *testStoreSuite) checkPeers(c *C, num int, stores []*Store) *Store {
+	time.Sleep(stores[0].cfg.getCellHeartbeatDuration() * 10)
+	var leader *Store
+	leaderCnt := 0
+
+	for _, store := range stores {
+		c.Assert(store.replicatesMap.size(), Equals, uint32(1))
+		store.replicatesMap.foreach(func(pr *PeerReplicate) (bool, error) {
+			c.Assert(len(pr.getCell().Peers), Equals, num)
+			if pr.isLeader() {
+				leaderCnt++
+				leader = pr.store
+			}
+			return false, nil
+		})
+	}
+
+	c.Assert(leader, NotNil)
+	c.Assert(leaderCnt, Equals, 1)
+	return leader
+}
+
+func (s *testStoreSuite) TestFirstGroup(c *C) {
+	stores := s.startFirstRaftGroup(c, 3)
 
 	defer func() {
-		store.Stop()
-		store2.Stop()
-		store3.Stop()
+		for _, store := range stores {
+			store.Stop()
+		}
 		s.stopMultiPDServers(c)
 	}()
 
-	time.Sleep(store.cfg.getCellHeartbeatDuration() * 5)
-	c.Assert(store.replicatesMap.size(), Equals, uint32(1))
-	c.Assert(store2.replicatesMap.size(), Equals, uint32(1))
-	c.Assert(store3.replicatesMap.size(), Equals, uint32(1))
-
-	store.replicatesMap.foreach(func(pr *PeerReplicate) (bool, error) {
-		c.Assert(len(pr.getCell().Peers), Equals, 3)
-		return false, nil
-	})
-
-	store2.replicatesMap.foreach(func(pr *PeerReplicate) (bool, error) {
-		c.Assert(len(pr.getCell().Peers), Equals, 3)
-		return false, nil
-	})
-
-	store3.replicatesMap.foreach(func(pr *PeerReplicate) (bool, error) {
-		c.Assert(len(pr.getCell().Peers), Equals, 3)
-		return false, nil
-	})
+	s.checkPeers(c, 3, stores)
 }

@@ -14,6 +14,7 @@
 package redis
 
 import (
+	"bytes"
 	"strings"
 
 	"github.com/deepfabric/elasticell/pkg/util"
@@ -54,4 +55,15 @@ func (c Command) CmdString() string {
 // Args returns redis command args
 func (c Command) Args() [][]byte {
 	return c[1:]
+}
+
+// ToString returns a redis command as string
+func (c Command) ToString() string {
+	buf := new(bytes.Buffer)
+	for _, arg := range c {
+		buf.Write(arg)
+		buf.WriteString(" ")
+	}
+
+	return strings.TrimSpace(buf.String())
 }

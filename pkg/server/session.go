@@ -14,6 +14,7 @@
 package server
 
 import (
+	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
 	"github.com/deepfabric/elasticell/pkg/redis"
 	"github.com/deepfabric/elasticell/pkg/util"
@@ -42,6 +43,8 @@ func newSession(conn goetty.IOSession) *session {
 func (s *session) close() {
 	s.cancel()
 	close(s.resps)
+
+	log.Debugf("redis-[%s]: closed", s.conn.RemoteAddr())
 }
 
 func (s *session) respCB(resp *raftcmdpb.RaftCMDResponse) {
@@ -67,7 +70,11 @@ func (s *session) writeLoop() {
 		case <-s.ctx.Done():
 			return
 		case resp := <-s.resps:
-			s.doResp(resp)
+			if resp == nil {
+				log.Fatalf("bug: resp can not be nil")
+			} else {
+				s.doResp(resp)
+			}
 		}
 	}
 }
@@ -86,7 +93,7 @@ func (s *session) doResp(resp *raftcmdpb.Response) {
 	}
 
 	if resp.BulkResult != nil || resp.HasEmptyBulkResult != nil {
-		redis.WriteBulk(resp.ErrorResult, buf)
+		redis.WriteBulk(resp.BulkResult, buf)
 	}
 
 	if resp.FvPairArrayResult != nil || resp.HasEmptyFVPairArrayResult != nil {

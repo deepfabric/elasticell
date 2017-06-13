@@ -54,7 +54,5 @@ func (decoder redisDecoder) Decode(in *goetty.ByteBuf) (bool, interface{}, error
 
 // Encode encode
 func (e redisEncoder) Encode(data interface{}, out *goetty.ByteBuf) error {
-	// reply, _ := data.(*goetty.ByteBuf)
-	// out.Write(reply.R)
 	return nil
 }

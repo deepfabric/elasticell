@@ -7,6 +7,11 @@
 	],
 	"Deps": [
 		{
+			"ImportPath": "github.com/CodisLabs/codis/pkg/utils/atomic2",
+			"Comment": "2.0.14",
+			"Rev": "3a771a8ccc896140856e248338bbb4388f8467d9"
+		},
+		{
 			"ImportPath": "github.com/StackExchange/wmi",
 			"Rev": "9f32b5905fd6ce7384093f9d048437e79f7b4d85"
 		},
@@ -318,6 +323,16 @@
 			"Rev": "905b7ab7ce6f1fea0505fde704d105fb7b1b7d80"
 		},
 		{
+			"ImportPath": "github.com/garyburd/redigo/internal",
+			"Comment": "v1.1.0-3-g95d11db",
+			"Rev": "95d11dba2d44531bdb8022752b98912baafae03a"
+		},
+		{
+			"ImportPath": "github.com/garyburd/redigo/redis",
+			"Comment": "v1.1.0-3-g95d11db",
+			"Rev": "95d11dba2d44531bdb8022752b98912baafae03a"
+		},
+		{
 			"ImportPath": "github.com/ghodss/yaml",
 			"Rev": "04f313413ffd65ce25f2541bfd2b2ceec5c0908c"
 		},
@@ -435,6 +450,11 @@
 		{
 			"ImportPath": "github.com/prometheus/procfs/xfs",
 			"Rev": "a1dba9ce8baed984a2495b658c82687f8157b98f"
+		},
+		{
+			"ImportPath": "github.com/satori/go.uuid",
+			"Comment": "v1.0.0",
+			"Rev": "f9ab0dce87d815821e221626b772e3475a0d2749"
 		},
 		{
 			"ImportPath": "github.com/shirou/gopsutil/disk",

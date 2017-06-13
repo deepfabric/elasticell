@@ -289,10 +289,6 @@ func (pr *PeerReplicate) propose(meta *proposalMeta) {
 		return
 	}
 
-	log.Debugf("raftstore[cell-%d]: propose command, uuid=<%v>",
-		pr.cellID,
-		meta.uuid)
-
 	isConfChange := false
 	policy, err := pr.getHandlePolicy(meta.cmd.req)
 	if err != nil {
@@ -301,6 +297,7 @@ func (pr *PeerReplicate) propose(meta *proposalMeta) {
 		return
 	}
 
+	doPropose := false
 	switch policy {
 	case readLocal:
 		pr.execReadLocal(meta.cmd)
@@ -309,12 +306,16 @@ func (pr *PeerReplicate) propose(meta *proposalMeta) {
 		pr.execReadIndex(meta.cmd)
 		return
 	case proposeNormal:
-		pr.proposeNormal(meta)
+		doPropose = pr.proposeNormal(meta)
 	case proposeTransferLeader:
-		pr.proposeTransferLeader(meta)
+		doPropose = pr.proposeTransferLeader(meta)
 	case proposeChange:
 		isConfChange = true
-		pr.proposeConfChange(meta)
+		doPropose = pr.proposeConfChange(meta)
+	}
+
+	if !doPropose {
+		return
 	}
 
 	err = pr.startProposeJob(meta, isConfChange)
@@ -326,35 +327,38 @@ func (pr *PeerReplicate) propose(meta *proposalMeta) {
 	pr.proposals.push(meta)
 }
 
-func (pr *PeerReplicate) proposeNormal(meta *proposalMeta) {
+func (pr *PeerReplicate) proposeNormal(meta *proposalMeta) bool {
 	cmd := meta.cmd
 	data := util.MustMarshal(cmd.req)
 
 	size := uint64(len(data))
 	if size > pr.store.cfg.Raft.MaxSizePerEntry {
 		cmd.respLargeRaftEntrySize(pr.cellID, size, meta.term)
-		return
+		return false
 	}
 
-	idx := pr.nextProposalIndex()
+	// TODO: need check for better performance
+	// idx := pr.nextProposalIndex()
 	err := pr.rn.Propose(context.TODO(), data)
 	if err != nil {
 		cmd.resp(errorOtherCMDResp(err))
-		return
+		return false
 	}
-	if idx == pr.nextProposalIndex() {
-		cmd.respNotLeader(pr.cellID, meta.term, nil)
-		return
-	}
+	// if idx == pr.nextProposalIndex() {
+	// 	cmd.respNotLeader(pr.cellID, meta.term, nil)
+	// 	return false
+	// }
+
+	return true
 }
 
-func (pr *PeerReplicate) proposeConfChange(meta *proposalMeta) {
+func (pr *PeerReplicate) proposeConfChange(meta *proposalMeta) bool {
 	cmd := meta.cmd
 
 	err := pr.checkConfChange(cmd)
 	if err != nil {
 		cmd.respOtherError(err)
-		return
+		return false
 	}
 
 	changePeer := new(raftcmdpb.ChangePeerRequest)
@@ -379,15 +383,17 @@ func (pr *PeerReplicate) proposeConfChange(meta *proposalMeta) {
 	err = pr.rn.ProposeConfChange(context.TODO(), *cc)
 	if err != nil {
 		cmd.respOtherError(err)
-		return
+		return false
 	}
 	if idx == pr.nextProposalIndex() {
 		cmd.respNotLeader(pr.cellID, meta.term, nil)
-		return
+		return false
 	}
+
+	return true
 }
 
-func (pr *PeerReplicate) proposeTransferLeader(meta *proposalMeta) {
+func (pr *PeerReplicate) proposeTransferLeader(meta *proposalMeta) bool {
 	cmd := meta.cmd
 	req := new(raftcmdpb.TransferLeaderRequest)
 	util.MustUnmarshal(req, cmd.req.AdminRequest.Body)
@@ -403,6 +409,7 @@ func (pr *PeerReplicate) proposeTransferLeader(meta *proposalMeta) {
 	// transfer leader command doesn't need to replicate log and apply, so we
 	// return immediately. Note that this command may fail, we can view it just as an advice
 	cmd.resp(newAdminRaftCMDResponse(raftcmdpb.TransferLeader, &raftcmdpb.TransferLeaderResponse{}))
+	return false
 }
 
 func (pr *PeerReplicate) doTransferLeader(peer *metapb.Peer) {
@@ -547,14 +554,6 @@ func (pr *PeerReplicate) sendRaftMsg(msg raftpb.Message) error {
 	sendMsg.ToPeer, _ = pr.store.peerCache.get(msg.To)
 	if sendMsg.ToPeer.ID == pd.ZeroID {
 		return fmt.Errorf("can not found peer<%d>", msg.To)
-	}
-
-	if log.DebugEnabled() {
-		log.Debugf("raftstore[cell-%d]: send raft msg, from=<%d> to=<%d> msg=<%s>",
-			pr.ps.getCell().ID,
-			sendMsg.FromPeer.ID,
-			sendMsg.ToPeer.ID,
-			msg.String())
 	}
 
 	// There could be two cases:

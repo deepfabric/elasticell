@@ -42,10 +42,18 @@ type splitCheckResult struct {
 }
 
 func buildTerm(term uint64, resp *raftcmdpb.RaftCMDResponse) {
+	if resp.Header == nil {
+		return
+	}
+
 	resp.Header.CurrentTerm = term
 }
 
 func buildUUID(uuid []byte, resp *raftcmdpb.RaftCMDResponse) {
+	if resp.Header == nil {
+		return
+	}
+
 	if resp.Header.UUID != nil {
 		resp.Header.UUID = uuid
 	}

@@ -238,6 +238,7 @@ func newTestStoreCfg(id uint64) *Cfg {
 	c.StoreHeartbeatIntervalMs = 200
 	c.CellHeartbeatIntervalMs = 200
 	c.Raft.BaseTick = 100
+	c.CellSplitSize = 1024
 
 	return c
 }

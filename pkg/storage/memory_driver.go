@@ -70,6 +70,7 @@ func NewMemoryDriver() Driver {
 	return &memoryDriver{
 		metaEngine: newMemoryMetaEngine(),
 		dataEngine: newMemoryDataEngine(),
+		kvEngine:   newMemoryKVEngine(),
 	}
 }
 
