@@ -333,8 +333,12 @@ func (pr *PeerReplicate) propose(meta *proposalMeta) {
 
 func (pr *PeerReplicate) proposeNormal(meta *proposalMeta) bool {
 	cmd := meta.cmd
-	data := util.MustMarshal(cmd.req)
+	if !pr.isLeader() {
+		cmd.respNotLeader(pr.cellID, meta.term, nil)
+		return false
+	}
 
+	data := util.MustMarshal(cmd.req)
 	size := uint64(len(data))
 	if size > pr.store.cfg.Raft.MaxSizePerEntry {
 		cmd.respLargeRaftEntrySize(pr.cellID, size, meta.term)

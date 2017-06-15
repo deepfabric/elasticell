@@ -16,16 +16,18 @@ package raftstore
 import (
 	"time"
 
+	"fmt"
+
 	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
 	"github.com/deepfabric/elasticell/pkg/redis"
 	. "github.com/pingcap/check"
 )
 
-type testRedisKVSuite struct {
+type testSplitSuite struct {
 	baseSuite
 }
 
-func (s *testRedisKVSuite) TestKVSet(c *C) {
+func (s *testSplitSuite) TestSplit(c *C) {
 	stores := s.startFirstRaftGroup(c, 3)
 
 	defer func() {
@@ -36,18 +38,29 @@ func (s *testRedisKVSuite) TestKVSet(c *C) {
 	}()
 
 	leader := s.checkPeers(c, 3, stores)
+	for index := 0; index < 2; index++ {
+		key := fmt.Sprintf("key-%d", index)
+		value := make([]byte, 512)
 
-	complete := make(chan struct{}, 1)
-	cmd := [][]byte{[]byte("set"), []byte("key1"), []byte("value1")}
-	leader.OnRedisCommand(raftcmdpb.Set, redis.Command(cmd), func(resp *raftcmdpb.RaftCMDResponse) {
-		c.Assert(len(resp.Responses), Equals, 1)
-		c.Assert(resp.Responses[0].StatusResult, NotNil)
-		complete <- struct{}{}
-	})
+		complete := make(chan struct{}, 1)
+		defer close(complete)
 
-	select {
-	case <-complete:
-	case <-time.After(time.Second):
-		c.Fatal("set command timeout")
+		cmd := [][]byte{[]byte("set"), []byte(key), value}
+		leader.OnRedisCommand(raftcmdpb.Set, redis.Command(cmd), func(resp *raftcmdpb.RaftCMDResponse) {
+			c.Assert(len(resp.Responses), Equals, 1)
+			c.Assert(resp.Responses[0].StatusResult, NotNil)
+			complete <- struct{}{}
+		})
+
+		select {
+		case <-complete:
+		case <-time.After(time.Second):
+			c.Fatal("set command timeout")
+		}
 	}
+
+	time.Sleep(leader.cfg.getSplitCellCheckDuration() * 2)
+	time.Sleep(leader.cfg.getCellHeartbeatDuration() * 3)
+
+	c.Assert(leader.replicatesMap.size(), Equals, uint32(2))
 }
