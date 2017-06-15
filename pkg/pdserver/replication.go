@@ -73,6 +73,7 @@ func (r *replicaChecker) checkDownPeer(cell *cellRuntimeInfo) Operator {
 	for _, stats := range cell.downPeers {
 		peer := stats.Peer
 		store := r.cache.getStore(peer.StoreID)
+
 		if nil != store && store.downTime() < r.cfg.Schedule.getMaxStoreDownTimeDuration() {
 			continue
 		}

@@ -18,6 +18,8 @@ import (
 	"sync"
 	"time"
 
+	"fmt"
+
 	"golang.org/x/net/context"
 )
 
@@ -173,7 +175,8 @@ type Runner struct {
 
 	stop       sync.WaitGroup
 	stopC      chan struct{}
-	cancels    []context.CancelFunc
+	lastID     uint64
+	cancels    map[uint64]context.CancelFunc
 	state      state
 	namedQueue map[string]chan *Job
 }
@@ -184,6 +187,7 @@ func NewRunnerSize(cap uint64) *Runner {
 		stopC:      make(chan struct{}),
 		state:      running,
 		namedQueue: make(map[string]chan *Job, 2),
+		cancels:    make(map[uint64]context.CancelFunc),
 	}
 
 	t.AddNamedWorker(defaultQueueName, cap)
@@ -196,7 +200,7 @@ func NewRunner() *Runner {
 }
 
 // AddNamedWorker add a named worker, the named worker has uniq queue, so jobs are linear execution
-func (s *Runner) AddNamedWorker(name string, cap uint64) error {
+func (s *Runner) AddNamedWorker(name string, cap uint64) (uint64, error) {
 	s.Lock()
 	q, ok := s.namedQueue[name]
 	if !ok {
@@ -216,7 +220,7 @@ func (s *Runner) IsNamedWorkerBusy(worker string) bool {
 	return len(s.getNamedQueue(worker)) > 0
 }
 
-func (s *Runner) startWorker(name string, q chan *Job) error {
+func (s *Runner) startWorker(name string, q chan *Job) (uint64, error) {
 	return s.RunCancelableTask(func(ctx context.Context) {
 		for {
 			select {
@@ -262,8 +266,8 @@ func (s *Runner) RunJob(task func() error) (*Job, error) {
 
 // RunJobWithNamedWorker run a job in a named worker
 func (s *Runner) RunJobWithNamedWorker(worker string, task func() error) (*Job, error) {
-	s.RLock()
-	defer s.RUnlock()
+	s.Lock()
+	defer s.Unlock()
 
 	if s.state != running {
 		return nil, errUnavailable
@@ -288,17 +292,18 @@ func (s *Runner) RunJobWithNamedWorker(worker string, task func() error) (*Job, 
 // 	// hanle error
 // 	return
 // }
-func (s *Runner) RunCancelableTask(task func(context.Context)) error {
-	s.RLock()
-	defer s.RUnlock()
+func (s *Runner) RunCancelableTask(task func(context.Context)) (uint64, error) {
+	s.Lock()
+	defer s.Unlock()
 
 	if s.state != running {
-		return errUnavailable
+		return 0, errUnavailable
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	s.cancels = append(s.cancels, cancel)
-
+	s.lastID++
+	id := s.lastID
+	s.cancels[id] = cancel
 	s.stop.Add(1)
 
 	go func() {
@@ -306,13 +311,13 @@ func (s *Runner) RunCancelableTask(task func(context.Context)) error {
 		task(ctx)
 	}()
 
-	return nil
+	return id, nil
 }
 
 // RunTask runs a task in new goroutine
 func (s *Runner) RunTask(task func()) error {
-	s.RLock()
-	defer s.RUnlock()
+	s.Lock()
+	defer s.Unlock()
 
 	if s.state != running {
 		return errUnavailable
@@ -325,6 +330,26 @@ func (s *Runner) RunTask(task func()) error {
 		task()
 	}()
 
+	return nil
+}
+
+// StopCancelableTask stop cancelable spec task
+func (s *Runner) StopCancelableTask(id uint64) error {
+	s.Lock()
+	defer s.Unlock()
+
+	if s.state == stopping ||
+		s.state == stopped {
+		return errors.New("stopper is already stoppped")
+	}
+
+	cancel, ok := s.cancels[id]
+	if !ok {
+		return fmt.Errorf("target task<%d> not found", id)
+	}
+
+	delete(s.cancels, id)
+	cancel()
 	return nil
 }
 

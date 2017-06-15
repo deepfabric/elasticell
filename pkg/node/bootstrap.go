@@ -173,4 +173,6 @@ func (n *Node) putStore() {
 	if err != nil {
 		log.Fatalf("bootstrap: put store to pd failed, errors:\n %+v", err)
 	}
+
+	log.Infof("bootstrap: put store succ, store=<%+v>", n.storeMeta)
 }

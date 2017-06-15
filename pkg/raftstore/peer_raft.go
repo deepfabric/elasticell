@@ -105,6 +105,10 @@ func (pr *PeerReplicate) readyToServeRaft(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
+			pr.raftTicker.Stop()
+			pr.rn.Stop()
+			log.Infof("raftstore[cell-%d]: handle serve raft stopped",
+				pr.ps.getCell().ID)
 			return
 		case <-pr.raftTicker.C:
 			pr.rn.Tick()
@@ -158,14 +162,14 @@ func (pr *PeerReplicate) handleRaftReadyAppend(ctx *tempRaftContext, rd *raft.Re
 		pr.send(rd.Messages)
 	}
 
+	ctx.wb = pr.store.engine.NewWriteBatch()
+
 	pr.handleAppendSnapshot(ctx, rd)
 	pr.handleAppendEntries(ctx, rd)
 
 	if ctx.raftState.LastIndex > 0 && !raft.IsEmptyHardState(rd.HardState) {
 		ctx.raftState.HardState = rd.HardState
 	}
-
-	ctx.wb = pr.store.engine.NewWriteBatch()
 
 	pr.handleSaveRaftState(ctx)
 	pr.handleSaveApplyState(ctx)
@@ -269,8 +273,8 @@ func (pr *PeerReplicate) readyToProcessPropose(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			log.Infof("raftstore[cell-%d]: cell propose exit.", pr.cellID)
 			close(pr.proposeC)
+			log.Infof("raftstore[cell-%d]: handle propose stopped", pr.cellID)
 			return
 		case meta := <-pr.proposeC:
 			pr.propose(meta)
@@ -529,17 +533,18 @@ func (pr *PeerReplicate) readyToSendRaftMessage(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			log.Infof("raftstore[cell-%d]: peer send msg raft stopped",
-				pr.ps.getCell().ID)
 			close(pr.msgC)
+			log.Infof("raftstore[cell-%d]: handle send raft msg stopped",
+				pr.ps.getCell().ID)
 			return
 		case msg := <-pr.msgC:
 			err := pr.sendRaftMsg(msg)
 			if err != nil {
 				// We don't care that the message is sent failed, so here just log this error
-				log.Warnf("raftstore[cell-%d]: send msg failure, error:\n %+v",
+				log.Warnf("raftstore[cell-%d]: send msg failure, from_peer=<%d> to_peer=<%d>",
 					pr.ps.getCell().ID,
-					err)
+					msg.From,
+					msg.To)
 			}
 		}
 	}
@@ -575,17 +580,17 @@ func (pr *PeerReplicate) sendRaftMsg(msg raftpb.Message) error {
 	sendMsg.Message = msg
 	err := pr.store.trans.send(sendMsg.ToPeer.StoreID, &sendMsg)
 	if err != nil {
-		log.Warnf("raftstore[cell-%d]: failed to send msg, from=<%d> to=<%d> errors:\n%+v",
-			pr.cellID,
-			sendMsg.FromPeer.ID,
-			sendMsg.ToPeer.ID,
-			err)
-
 		pr.rn.ReportUnreachable(sendMsg.ToPeer.ID)
 
 		if msg.Type == raftpb.MsgSnap {
 			pr.rn.ReportSnapshot(sendMsg.ToPeer.ID, raft.SnapshotFailure)
 		}
+
+		return err
+	}
+
+	if msg.Type == raftpb.MsgSnap {
+		pr.rn.ReportSnapshot(sendMsg.ToPeer.ID, raft.SnapshotFinish)
 	}
 
 	return nil

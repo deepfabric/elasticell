@@ -85,14 +85,25 @@ func newPeerStorage(store *Store, cell metapb.Cell) (*peerStorage, error) {
 	if err != nil {
 		return nil, err
 	}
+	log.Infof("raftstore[cell-%d]: init raft state, state=<%+v>",
+		cell.ID,
+		s.raftState)
+
 	err = s.initApplyState()
 	if err != nil {
 		return nil, err
 	}
+	log.Infof("raftstore[cell-%d]: init apply state, state=<%+v>",
+		cell.ID,
+		s.applyState)
+
 	err = s.initLastTerm()
 	if err != nil {
 		return nil, err
 	}
+	log.Infof("raftstore[cell-%d]: init last term, last term=<%d>",
+		cell.ID,
+		s.lastTerm)
 
 	s.lastReadyIndex = s.getAppliedIndex()
 	s.pendingReads = new(readIndexQueue)
@@ -133,19 +144,22 @@ func (ps *peerStorage) initApplyState() error {
 	}
 
 	if len(v) > 0 && len(ps.getCell().Peers) > 0 {
-		ps.applyState.AppliedIndex = raftInitLogIndex
-		ps.applyState.TruncatedState.Index = raftInitLogIndex
-		ps.applyState.TruncatedState.Term = raftInitLogTerm
+		s := &mraft.RaftApplyState{}
+		err = s.Unmarshal(v)
+		if err != nil {
+			return errors.Wrap(err, "")
+		}
+
+		ps.applyState = *s
 		return nil
 	}
 
-	s := &mraft.RaftApplyState{}
-	err = s.Unmarshal(v)
-	if err != nil {
-		return errors.Wrap(err, "")
+	if len(ps.getCell().Peers) > 0 {
+		ps.applyState.AppliedIndex = raftInitLogIndex
+		ps.applyState.TruncatedState.Index = raftInitLogIndex
+		ps.applyState.TruncatedState.Term = raftInitLogTerm
 	}
 
-	ps.applyState = *s
 	return nil
 }
 
@@ -306,7 +320,7 @@ func (ps *peerStorage) loadLogEntry(index uint64) (*raftpb.Entry, error) {
 			index,
 			err)
 		return nil, err
-	} else if v == nil {
+	} else if len(v) == 0 {
 		log.Errorf("raftstore[cell-%d]: entry not found, index=<%d>",
 			ps.getCell().ID,
 			index)
@@ -370,9 +384,10 @@ func (ps *peerStorage) loadApplyState() (*mraft.RaftApplyState, error) {
 func (ps *peerStorage) unmarshal(v []byte, expectIndex uint64) (*raftpb.Entry, error) {
 	e := &raftpb.Entry{}
 	if err := e.Unmarshal(v); err != nil {
-		log.Errorf("raftstore[cell-%d]: unmarshal entry failure, index=<%d> errors:\n %+v",
+		log.Errorf("raftstore[cell-%d]: unmarshal entry failure, index=<%d>, v=<%+v> errors:\n %+v",
 			ps.getCell().ID,
 			expectIndex,
+			v,
 			err)
 		return nil, err
 	}
@@ -493,7 +508,7 @@ func (ps *peerStorage) clearExtraData(newCell metapb.Cell) error {
 }
 
 func (ps *peerStorage) updatePeerState(cell metapb.Cell, state mraft.PeerState, wb storage.WriteBatch) error {
-	cellState := mraft.CellLocalState{}
+	cellState := &mraft.CellLocalState{}
 	cellState.State = state
 	cellState.Cell = cell
 

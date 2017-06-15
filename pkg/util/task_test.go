@@ -68,7 +68,7 @@ func TestTask(t *testing.T) {
 
 	result := false
 
-	err = runner.RunCancelableTask(func(c context.Context) {
+	_, err = runner.RunCancelableTask(func(c context.Context) {
 		select {
 		case <-c.Done():
 			result = true
@@ -122,5 +122,58 @@ func TestNamedTask(t *testing.T) {
 	<-complete
 	if cnt != 2 {
 		t.Errorf("run named job failed. expect=<%d>, actual=<%d>", 2, cnt)
+	}
+}
+
+func TestStopWithID(t *testing.T) {
+	runner := NewRunner()
+	c := make(chan struct{})
+	defer close(c)
+
+	result := false
+	start := make(chan struct{}, 1)
+	defer close(start)
+
+	id, err := runner.RunCancelableTask(func(c context.Context) {
+		select {
+		case <-c.Done():
+			result = true
+		case <-start:
+
+		}
+	})
+	if err != nil {
+		t.Error("run cancelable task failed, return a error", err)
+		return
+	}
+
+	err = runner.StopCancelableTask(id)
+	if err != nil {
+		t.Error("stop cancelable task failed, return a error", err)
+		return
+	}
+
+	for index := 0; index < 10; index++ {
+		runner.RunCancelableTask(func(c context.Context) {
+			select {
+			case <-c.Done():
+				result = true
+			case <-time.After(time.Hour):
+
+			}
+		})
+	}
+
+	defaultWaitStoppedTimeout = time.Second
+	err = runner.Stop()
+	if err != nil {
+		t.Error("stop runner failed, return a error", err)
+		return
+	}
+
+	start <- struct{}{}
+	if !result {
+		t.Error("cancelable task excuted after stop")
+		return
 	}
 }

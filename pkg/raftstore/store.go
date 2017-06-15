@@ -132,6 +132,10 @@ func (s *Store) init() {
 		localState := new(mraft.CellLocalState)
 		util.MustUnmarshal(localState, value)
 
+		for _, p := range localState.Cell.Peers {
+			s.peerCache.put(p.ID, *p)
+		}
+
 		if localState.State == mraft.Tombstone {
 			tomebstoneCount++
 			log.Infof("bootstrap: cell is tombstone in store, cellID=<%d>", cellID)
@@ -200,14 +204,26 @@ func (s *Store) cleanup() {
 
 // Start returns the error when start store
 func (s *Store) Start() {
+	log.Infof("bootstrap: begin to start store %d", s.id)
+
 	go s.startTransfer()
 	<-s.trans.server.Started()
+	log.Infof("bootstrap: transfer started")
 
 	s.startHandleNotifyMsg()
+	log.Infof("bootstrap: ready to handle notify msg")
+
 	s.startStoreHeartbeatTask()
+	log.Infof("bootstrap: ready to handle store heartbeat")
+
 	s.startCellHeartbeatTask()
+	log.Infof("bootstrap: ready to handle cell heartbeat")
+
 	s.startGCTask()
+	log.Infof("bootstrap: ready to handle gc task")
+
 	s.startCellSplitCheckTask()
+	log.Infof("bootstrap: ready to handle split check task")
 }
 
 func (s *Store) startTransfer() {
@@ -536,12 +552,12 @@ func (s *Store) handleStaleMsg(msg *mraft.RaftMessage, currEpoch metapb.CellEpoc
 
 	gc := new(mraft.RaftMessage)
 	gc.CellID = cellID
+	gc.ToPeer = fromPeer
 	gc.FromPeer = toPeer
-	gc.FromPeer = fromPeer
 	gc.CellEpoch = currEpoch
 	gc.IsTombstone = true
 
-	err := s.trans.send(toPeer.StoreID, gc)
+	err := s.trans.send(fromPeer.StoreID, gc)
 	if err != nil {
 		log.Errorf("raftstore[cell-%d]: raft msg is stale, send gc msg failed, msg=<%+v> current=<%+v> errors:\n %+v",
 			cellID,

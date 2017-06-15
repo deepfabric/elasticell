@@ -159,7 +159,7 @@ func (ps *peerStorage) doAppendEntries(ctx *tempRaftContext, entries []raftpb.En
 
 	for _, e := range entries {
 		d := util.MustMarshal(&e)
-		err := ps.store.getMetaEngine().Set(getRaftLogKey(ps.getCell().ID, e.Index), d)
+		err := ctx.wb.Set(getRaftLogKey(ps.getCell().ID, e.Index), d)
 		if err != nil {
 			log.Errorf("raftstore[cell-%d]: append entry failure, entry=<%s> errors:\n %+v",
 				ps.getCell().ID,
@@ -171,7 +171,7 @@ func (ps *peerStorage) doAppendEntries(ctx *tempRaftContext, entries []raftpb.En
 
 	// Delete any previously appended log entries which never committed.
 	for index := lastIndex + 1; index < prevLastIndex+1; index++ {
-		err := ps.store.getMetaEngine().Delete(getRaftLogKey(ps.getCell().ID, index))
+		err := ctx.wb.Delete(getRaftLogKey(ps.getCell().ID, index))
 		if err != nil {
 			log.Errorf("raftstore[cell-%d]: delete any previously appended log entries failure, index=<%d> errors:\n %+v",
 				ps.getCell().ID,
@@ -680,7 +680,7 @@ func (ps *peerStorage) Entries(low, high, maxSize uint64) ([]raftpb.Entry, error
 			return nil, errors.Wrap(err, "")
 		}
 
-		if nil == v {
+		if len(v) == 0 {
 			return nil, raft.ErrUnavailable
 		}
 
@@ -694,14 +694,17 @@ func (ps *peerStorage) Entries(low, high, maxSize uint64) ([]raftpb.Entry, error
 	}
 
 	endKey := getRaftLogKey(ps.getCell().ID, high)
-	err = ps.store.getMetaEngine().Scan(startKey, endKey, func(data, value []byte) (bool, error) {
-		e, err := ps.unmarshal(data, nextIndex)
-		if err != nil {
-			return false, err
+	err = ps.store.getMetaEngine().Scan(startKey, endKey, func(key, value []byte) (bool, error) {
+		e := &raftpb.Entry{}
+		util.MustUnmarshal(e, value)
+
+		// May meet gap or has been compacted.
+		if e.Index != nextIndex {
+			return false, nil
 		}
 
 		nextIndex++
-		totalSize += uint64(len(data))
+		totalSize += uint64(len(value))
 
 		exceededMaxSize = totalSize > maxSize
 		if !exceededMaxSize || len(ents) == 0 {

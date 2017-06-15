@@ -14,7 +14,8 @@
 package pdserver
 
 const (
-	storageRatioThreshold = 80
+	// TODO: for test, default is 80%
+	storageRatioThreshold = 99
 )
 
 // Filter is used for filter store
@@ -73,7 +74,7 @@ func newExcludedFilter(sources, targets map[uint64]struct{}) *excludedFilter {
 }
 
 func (f *stateFilter) filter(store *storeRuntimeInfo) bool {
-	return !store.isUp()
+	return !(store.isUp() && store.downTime() < f.cfg.Schedule.getMaxStoreDownTimeDuration())
 }
 
 func (f *stateFilter) FilterSource(store *storeRuntimeInfo) bool {

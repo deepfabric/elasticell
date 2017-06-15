@@ -61,12 +61,12 @@ func (s *Store) isMsgStale(msg *mraft.RaftMessage) (bool, error) {
 	//  unlike case e, 2 will be stale forever.
 	// TODO: for case f, if 2 is stale for a long time, 2 will communicate with pd and pd will
 	// tell 2 is stale, so 2 can remove itself.
-	peers := s.getPeerReplicate(cellID)
-	if nil != peers {
-		c := peers.getCell()
+	pr := s.getPeerReplicate(cellID)
+	if nil != pr {
+		c := pr.getCell()
 		epoch := c.Epoch
 		if isEpochStale(fromEpoch, epoch) &&
-			findPeer(&c, fromStoreID) != nil {
+			findPeer(&c, fromStoreID) == nil {
 			s.handleStaleMsg(msg, epoch, isVoteMsg)
 			return true, nil
 		}
@@ -96,7 +96,6 @@ func (s *Store) isMsgStale(msg *mraft.RaftMessage) (bool, error) {
 				cellEpoch.String(),
 				cellID,
 				msg.String())
-
 			notExist := findPeer(&localState.Cell, fromStoreID) == nil
 			s.handleStaleMsg(msg, cellEpoch, isVoteMsg && notExist)
 

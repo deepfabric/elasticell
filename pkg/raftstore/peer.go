@@ -57,6 +57,8 @@ type PeerReplicate struct {
 	sizeDiffHint    int64
 	raftLogSizeHint uint64
 	deleteKeysHint  uint64
+
+	cancelTaskIds []uint64
 }
 
 func createPeerReplicate(store *Store, cell *metapb.Cell) (*PeerReplicate, error) {
@@ -119,8 +121,11 @@ func newPeerReplicate(store *Store, cell *metapb.Cell, peerID uint64) (*PeerRepl
 	pr.peerHeartbeatsMap = newPeerHeartbeatsMap()
 	pr.proposals = newProposalQueue()
 
-	store.runner.RunCancelableTask(pr.readyToProcessPropose)
-	store.runner.RunCancelableTask(pr.readyToSendRaftMessage)
+	id, _ := store.runner.RunCancelableTask(pr.readyToProcessPropose)
+	pr.cancelTaskIds = append(pr.cancelTaskIds, id)
+
+	id, _ = store.runner.RunCancelableTask(pr.readyToSendRaftMessage)
+	pr.cancelTaskIds = append(pr.cancelTaskIds, id)
 
 	// If this region has only one peer and I am the one, campaign directly.
 	if len(cell.Peers) == 1 && cell.Peers[0].StoreID == store.id {
@@ -133,7 +138,8 @@ func newPeerReplicate(store *Store, cell *metapb.Cell, peerID uint64) (*PeerRepl
 			pr.cellID)
 	}
 
-	store.runner.RunCancelableTask(pr.readyToServeRaft)
+	id, _ = store.runner.RunCancelableTask(pr.readyToServeRaft)
+	pr.cancelTaskIds = append(pr.cancelTaskIds, id)
 	return pr, nil
 }
 
@@ -283,6 +289,10 @@ func (pr *PeerReplicate) destroy() error {
 				err)
 			return err
 		}
+	}
+
+	for _, id := range pr.cancelTaskIds {
+		pr.store.runner.StopCancelableTask(id)
 	}
 
 	log.Infof("raftstore-destroy[cell-%d]: destroy self complete.",

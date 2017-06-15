@@ -31,8 +31,9 @@ type Unmarshal interface {
 func MustUnmarshal(target Unmarshal, data []byte) {
 	err := target.Unmarshal(data)
 	if err != nil {
-		log.Fatalf("unmarshal failed, data=<%v> errors:\n %+v",
+		log.Fatalf("unmarshal failed, data=<%v>, target=<%+v> errors:\n %+v",
 			data,
+			target,
 			err)
 	}
 }

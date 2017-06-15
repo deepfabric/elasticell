@@ -184,6 +184,7 @@ func (t *transport) send(storeID uint64, msg *mraft.RaftMessage) error {
 
 	err = conn.Write(msg)
 	if err != nil {
+		conn.Close()
 		return errors.Wrapf(err, "write")
 	}
 
