@@ -117,7 +117,7 @@ func newTestConfig(name, addrClient, addrPeer, addrRPC, initCluster string) *Cfg
 	cfg.Schedule.MaxReplicas = 3
 	cfg.Schedule.LocationLabels = []string{"zone", "rack"}
 	cfg.Schedule.MaxSnapshotCount = 3
-	cfg.Schedule.MaxStoreDownTimeMs = 3600000
+	cfg.Schedule.MaxStoreDownTimeMs = 1000
 	cfg.Schedule.LeaderScheduleLimit = 16
 	cfg.Schedule.CellScheduleLimit = 12
 	cfg.Schedule.ReplicaScheduleLimit = 16

@@ -33,7 +33,7 @@ import (
 )
 
 var (
-	storeBasePort    = 20000
+	storeBasePort    = 50000
 	storeAddrPattern = "127.0.0.1:%d"
 )
 
@@ -141,7 +141,7 @@ func (s *baseSuite) startFirstRaftGroup(c *C, num int) []*Store {
 }
 
 func (s *baseSuite) checkPeers(c *C, num int, stores []*Store) *Store {
-	time.Sleep(stores[0].cfg.getCellHeartbeatDuration() * 10)
+	time.Sleep(stores[0].cfg.getCellHeartbeatDuration() * 30)
 	var leader *Store
 	leaderCnt := 0
 
@@ -155,6 +155,7 @@ func (s *baseSuite) checkPeers(c *C, num int, stores []*Store) *Store {
 			}
 			return false, nil
 		})
+		c.Assert(len(store.peerCache.m), Equals, num)
 	}
 
 	c.Assert(leader, NotNil)
@@ -238,9 +239,10 @@ func newTestStoreCfg(id uint64) *Cfg {
 
 	storeBasePort++
 
-	c.StoreHeartbeatIntervalMs = 200
-	c.CellHeartbeatIntervalMs = 200
-	c.Raft.BaseTick = 100
+	c.MaxPeerDownSec = 1
+	c.StoreHeartbeatIntervalMs = 50
+	c.CellHeartbeatIntervalMs = 50
+	c.Raft.BaseTick = 20
 	c.CellSplitSize = 1024
 	c.CellMaxSize = 1024
 	c.CellCheckSizeDiff = 1024

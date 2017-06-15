@@ -661,6 +661,8 @@ func (s *Store) tryToCreatePeerReplicate(cellID uint64, msg *mraft.RaftMessage) 
 	// following snapshot may overlap, should insert into keyRanges after
 	// snapshot is applied.
 	s.replicatesMap.put(cellID, peerReplicate)
+	s.addPeerToCache(msg.FromPeer)
+	s.addPeerToCache(msg.ToPeer)
 	return true
 }
 

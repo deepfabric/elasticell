@@ -255,8 +255,8 @@ func (t *transport) getConnectionCfg(addr string) *goetty.Conf {
 		TimeoutWrite:           defaultWriteIdle,
 		WriteTimeoutFn:         t.onTimeIdle,
 	}
-}
 
+}
 func (t *transport) onTimeIdle(addr string, conn *goetty.Connector) {
 
 }

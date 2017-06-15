@@ -21,11 +21,13 @@ import (
 
 var _ = Suite(&testUtilSuite{})
 var _ = Suite(&testStoreSuite{})
-var _ = Suite(&testTransportSuite{})
 var _ = Suite(&testSplitSuite{})
+var _ = Suite(&testRemoveSuite{})
 var _ = Suite(&testRedisKVSuite{})
+var _ = Suite(&testTransportSuite{})
 
 func TestRaftStore(t *testing.T) {
+	t.Parallel()
 	TestingT(t)
 }
 

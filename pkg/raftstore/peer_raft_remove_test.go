@@ -16,17 +16,16 @@ package raftstore
 import (
 	"time"
 
-	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
-	"github.com/deepfabric/elasticell/pkg/redis"
 	. "github.com/pingcap/check"
 )
 
-type testRedisKVSuite struct {
+type testRemoveSuite struct {
 	baseSuite
 }
 
-func (s *testRedisKVSuite) TestKVSet(c *C) {
+func (s *testRemoveSuite) TestRemove(c *C) {
 	stores := s.startFirstRaftGroup(c, 3)
+
 	defer func() {
 		for _, store := range stores {
 			store.Stop()
@@ -34,19 +33,10 @@ func (s *testRedisKVSuite) TestKVSet(c *C) {
 		s.stopMultiPDServers(c)
 	}()
 
-	leader := s.checkPeers(c, 3, stores)
+	s.checkPeers(c, 3, stores)
+	stores[0].Stop()
 
-	complete := make(chan struct{}, 1)
-	cmd := [][]byte{[]byte("set"), []byte("key1"), []byte("value1")}
-	leader.OnRedisCommand(raftcmdpb.Set, redis.Command(cmd), func(resp *raftcmdpb.RaftCMDResponse) {
-		c.Assert(len(resp.Responses), Equals, 1)
-		c.Assert(resp.Responses[0].StatusResult, NotNil)
-		complete <- struct{}{}
-	})
-
-	select {
-	case <-complete:
-	case <-time.After(time.Second):
-		c.Fatal("set command timeout")
-	}
+	time.Sleep(stores[0].cfg.getMaxPeerDownSecDuration() * 10)
+	c.Assert(len(stores[1].peerCache.m), Equals, 2)
+	c.Assert(len(stores[2].peerCache.m), Equals, 2)
 }
