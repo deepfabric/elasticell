@@ -319,10 +319,6 @@
 			"Rev": "1c941d73110817a80b9fa6e14d5d2b00d977ce2a"
 		},
 		{
-			"ImportPath": "github.com/fagongzi/goetty",
-			"Rev": "905b7ab7ce6f1fea0505fde704d105fb7b1b7d80"
-		},
-		{
 			"ImportPath": "github.com/garyburd/redigo/internal",
 			"Comment": "v1.1.0-3-g95d11db",
 			"Rev": "95d11dba2d44531bdb8022752b98912baafae03a"
