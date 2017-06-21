@@ -18,132 +18,132 @@ import (
 	"github.com/deepfabric/elasticell/pkg/redis"
 )
 
-func (s *RedisServer) onLIndex(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) error {
+func (s *RedisServer) onLIndex(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
 	args := cmd.Args()
 	if len(args) != 2 {
-		session.onResp(redis.ErrInvalidCommandResp)
-		return nil
+		session.onResp(nil, redis.ErrInvalidCommandResp)
+		return nil, nil
 	}
 
-	return s.store.OnRedisCommand(cmdType, cmd, session.respCB)
+	return s.store.OnRedisCommand(cmdType, cmd, s.onResp)
 }
 
-func (s *RedisServer) onLInsert(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) error {
+func (s *RedisServer) onLInsert(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
 	args := cmd.Args()
 	if len(args) != 4 {
-		session.onResp(redis.ErrInvalidCommandResp)
-		return nil
+		session.onResp(nil, redis.ErrInvalidCommandResp)
+		return nil, nil
 	}
 
-	return s.store.OnRedisCommand(cmdType, cmd, session.respCB)
+	return s.store.OnRedisCommand(cmdType, cmd, s.onResp)
 }
 
-func (s *RedisServer) onLLen(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) error {
+func (s *RedisServer) onLLen(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
 	args := cmd.Args()
 	if len(args) != 1 {
-		session.onResp(redis.ErrInvalidCommandResp)
-		return nil
+		session.onResp(nil, redis.ErrInvalidCommandResp)
+		return nil, nil
 	}
 
-	return s.store.OnRedisCommand(cmdType, cmd, session.respCB)
+	return s.store.OnRedisCommand(cmdType, cmd, s.onResp)
 }
 
-func (s *RedisServer) onLPop(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) error {
+func (s *RedisServer) onLPop(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
 	args := cmd.Args()
 	if len(args) != 1 {
-		session.onResp(redis.ErrInvalidCommandResp)
-		return nil
+		session.onResp(nil, redis.ErrInvalidCommandResp)
+		return nil, nil
 	}
 
-	return s.store.OnRedisCommand(cmdType, cmd, session.respCB)
+	return s.store.OnRedisCommand(cmdType, cmd, s.onResp)
 }
 
-func (s *RedisServer) onLPush(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) error {
+func (s *RedisServer) onLPush(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
 	args := cmd.Args()
 	if len(args) < 2 {
-		session.onResp(redis.ErrInvalidCommandResp)
-		return nil
+		session.onResp(nil, redis.ErrInvalidCommandResp)
+		return nil, nil
 	}
 
-	return s.store.OnRedisCommand(cmdType, cmd, session.respCB)
+	return s.store.OnRedisCommand(cmdType, cmd, s.onResp)
 }
 
-func (s *RedisServer) onLPushX(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) error {
+func (s *RedisServer) onLPushX(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
 	args := cmd.Args()
 	if len(args) != 2 {
-		session.onResp(redis.ErrInvalidCommandResp)
-		return nil
+		session.onResp(nil, redis.ErrInvalidCommandResp)
+		return nil, nil
 	}
 
-	return s.store.OnRedisCommand(cmdType, cmd, session.respCB)
+	return s.store.OnRedisCommand(cmdType, cmd, s.onResp)
 }
 
-func (s *RedisServer) onLRange(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) error {
+func (s *RedisServer) onLRange(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
 	args := cmd.Args()
 	if len(args) != 3 {
-		session.onResp(redis.ErrInvalidCommandResp)
-		return nil
+		session.onResp(nil, redis.ErrInvalidCommandResp)
+		return nil, nil
 	}
 
-	return s.store.OnRedisCommand(cmdType, cmd, session.respCB)
+	return s.store.OnRedisCommand(cmdType, cmd, s.onResp)
 }
 
-func (s *RedisServer) onLRem(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) error {
+func (s *RedisServer) onLRem(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
 	args := cmd.Args()
 	if len(args) != 3 {
-		session.onResp(redis.ErrInvalidCommandResp)
-		return nil
+		session.onResp(nil, redis.ErrInvalidCommandResp)
+		return nil, nil
 	}
 
-	return s.store.OnRedisCommand(cmdType, cmd, session.respCB)
+	return s.store.OnRedisCommand(cmdType, cmd, s.onResp)
 }
 
-func (s *RedisServer) onLSet(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) error {
+func (s *RedisServer) onLSet(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
 	args := cmd.Args()
 	if len(args) != 3 {
-		session.onResp(redis.ErrInvalidCommandResp)
-		return nil
+		session.onResp(nil, redis.ErrInvalidCommandResp)
+		return nil, nil
 	}
 
-	return s.store.OnRedisCommand(cmdType, cmd, session.respCB)
+	return s.store.OnRedisCommand(cmdType, cmd, s.onResp)
 }
 
-func (s *RedisServer) onLTrim(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) error {
+func (s *RedisServer) onLTrim(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
 	args := cmd.Args()
 	if len(args) != 3 {
-		session.onResp(redis.ErrInvalidCommandResp)
-		return nil
+		session.onResp(nil, redis.ErrInvalidCommandResp)
+		return nil, nil
 	}
 
-	return s.store.OnRedisCommand(cmdType, cmd, session.respCB)
+	return s.store.OnRedisCommand(cmdType, cmd, s.onResp)
 }
 
-func (s *RedisServer) onRPop(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) error {
+func (s *RedisServer) onRPop(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
 	args := cmd.Args()
 	if len(args) != 1 {
-		session.onResp(redis.ErrInvalidCommandResp)
-		return nil
+		session.onResp(nil, redis.ErrInvalidCommandResp)
+		return nil, nil
 	}
 
-	return s.store.OnRedisCommand(cmdType, cmd, session.respCB)
+	return s.store.OnRedisCommand(cmdType, cmd, s.onResp)
 }
 
-func (s *RedisServer) onRPush(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) error {
+func (s *RedisServer) onRPush(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
 	args := cmd.Args()
 	if len(args) < 2 {
-		session.onResp(redis.ErrInvalidCommandResp)
-		return nil
+		session.onResp(nil, redis.ErrInvalidCommandResp)
+		return nil, nil
 	}
 
-	return s.store.OnRedisCommand(cmdType, cmd, session.respCB)
+	return s.store.OnRedisCommand(cmdType, cmd, s.onResp)
 }
 
-func (s *RedisServer) onRPushX(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) error {
+func (s *RedisServer) onRPushX(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
 	args := cmd.Args()
 	if len(args) != 2 {
-		session.onResp(redis.ErrInvalidCommandResp)
-		return nil
+		session.onResp(nil, redis.ErrInvalidCommandResp)
+		return nil, nil
 	}
 
-	return s.store.OnRedisCommand(cmdType, cmd, session.respCB)
+	return s.store.OnRedisCommand(cmdType, cmd, s.onResp)
 }

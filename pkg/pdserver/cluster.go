@@ -146,6 +146,15 @@ func (s *Server) reportSplit(req *pdpb.ReportSplitReq) (*pdpb.ReportSplitRsp, er
 	return c.doReportSplit(req)
 }
 
+func (s *Server) getLastRanges(req *pdpb.GetLastRangesReq) (*pdpb.GetLastRangesRsp, error) {
+	c := s.GetCellCluster()
+	if c == nil {
+		return nil, errNotBootstrapped
+	}
+
+	return c.doGetLastRanges(req)
+}
+
 // GetClusterID returns cluster id
 func (s *Server) GetClusterID() uint64 {
 	return s.clusterID
@@ -364,6 +373,25 @@ func (c *CellCluster) doReportSplit(req *pdpb.ReportSplitReq) (*pdpb.ReportSplit
 	return &pdpb.ReportSplitRsp{}, nil
 }
 
+func (c *CellCluster) doGetLastRanges(req *pdpb.GetLastRangesReq) (*pdpb.GetLastRangesRsp, error) {
+	c.mux.RLock()
+	defer c.mux.RUnlock()
+
+	var ranges []*pdpb.Range
+	for _, cr := range c.cache.cc.cells {
+		if cr.leader != nil {
+			ranges = append(ranges, &pdpb.Range{
+				Cell:        cr.cell,
+				LeaderStore: c.cache.getStore(cr.leader.StoreID).store,
+			})
+		}
+	}
+
+	return &pdpb.GetLastRangesRsp{
+		Ranges: ranges,
+	}, nil
+}
+
 func (c *CellCluster) checkSplitRegion(left *metapb.Cell, right *metapb.Cell) error {
 	if !bytes.Equal(left.End, right.Start) {
 		return errors.New("invalid split cell")
@@ -417,7 +445,7 @@ func (c *CellCluster) start() error {
 		return err
 	}
 
-	log.Debugf("cell-cluster: load cluster meta succ, cache=<%v>", *c.cache)
+	log.Debugf("cell-cluster: load cluster meta succ, cache=<%v>", c.cache)
 
 	c.running = true
 	log.Info("cell-cluster: cell cluster started.")

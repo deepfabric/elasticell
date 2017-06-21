@@ -15,10 +15,13 @@ package redis
 
 import (
 	"errors"
+	"fmt"
 	"strconv"
 
+	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
 	"github.com/deepfabric/elasticell/pkg/util"
 	"github.com/fagongzi/goetty"
+	gredis "github.com/fagongzi/goetty/protocol/redis"
 	pe "github.com/pkg/errors"
 )
 
@@ -28,43 +31,110 @@ var (
 )
 
 const (
-	// CR \r
-	CR = '\r'
-	// LF \n
-	LF = '\n'
-	// ARGBegin '$'
-	ARGBegin = '$'
-	// CMDBegin '*'
+	// CMDBegin prefix of redis command
 	CMDBegin = '*'
+	// ProxyBegin 0x01
+	ProxyBegin = 0x01
 
 	defaultBufferSize = 64
 )
 
-var (
-	delims    = []byte("\r\n")
-	nullBulk  = []byte("-1")
-	nullArray = []byte("-1")
-)
-
-func readCommand(in *goetty.ByteBuf) (bool, Command, error) {
+func readCommand(in *goetty.ByteBuf) (bool, interface{}, error) {
 	for {
-		// remember the begin read index,
-		// if we found has no enough data, we will resume this read index,
-		// and waiting for next.
-		backupReaderIndex := in.GetReaderIndex()
-
-		c, err := in.ReadByte()
+		c, err := in.PeekByte(0)
 		if err != nil {
 			return false, nil, err
 		}
 
 		// 1. Read ( *<number of arguments> CR LF )
-		if c != CMDBegin {
+		if c != CMDBegin && c != ProxyBegin {
 			return false, nil, pe.Wrap(ErrIllegalPacket, "")
 		}
 
-		// 2. Read number of arguments
-		count, argsCount, err := readStringInt(in)
+		switch c {
+		case CMDBegin:
+			return readCommandByRedisProtocol(in)
+		case ProxyBegin:
+			return readCommandByProxyProtocol(in)
+		}
+	}
+}
+
+func readCommandByProxyProtocol(in *goetty.ByteBuf) (bool, interface{}, error) {
+	// remember the begin read index,
+	// if we found has no enough data, we will resume this read index,
+	// and waiting for next.
+	backupReaderIndex := in.GetReaderIndex()
+
+	if in.Readable() < 4 {
+		in.SetReaderIndex(backupReaderIndex)
+		return false, nil, nil
+	}
+
+	size, _ := in.PeekInt(0)
+	if in.Readable() < 4+size {
+		in.SetReaderIndex(backupReaderIndex)
+		return false, nil, nil
+	}
+
+	in.Skip(4)
+	n, data, err := in.ReadBytes(size)
+	if err != nil {
+		return false, nil, err
+	}
+
+	if n != size {
+		return false, nil, fmt.Errorf("read bytes not match length field, expect=<%d>, read=<%d>", size, n)
+	}
+
+	req := new(raftcmdpb.Request)
+	util.MustUnmarshal(req, data)
+	return true, req, nil
+}
+
+func readCommandByRedisProtocol(in *goetty.ByteBuf) (bool, interface{}, error) {
+	// remember the begin read index,
+	// if we found has no enough data, we will resume this read index,
+	// and waiting for next.
+	backupReaderIndex := in.GetReaderIndex()
+
+	// 2. Read number of arguments
+	count, argsCount, err := readStringInt(in)
+	if count == 0 && err == nil {
+		in.SetReaderIndex(backupReaderIndex)
+		return false, nil, nil
+	} else if err != nil {
+		return false, nil, err
+	}
+
+	data := make([][]byte, argsCount)
+
+	// 3. Read args
+	for i := 0; i < argsCount; i++ {
+		// 3.1 Read ( $<number of bytes of argument 1> CR LF )
+		c, err := in.ReadByte()
+		if err != nil {
+			return false, nil, err
+		}
+
+		// 3.2 Read ( *<number of arguments> CR LF )
+
+		if c != gredis.ARGBegin {
+			return false, nil, pe.Wrapf(ErrIllegalPacket, "")
+		}
+
+		count, argBytesCount, err := readStringInt(in)
+		if count == 0 && err == nil {
+			in.SetReaderIndex(backupReaderIndex)
+			return false, nil, nil
+		} else if err != nil {
+			return false, nil, err
+		} else if count < 2 {
+			return false, nil, pe.Wrap(ErrIllegalPacket, "")
+		}
+
+		// 3.3  Read ( <argument data> CR LF )
+		count, value, err := in.ReadBytes(argBytesCount + 2)
 		if count == 0 && err == nil {
 			in.SetReaderIndex(backupReaderIndex)
 			return false, nil, nil
@@ -72,46 +142,10 @@ func readCommand(in *goetty.ByteBuf) (bool, Command, error) {
 			return false, nil, err
 		}
 
-		data := make([][]byte, argsCount)
-
-		// 3. Read args
-		for i := 0; i < argsCount; i++ {
-			// 3.1 Read ( $<number of bytes of argument 1> CR LF )
-			c, err := in.ReadByte()
-			if err != nil {
-				return false, nil, err
-			}
-
-			// 3.2 Read ( *<number of arguments> CR LF )
-
-			if c != ARGBegin {
-				return false, nil, pe.Wrapf(ErrIllegalPacket, "")
-			}
-
-			count, argBytesCount, err := readStringInt(in)
-			if count == 0 && err == nil {
-				in.SetReaderIndex(backupReaderIndex)
-				return false, nil, nil
-			} else if err != nil {
-				return false, nil, err
-			} else if count < 2 {
-				return false, nil, pe.Wrap(ErrIllegalPacket, "")
-			}
-
-			// 3.3  Read ( <argument data> CR LF )
-			count, value, err := in.ReadBytes(argBytesCount + 2)
-			if count == 0 && err == nil {
-				in.SetReaderIndex(backupReaderIndex)
-				return false, nil, nil
-			} else if err != nil {
-				return false, nil, err
-			}
-
-			data[i] = value[:count-2]
-		}
-
-		return true, Command(data), nil
+		data[i] = value[:count-2]
 	}
+
+	return true, Command(data), nil
 }
 
 func readStringInt(in *goetty.ByteBuf) (int, int, error) {
@@ -137,9 +171,9 @@ func readLine(in *goetty.ByteBuf) (int, []byte, error) {
 
 	for offset < size {
 		ch, _ := in.PeekByte(offset)
-		if ch == LF {
+		if ch == gredis.LF {
 			ch, _ := in.PeekByte(offset - 1)
-			if ch == CR {
+			if ch == gredis.CR {
 				return in.ReadBytes(offset + 1)
 			}
 

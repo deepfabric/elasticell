@@ -12,8 +12,9 @@ option (gogoproto.unmarshaler_all) = true;
 option (gogoproto.goproto_enum_prefix_all) = false;
 
 enum CMDType {
-    Invalid  = 0;
-    Snap     = 1;
+    Invalid   = 0;
+    RaftError = 1;
+    Snap      = 2;
 
     // common
     Keys     = 100;
@@ -201,16 +202,19 @@ message ScorePair {
 }
 
 message Request {
-    optional CMDType type = 1 [(gogoproto.nullable) = false];
-    repeated bytes   cmd  = 2;
+    optional bytes   uuid  = 1 [(gogoproto.customname) = "UUID"];
+    optional CMDType type  = 2 [(gogoproto.nullable) = false];
+    repeated bytes   cmd   = 3;
+    optional uint64  epoch = 4 [(gogoproto.nullable) = false];
 }
 
 message Response {
-    optional CMDType   type                         = 1 [(gogoproto.nullable) = false];
-    optional bytes     errorResult                  = 2;
-    repeated bytes     errorResults                 = 3;
-    optional bytes     statusResult                 = 4;
-    optional int64     integerResult                = 5;
+    optional bytes     uuid                         = 1 [(gogoproto.customname) = "UUID"];
+    optional CMDType   type                         = 2 [(gogoproto.nullable) = false];
+    optional bytes     errorResult                  = 3;
+    repeated bytes     errorResults                 = 4;
+    optional bytes     statusResult                 = 5;
+    optional int64     integerResult                = 6;
     optional bytes     bulkResult                   = 7;
     optional bool      hasEmptyBulkResult           = 8;
     repeated bytes     sliceArrayResult             = 9;
@@ -220,4 +224,5 @@ message Response {
     repeated ScorePair scorePairArrayResult         = 13;
     optional bool      hasEmptyScorePairArrayResult = 14;
     optional bool      withscores                   = 15;
+    optional Request   originRequest                = 16 [(gogoproto.nullable) = true];
 }

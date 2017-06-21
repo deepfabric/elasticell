@@ -16,6 +16,7 @@ package raftstore
 import (
 	"errors"
 
+	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/errorpb"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
@@ -74,7 +75,6 @@ func errorPbResp(err *errorpb.Error, uuid []byte, currentTerm uint64) *raftcmdpb
 
 func errorStaleCMDResp(uuid []byte, currentTerm uint64) *raftcmdpb.RaftCMDResponse {
 	resp := errorBaseResp(uuid, currentTerm)
-
 	resp.Header.Error.Message = errStaleCMD.Error()
 	resp.Header.Error.StaleCommand = infoStaleCMD
 
@@ -115,6 +115,32 @@ func newCMD(req *raftcmdpb.RaftCMDRequest, cb func(*raftcmdpb.RaftCMDResponse)) 
 
 func (c *cmd) resp(resp *raftcmdpb.RaftCMDResponse) {
 	if c.cb != nil {
+		if len(c.req.Requests) > 0 {
+			if len(c.req.Requests) != len(resp.Responses) {
+				if resp.Header == nil {
+					log.Fatalf("bug: requests and response count not match.")
+				} else if len(resp.Responses) != 0 {
+					log.Fatalf("bug: responses len must be 0.")
+				}
+
+				for _, req := range c.req.Requests {
+					resp.Responses = append(resp.Responses, &raftcmdpb.Response{
+						UUID: req.UUID,
+					})
+				}
+			} else {
+				for idx, req := range c.req.Requests {
+					resp.Responses[idx].UUID = req.UUID
+				}
+			}
+		}
+
+		if resp.Header != nil {
+			for idx, req := range c.req.Requests {
+				resp.Responses[idx].OriginRequest = req
+			}
+		}
+
 		c.cb(resp)
 	}
 }

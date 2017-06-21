@@ -339,6 +339,24 @@ func (c *Client) ReportSplit(ctx context.Context, req *pdpb.ReportSplitReq) (*pd
 	return rsp.(*pdpb.ReportSplitRsp), nil
 }
 
+// GetLastRanges returns lastest key ranges
+func (c *Client) GetLastRanges(ctx context.Context, req *pdpb.GetLastRangesReq) (*pdpb.GetLastRangesRsp, error) {
+	rsp, err := c.proxyRPC(ctx,
+		req,
+		func() {
+			req.From = c.name
+			req.ID = c.seq
+		},
+		func() (interface{}, error) {
+			return c.pd.GetLastRanges(ctx, req, grpc.FailFast(true))
+		})
+	if err != nil {
+		return nil, err
+	}
+
+	return rsp.(*pdpb.GetLastRangesRsp), nil
+}
+
 func (c *Client) proxyRPC(ctx context.Context, req pb.BaseReq, setFromFun func(), doRPC func() (interface{}, error)) (interface{}, error) {
 	c.mut.RLock()
 

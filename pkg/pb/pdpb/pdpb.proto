@@ -21,6 +21,7 @@ service PDService {
     rpc StoreHeartbeat (StoreHeartbeatReq) returns (StoreHeartbeatRsp) {}
     rpc AskSplit (AskSplitReq) returns (AskSplitRsp) {}
     rpc ReportSplit(ReportSplitReq) returns (ReportSplitRsp) {}
+    rpc GetLastRanges(GetLastRangesReq) returns (GetLastRangesRsp) {}
 }
 
 enum ConfChangeType {
@@ -40,6 +41,11 @@ message TransferLeader {
 message PeerStats {
     optional metapb.Peer peer        = 1 [(gogoproto.nullable) = false];
     optional uint64      downSeconds = 2 [(gogoproto.nullable) = false];
+}
+
+message Range {
+    optional metapb.Cell  cell         = 1 [(gogoproto.nullable) = false];
+    optional metapb.Store leaderStore  = 2 [(gogoproto.nullable) = false];
 }
 
 message StoreStats {
@@ -208,4 +214,13 @@ message ReportSplitReq {
 
 message ReportSplitRsp {
     optional ResponseHeader header = 1 [(gogoproto.nullable) = false];
+}
+
+message GetLastRangesReq {
+    optional string from = 1 [(gogoproto.nullable) = false];
+    optional uint64 id   = 2 [(gogoproto.nullable) = false, (gogoproto.customname) = "ID"];
+}
+
+message GetLastRangesRsp {
+    repeated Range ranges = 1;
 }

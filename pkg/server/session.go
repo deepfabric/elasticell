@@ -14,19 +14,25 @@
 package server
 
 import (
+	"sync/atomic"
+
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
 	"github.com/deepfabric/elasticell/pkg/redis"
 	"github.com/deepfabric/elasticell/pkg/util"
 	"github.com/fagongzi/goetty"
+	gedis "github.com/fagongzi/goetty/protocol/redis"
 	"golang.org/x/net/context"
 )
 
 type session struct {
-	ctx    context.Context
-	cancel context.CancelFunc
-	resps  chan *raftcmdpb.Response
-	conn   goetty.IOSession
+	ctx       context.Context
+	cancel    context.CancelFunc
+	resps     chan *raftcmdpb.Response
+	conn      goetty.IOSession
+	fromProxy bool
+
+	closed int32
 }
 
 func newSession(conn goetty.IOSession) *session {
@@ -40,27 +46,33 @@ func newSession(conn goetty.IOSession) *session {
 	}
 }
 
+func (s *session) isClosed() bool {
+	return atomic.LoadInt32(&s.closed) == 1
+}
+
 func (s *session) close() {
+	atomic.StoreInt32(&s.closed, 1)
 	s.cancel()
 	close(s.resps)
 
 	log.Debugf("redis-[%s]: closed", s.conn.RemoteAddr())
 }
 
-func (s *session) respCB(resp *raftcmdpb.RaftCMDResponse) {
-	if resp.Header != nil {
-		s.doResp(&raftcmdpb.Response{
-			Type:        raftcmdpb.Invalid,
-			ErrorResult: util.MustMarshal(resp.Header),
-		})
-	} else {
-		for _, rsp := range resp.Responses {
-			s.doResp(rsp)
-		}
-	}
+func (s *session) setFromProxy() {
+	s.fromProxy = true
 }
 
-func (s *session) onResp(resp *raftcmdpb.Response) {
+func (s *session) onResp(header *raftcmdpb.RaftResponseHeader, resp *raftcmdpb.Response) {
+	if header != nil {
+		if header.Error.RaftEntryTooLarge == nil {
+			resp.Type = raftcmdpb.RaftError
+		} else {
+			resp.Type = raftcmdpb.Invalid
+		}
+
+		resp.ErrorResult = util.MustMarshal(header)
+	}
+
 	s.resps <- resp
 }
 
@@ -80,18 +92,27 @@ func (s *session) writeLoop() {
 func (s *session) doResp(resp *raftcmdpb.Response) {
 	buf := s.conn.OutBuf()
 
+	if s.fromProxy {
+		data := util.MustMarshal(resp)
+		buf.WriteByte(redis.ProxyBegin)
+		buf.WriteInt(len(data))
+		buf.Write(data)
+		s.conn.WriteOutBuf()
+		return
+	}
+
 	if resp.ErrorResult != nil {
-		redis.WriteError(resp.ErrorResult, buf)
+		gedis.WriteError(resp.ErrorResult, buf)
 	}
 
 	if resp.ErrorResults != nil {
 		for _, err := range resp.ErrorResults {
-			redis.WriteError(err, buf)
+			gedis.WriteError(err, buf)
 		}
 	}
 
 	if resp.BulkResult != nil || resp.HasEmptyBulkResult != nil {
-		redis.WriteBulk(resp.BulkResult, buf)
+		gedis.WriteBulk(resp.BulkResult, buf)
 	}
 
 	if resp.FvPairArrayResult != nil || resp.HasEmptyFVPairArrayResult != nil {
@@ -99,7 +120,7 @@ func (s *session) doResp(resp *raftcmdpb.Response) {
 	}
 
 	if resp.IntegerResult != nil {
-		redis.WriteInteger(*resp.IntegerResult, buf)
+		gedis.WriteInteger(*resp.IntegerResult, buf)
 	}
 
 	if resp.ScorePairArrayResult != nil || resp.HasEmptyScorePairArrayResult != nil {
@@ -107,11 +128,11 @@ func (s *session) doResp(resp *raftcmdpb.Response) {
 	}
 
 	if resp.SliceArrayResult != nil || resp.HasEmptySliceArrayResult != nil {
-		redis.WriteSliceArray(resp.SliceArrayResult, buf)
+		gedis.WriteSliceArray(resp.SliceArrayResult, buf)
 	}
 
 	if resp.StatusResult != nil {
-		redis.WriteStatus(resp.StatusResult, buf)
+		gedis.WriteStatus(resp.StatusResult, buf)
 	}
 
 	s.conn.WriteOutBuf()

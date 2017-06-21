@@ -14,9 +14,9 @@
 package server
 
 import (
-	"strings"
-
 	"io"
+	"strings"
+	"sync"
 
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
@@ -28,10 +28,13 @@ import (
 
 // RedisServer is provide a redis like server
 type RedisServer struct {
+	sync.RWMutex
+
 	store       *raftstore.Store
 	s           *goetty.Server
 	typeMapping map[string]raftcmdpb.CMDType
-	handlers    map[raftcmdpb.CMDType]func(raftcmdpb.CMDType, redis.Command, *session) error
+	handlers    map[raftcmdpb.CMDType]func(raftcmdpb.CMDType, redis.Command, *session) ([]byte, error)
+	routing     *routing
 }
 
 // Start used for start the redis server
@@ -46,7 +49,8 @@ func (s *RedisServer) Stop() error {
 }
 
 func (s *RedisServer) init() {
-	s.handlers = make(map[raftcmdpb.CMDType]func(raftcmdpb.CMDType, redis.Command, *session) error)
+	s.routing = newRouting()
+	s.handlers = make(map[raftcmdpb.CMDType]func(raftcmdpb.CMDType, redis.Command, *session) ([]byte, error))
 	s.typeMapping = make(map[string]raftcmdpb.CMDType)
 
 	for k, v := range raftcmdpb.CMDType_value {
@@ -133,7 +137,7 @@ func (s *RedisServer) doConnection(session goetty.IOSession) error {
 	defer rs.close()
 
 	for {
-		req, err := session.Read()
+		value, err := session.Read()
 		if err != nil {
 			if err == io.EOF {
 				return nil
@@ -145,13 +149,46 @@ func (s *RedisServer) doConnection(session goetty.IOSession) error {
 			return err
 		}
 
-		err = s.onRedisCommand(req.(redis.Command), rs)
-		if err != nil {
-			rs.onResp(&raftcmdpb.Response{
-				ErrorResult: util.StringToSlice(err.Error()),
-			})
+		if req, ok := value.(redis.Command); ok {
+			err = s.onRedisCommand(req, rs)
+			if err != nil {
+				rs.onResp(nil, &raftcmdpb.Response{
+					ErrorResult: util.StringToSlice(err.Error()),
+				})
+			}
+		} else if req, ok := value.(*raftcmdpb.Request); ok {
+			rs.setFromProxy()
+			err = s.onProxyReq(req, rs)
+			if err != nil {
+				rs.onResp(nil, &raftcmdpb.Response{
+					UUID:        req.UUID,
+					ErrorResult: util.StringToSlice(err.Error()),
+				})
+			}
 		}
 	}
+}
+
+func (s *RedisServer) onResp(resp *raftcmdpb.RaftCMDResponse) {
+	for _, rsp := range resp.Responses {
+		rs := s.routing.delete(rsp.UUID)
+		if rs != nil {
+			if !rs.isClosed() {
+				rs.onResp(resp.Header, rsp)
+			}
+		}
+	}
+}
+
+func (s *RedisServer) onProxyReq(req *raftcmdpb.Request, session *session) error {
+	req.Type = s.typeMapping[strings.ToLower(util.SliceToString(req.Cmd[0]))]
+	err := s.store.OnProxyReq(req, s.onResp)
+	if err != nil {
+		return err
+	}
+
+	s.routing.put(req.UUID, session)
+	return nil
 }
 
 func (s *RedisServer) onRedisCommand(cmd redis.Command, session *session) error {
@@ -159,19 +196,25 @@ func (s *RedisServer) onRedisCommand(cmd redis.Command, session *session) error 
 
 	h, ok := s.handlers[t]
 	if !ok {
-		session.onResp(redis.ErrNotSupportCommand)
+		session.onResp(nil, redis.ErrNotSupportCommand)
 		return nil
 	}
 
-	return h(t, cmd, session)
+	uuid, err := h(t, cmd, session)
+	if err != nil {
+		return err
+	}
+
+	s.routing.put(uuid, session)
+	return nil
 }
 
-func (s *RedisServer) onDel(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) error {
+func (s *RedisServer) onDel(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
 	args := cmd.Args()
 	if len(args) != 1 {
-		session.onResp(redis.ErrInvalidCommandResp)
-		return nil
+		session.onResp(nil, redis.ErrInvalidCommandResp)
+		return nil, nil
 	}
 
-	return s.store.OnRedisCommand(cmdType, cmd, session.respCB)
+	return s.store.OnRedisCommand(cmdType, cmd, s.onResp)
 }

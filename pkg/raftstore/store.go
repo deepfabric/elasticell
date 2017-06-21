@@ -367,12 +367,39 @@ func (s *Store) getTargetCell(key []byte) (*PeerReplicate, error) {
 	return pr, nil
 }
 
-// OnRedisCommand process redis command
-func (s *Store) OnRedisCommand(cmdType raftcmdpb.CMDType, cmd redis.Command, cb func(*raftcmdpb.RaftCMDResponse)) error {
-	key := cmd.Args()[0]
+// OnProxyReq process proxy req
+func (s *Store) OnProxyReq(req *raftcmdpb.Request, cb func(*raftcmdpb.RaftCMDResponse)) error {
+	key := req.Cmd[0]
 	pr, err := s.getTargetCell(key)
 	if err != nil {
 		return err
+	}
+
+	cell := pr.getCell()
+
+	raftCMD := new(raftcmdpb.RaftCMDRequest)
+	raftCMD.Header = &raftcmdpb.RaftRequestHeader{
+		CellId:     cell.ID,
+		Peer:       pr.getPeer(),
+		ReadQuorum: true, // TODO: configuration
+		UUID:       uuid.NewV4().Bytes(),
+		CellEpoch:  cell.Epoch,
+	}
+
+	req.Cmd[0] = getDataKey(key)
+
+	// TODO: batch process
+	raftCMD.Requests = append(raftCMD.Requests, req)
+	s.notify(newCMD(raftCMD, cb))
+	return nil
+}
+
+// OnRedisCommand process redis command
+func (s *Store) OnRedisCommand(cmdType raftcmdpb.CMDType, cmd redis.Command, cb func(*raftcmdpb.RaftCMDResponse)) ([]byte, error) {
+	key := cmd.Args()[0]
+	pr, err := s.getTargetCell(key)
+	if err != nil {
+		return nil, err
 	}
 
 	cell := pr.getCell()
@@ -388,13 +415,16 @@ func (s *Store) OnRedisCommand(cmdType raftcmdpb.CMDType, cmd redis.Command, cb 
 
 	cmd.Args()[0] = getDataKey(key)
 
+	// TODO: batch process
+	uuid := uuid.NewV4().Bytes()
 	req.Requests = append(req.Requests, &raftcmdpb.Request{
+		UUID: uuid,
 		Type: cmdType,
 		Cmd:  cmd,
 	})
 
 	s.notify(newCMD(req, cb))
-	return nil
+	return uuid, nil
 }
 
 func (s *Store) notify(msg interface{}) {
