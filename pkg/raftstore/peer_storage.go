@@ -403,50 +403,7 @@ func (ps *peerStorage) unmarshal(v []byte, expectIndex uint64) (*raftpb.Entry, e
 }
 
 func (ps *peerStorage) clearMeta(wb storage.WriteBatch) error {
-	metaCount := 0
-	raftCount := 0
-
-	// meta must in the range [cellID, cellID + 1)
-	metaStart := getCellMetaPrefix(ps.getCell().ID)
-	metaEnd := getCellMetaPrefix(ps.getCell().ID + 1)
-
-	err := ps.store.getMetaEngine().Scan(metaStart, metaEnd, func(key, value []byte) (bool, error) {
-		err := wb.Delete(key)
-		if err != nil {
-			return false, errors.Wrapf(err, "")
-		}
-
-		metaCount++
-		return false, nil
-	})
-
-	if err != nil {
-		return errors.Wrapf(err, "")
-	}
-
-	raftStart := getCellRaftPrefix(ps.getCell().ID)
-	raftEnd := getCellRaftPrefix(ps.getCell().ID + 1)
-
-	err = ps.store.getMetaEngine().Scan(raftStart, raftEnd, func(key, value []byte) (bool, error) {
-		err := wb.Delete(key)
-		if err != nil {
-			return false, errors.Wrapf(err, "")
-		}
-
-		raftCount++
-		return false, nil
-	})
-
-	if err != nil {
-		return errors.Wrapf(err, "")
-	}
-
-	log.Infof("raftstore[cell-%d]: clear peer meta keys and raft keys, meta key count=<%d>, raft key count=<%d>",
-		ps.getCell().ID,
-		metaCount,
-		raftCount)
-
-	return nil
+	return ps.store.clearMeta(ps.getCell().ID, wb)
 }
 
 /// Delete all data belong to the region.

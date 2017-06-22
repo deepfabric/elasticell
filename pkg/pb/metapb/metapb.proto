@@ -43,8 +43,9 @@ message Cell {
 }
 
 message Store {
-    optional uint64       id       = 1 [(gogoproto.nullable) = false, (gogoproto.customname) = "ID"];
-    optional string       address  = 2 [(gogoproto.nullable) = false];
-    repeated Label        lables   = 3 [(gogoproto.nullable) = false];
-    optional StoreState   state    = 4 [(gogoproto.nullable) = false];
+    optional uint64       id            = 1 [(gogoproto.nullable) = false, (gogoproto.customname) = "ID"];
+    optional string       address       = 2 [(gogoproto.nullable) = false];
+    repeated Label        lables        = 3 [(gogoproto.nullable) = false];
+    optional StoreState   state         = 4 [(gogoproto.nullable) = false];
+    optional string       clientAddress = 5 [(gogoproto.nullable) = false];
 }

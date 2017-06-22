@@ -43,12 +43,12 @@ type Node struct {
 }
 
 // NewNode create a node instance, then init store, pd connection and init the cluster ID
-func NewNode(cfg *Cfg, driver storage.Driver) (*Node, error) {
+func NewNode(clientAddr string, cfg *Cfg, driver storage.Driver) (*Node, error) {
 	n := new(Node)
 	n.cfg = cfg
 	n.driver = driver
 	n.clusterID = cfg.ClusterID
-	n.storeMeta = newStore(cfg)
+	n.storeMeta = newStore(clientAddr, cfg)
 	n.runner = util.NewRunner()
 
 	err := n.initPDClient()
@@ -138,15 +138,16 @@ func (n *Node) getAllocID() (uint64, error) {
 	return rsp.GetID(), nil
 }
 
-func newStore(cfg *Cfg) metapb.Store {
+func newStore(clientAddr string, cfg *Cfg) metapb.Store {
 	addr := cfg.RaftStore.StoreAddr
 	if cfg.RaftStore.StoreAdvertiseAddr != "" {
 		addr = cfg.RaftStore.StoreAdvertiseAddr
 	}
 
 	return metapb.Store{
-		Address: addr,
-		Lables:  cfg.StoreLables,
-		State:   metapb.UP,
+		Address:       addr,
+		ClientAddress: clientAddr,
+		Lables:        cfg.StoreLables,
+		State:         metapb.UP,
 	}
 }

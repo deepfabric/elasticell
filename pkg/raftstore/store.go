@@ -29,6 +29,7 @@ import (
 	"github.com/deepfabric/elasticell/pkg/storage"
 	"github.com/deepfabric/elasticell/pkg/util"
 	"github.com/deepfabric/elasticell/pkg/util/uuid"
+	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 )
 
@@ -117,6 +118,8 @@ func (s *Store) init() {
 	tomebstoneCount := 0
 	applyingCount := 0
 
+	wb := s.engine.NewWriteBatch()
+
 	err := s.getMetaEngine().Scan(cellMetaMinKey, cellMetaMaxKey, func(key, value []byte) (bool, error) {
 		cellID, suffix, err := decodeCellMetaKey(key)
 		if err != nil {
@@ -137,8 +140,10 @@ func (s *Store) init() {
 		}
 
 		if localState.State == mraft.Tombstone {
+			s.clearMeta(cellID, wb)
 			tomebstoneCount++
-			log.Infof("bootstrap: cell is tombstone in store, cellID=<%d>", cellID)
+			log.Infof("bootstrap: cell is tombstone in store, cellID=<%d>",
+				cellID)
 			return true, nil
 		}
 
@@ -165,41 +170,17 @@ func (s *Store) init() {
 		log.Fatalf("bootstrap: init store failed, errors:\n %+v", err)
 	}
 
+	err = s.engine.Write(wb)
+	if err != nil {
+		log.Fatalf("bootstrap: init store failed, errors:\n %+v", err)
+	}
+
 	log.Infof("bootstrap: starts with %d cells, including %d tombstones and %d applying cells",
 		totalCount,
 		tomebstoneCount,
 		applyingCount)
 
 	s.cleanup()
-}
-
-func (s *Store) cleanup() {
-	// clean up all possible garbage data
-	lastStartKey := getDataKey([]byte(""))
-
-	s.keyRanges.Ascend(func(cell *metapb.Cell) bool {
-		start := encStartKey(cell)
-		err := s.getDataEngine().RangeDelete(lastStartKey, start)
-		if err != nil {
-			log.Fatalf("bootstrap: cleanup possible garbage data failed, start=<%v> end=<%v> errors:\n %+v",
-				lastStartKey,
-				start,
-				err)
-		}
-
-		lastStartKey = encEndKey(cell)
-		return true
-	})
-
-	err := s.getDataEngine().RangeDelete(lastStartKey, dataMaxKey)
-	if err != nil {
-		log.Fatalf("bootstrap: cleanup possible garbage data failed, start=<%v> end=<%v> errors:\n %+v",
-			lastStartKey,
-			dataMaxKey,
-			err)
-	}
-
-	log.Infof("bootstrap: cleanup possible garbage data complete")
 }
 
 // Start returns the error when start store
@@ -369,7 +350,7 @@ func (s *Store) getTargetCell(key []byte) (*PeerReplicate, error) {
 
 // OnProxyReq process proxy req
 func (s *Store) OnProxyReq(req *raftcmdpb.Request, cb func(*raftcmdpb.RaftCMDResponse)) error {
-	key := req.Cmd[0]
+	key := req.Cmd[1]
 	pr, err := s.getTargetCell(key)
 	if err != nil {
 		return err
@@ -386,7 +367,7 @@ func (s *Store) OnProxyReq(req *raftcmdpb.Request, cb func(*raftcmdpb.RaftCMDRes
 		CellEpoch:  cell.Epoch,
 	}
 
-	req.Cmd[0] = getDataKey(key)
+	req.Cmd[1] = getDataKey(key)
 
 	// TODO: batch process
 	raftCMD.Requests = append(raftCMD.Requests, req)
@@ -396,6 +377,10 @@ func (s *Store) OnProxyReq(req *raftcmdpb.Request, cb func(*raftcmdpb.RaftCMDRes
 
 // OnRedisCommand process redis command
 func (s *Store) OnRedisCommand(cmdType raftcmdpb.CMDType, cmd redis.Command, cb func(*raftcmdpb.RaftCMDResponse)) ([]byte, error) {
+	if log.DebugEnabled() {
+		log.Debugf("raftstore[store-%d]: received a redis command, cmd=<%s>", s.id, cmd.ToString())
+	}
+
 	key := cmd.Args()[0]
 	pr, err := s.getTargetCell(key)
 	if err != nil {
@@ -729,6 +714,82 @@ func (s *Store) destroyPeer(cellID uint64, target metapb.Peer, async bool) {
 
 		s.startDestroyJob(cellID)
 	}
+}
+
+func (s *Store) cleanup() {
+	// clean up all possible garbage data
+	lastStartKey := getDataKey([]byte(""))
+
+	s.keyRanges.Ascend(func(cell *metapb.Cell) bool {
+		start := encStartKey(cell)
+		err := s.getDataEngine().RangeDelete(lastStartKey, start)
+		if err != nil {
+			log.Fatalf("bootstrap: cleanup possible garbage data failed, start=<%v> end=<%v> errors:\n %+v",
+				lastStartKey,
+				start,
+				err)
+		}
+
+		lastStartKey = encEndKey(cell)
+		return true
+	})
+
+	err := s.getDataEngine().RangeDelete(lastStartKey, dataMaxKey)
+	if err != nil {
+		log.Fatalf("bootstrap: cleanup possible garbage data failed, start=<%v> end=<%v> errors:\n %+v",
+			lastStartKey,
+			dataMaxKey,
+			err)
+	}
+
+	log.Infof("bootstrap: cleanup possible garbage data complete")
+}
+
+func (s *Store) clearMeta(cellID uint64, wb storage.WriteBatch) error {
+	metaCount := 0
+	raftCount := 0
+
+	// meta must in the range [cellID, cellID + 1)
+	metaStart := getCellMetaPrefix(cellID)
+	metaEnd := getCellMetaPrefix(cellID + 1)
+
+	err := s.getMetaEngine().Scan(metaStart, metaEnd, func(key, value []byte) (bool, error) {
+		err := wb.Delete(key)
+		if err != nil {
+			return false, errors.Wrapf(err, "")
+		}
+
+		metaCount++
+		return true, nil
+	})
+
+	if err != nil {
+		return errors.Wrapf(err, "")
+	}
+
+	raftStart := getCellRaftPrefix(cellID)
+	raftEnd := getCellRaftPrefix(cellID + 1)
+
+	err = s.getMetaEngine().Scan(raftStart, raftEnd, func(key, value []byte) (bool, error) {
+		err := wb.Delete(key)
+		if err != nil {
+			return false, errors.Wrapf(err, "")
+		}
+
+		raftCount++
+		return true, nil
+	})
+
+	if err != nil {
+		return errors.Wrapf(err, "")
+	}
+
+	log.Infof("raftstore[cell-%d]: clear peer meta keys and raft keys, meta key count=<%d>, raft key count=<%d>",
+		cellID,
+		metaCount,
+		raftCount)
+
+	return nil
 }
 
 func (s *Store) getPeerReplicate(cellID uint64) *PeerReplicate {

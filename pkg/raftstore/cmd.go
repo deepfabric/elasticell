@@ -115,6 +115,10 @@ func newCMD(req *raftcmdpb.RaftCMDRequest, cb func(*raftcmdpb.RaftCMDResponse)) 
 
 func (c *cmd) resp(resp *raftcmdpb.RaftCMDResponse) {
 	if c.cb != nil {
+		log.Debugf("raftstore[cell-%d]: response to client, resp=<%+v>",
+			c.req.Header.CellId,
+			resp)
+
 		if len(c.req.Requests) > 0 {
 			if len(c.req.Requests) != len(resp.Responses) {
 				if resp.Header == nil {
@@ -137,10 +141,14 @@ func (c *cmd) resp(resp *raftcmdpb.RaftCMDResponse) {
 
 		if resp.Header != nil {
 			for idx, req := range c.req.Requests {
+				req.Cmd[1] = getOriginKey(req.Cmd[1])
 				resp.Responses[idx].OriginRequest = req
 			}
 		}
 
+		log.Debugf("raftstore[cell-%d]: after response to client, resp=<%+v>",
+			c.req.Header.CellId,
+			resp)
 		c.cb(resp)
 	}
 }

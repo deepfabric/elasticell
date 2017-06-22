@@ -109,13 +109,13 @@ func (d *applyDelegate) clearAllCommandsAsStale() {
 	d.Unlock()
 }
 
-func (d *applyDelegate) findCB(uuid []byte, term uint64, req *raftcmdpb.RaftCMDRequest) func(*raftcmdpb.RaftCMDResponse) {
+func (d *applyDelegate) findCB(uuid []byte, term uint64, req *raftcmdpb.RaftCMDRequest) *cmd {
 	if isChangePeerCMD(req) {
 		cmd := d.getPendingChangePeerCMD()
 		if cmd == nil {
 			return nil
 		} else if bytes.Compare(uuid, cmd.cmd.getUUID()) == 0 {
-			return cmd.cmd.cb
+			return cmd.cmd
 		}
 
 		d.notifyStaleCMD(cmd)
@@ -129,7 +129,13 @@ func (d *applyDelegate) findCB(uuid []byte, term uint64, req *raftcmdpb.RaftCMDR
 		}
 
 		if bytes.Compare(head.cmd.getUUID(), uuid) == 0 {
-			return head.cmd.cb
+			return head.cmd
+		}
+
+		if log.DebugEnabled() {
+			log.Debugf("raftstore-apply[cell-%d]: notify stale cmd, cmd=<%+v>",
+				d.cell.ID,
+				head.cmd)
 		}
 
 		// Because of the lack of original RaftCmdRequest, we skip calling

@@ -150,6 +150,8 @@ func (s *RedisServer) doConnection(session goetty.IOSession) error {
 		}
 
 		if req, ok := value.(redis.Command); ok {
+			log.Debugf("redis-[%s]: read a redis command, cmd=<%+v>", addr, req)
+
 			err = s.onRedisCommand(req, rs)
 			if err != nil {
 				rs.onResp(nil, &raftcmdpb.Response{
@@ -157,6 +159,8 @@ func (s *RedisServer) doConnection(session goetty.IOSession) error {
 				})
 			}
 		} else if req, ok := value.(*raftcmdpb.Request); ok {
+			log.Debugf("redis-[%s]: read a raft req, req=<%+v>", addr, req)
+
 			rs.setFromProxy()
 			err = s.onProxyReq(req, rs)
 			if err != nil {

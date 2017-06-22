@@ -14,12 +14,11 @@
 package redis
 
 import (
-	"fmt"
 	"testing"
-
 	"time"
 
 	"github.com/fagongzi/goetty"
+	gredis "github.com/fagongzi/goetty/protocol/redis"
 	"github.com/garyburd/redigo/redis"
 	. "github.com/pingcap/check"
 )
@@ -75,9 +74,8 @@ func (s *testRedisSuite) doConnection(session goetty.IOSession) error {
 		}
 
 		cmd := req.(Command)
-		fmt.Println(cmd.ToString())
 		if cmd.CmdString() == "set" {
-			WriteStatus([]byte("OK"), session.OutBuf())
+			gredis.WriteStatus([]byte("OK"), session.OutBuf())
 			session.WriteOutBuf()
 		}
 	}

@@ -36,10 +36,10 @@ func InitLog() {
 	}
 
 	//CrashLog(*crashLog)
-	SetRotateByHour()
 	SetHighlighting(false)
 	SetLevelByString(*logLevel)
 	if "" != *logFile {
+		SetRotateByHour()
 		SetOutputByName(*logFile)
 	}
 

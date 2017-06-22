@@ -45,7 +45,7 @@ func (d *applyDelegate) doApplyRaftCMD(req *raftcmdpb.RaftCMDRequest, term uint6
 			d.cell.ID)
 	}
 
-	cb := d.findCB(req.Header.UUID, term, req)
+	cmd := d.findCB(req.Header.UUID, term, req)
 
 	if d.isPendingRemove() {
 		log.Fatalf("raftstore-apply[cell-%d]: apply raft comand can not pending remove",
@@ -96,17 +96,18 @@ func (d *applyDelegate) doApplyRaftCMD(req *raftcmdpb.RaftCMDRequest, term uint6
 	d.applyState = ctx.applyState
 	d.term = term
 
-	log.Debugf("raftstore-apply[cell-%d]: applied command, uuid=<%v> index=<%d>",
+	log.Debugf("raftstore-apply[cell-%d]: applied command, uuid=<%v> index=<%d> resp=<%+v>",
 		d.cell.ID,
 		req.Header.UUID,
-		index)
+		index,
+		resp)
 
-	if cb != nil {
+	if cmd != nil {
 		buildTerm(d.term, resp)
 		buildUUID(req.Header.UUID, resp)
 
 		// resp client
-		cb(resp)
+		cmd.resp(resp)
 	}
 
 	return ctx, result

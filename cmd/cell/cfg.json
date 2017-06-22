@@ -7,7 +7,16 @@
 
     "node": {
         "clusterID": 0,
-        "labels": [],
+        "labels": [
+            {
+                "key": "zone",
+                "value": "zone-1"
+            },
+            {
+                "key": "rack",
+                "value": "rack-1"
+            }
+        ],
         "pdRPCAddr": [
             "127.0.0.1:20800",
             "127.0.0.1:20801",

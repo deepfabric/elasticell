@@ -46,16 +46,13 @@ func readCommand(in *goetty.ByteBuf) (bool, interface{}, error) {
 			return false, nil, err
 		}
 
-		// 1. Read ( *<number of arguments> CR LF )
-		if c != CMDBegin && c != ProxyBegin {
-			return false, nil, pe.Wrap(ErrIllegalPacket, "")
-		}
-
 		switch c {
 		case CMDBegin:
 			return readCommandByRedisProtocol(in)
 		case ProxyBegin:
 			return readCommandByProxyProtocol(in)
+		default:
+			return false, nil, pe.Wrap(ErrIllegalPacket, "")
 		}
 	}
 }
@@ -65,6 +62,8 @@ func readCommandByProxyProtocol(in *goetty.ByteBuf) (bool, interface{}, error) {
 	// if we found has no enough data, we will resume this read index,
 	// and waiting for next.
 	backupReaderIndex := in.GetReaderIndex()
+
+	in.Skip(1)
 
 	if in.Readable() < 4 {
 		in.SetReaderIndex(backupReaderIndex)
@@ -97,6 +96,9 @@ func readCommandByRedisProtocol(in *goetty.ByteBuf) (bool, interface{}, error) {
 	// if we found has no enough data, we will resume this read index,
 	// and waiting for next.
 	backupReaderIndex := in.GetReaderIndex()
+
+	// 1. Read ( *<number of arguments> CR LF )
+	in.Skip(1)
 
 	// 2. Read number of arguments
 	count, argsCount, err := readStringInt(in)

@@ -142,7 +142,7 @@ func (s *Server) initNode() {
 		return
 	}
 
-	n, err := node.NewNode(s.cfg.Node, driver)
+	n, err := node.NewNode(s.cfg.Redis.Listen,s.cfg.Node, driver)
 	if err != nil {
 		log.Fatalf("bootstrap: create node failure, errors:\n %+v", err)
 		return

@@ -150,7 +150,7 @@ func (pr *PeerReplicate) handleRaftReadyAppend(ctx *tempRaftContext, rd *raft.Re
 	// If we become leader, send heartbeat to pd
 	if rd.SoftState != nil {
 		if rd.SoftState.RaftState == raft.StateLeader {
-			log.Infof("raftstore[cell-%d]: become leader now",
+			log.Infof("raftstore[cell-%d]: ********become leader now********",
 				pr.cellID)
 			pr.handleHeartbeat()
 		}
