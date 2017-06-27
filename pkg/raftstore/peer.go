@@ -146,8 +146,6 @@ func newPeerReplicate(store *Store, cell *metapb.Cell, peerID uint64) (*PeerRepl
 func (pr *PeerReplicate) handleHeartbeat() {
 	var err error
 	if pr.isLeader() {
-		log.Infof("todo-delete: raft-cell[%d]: cell heartbeat", pr.cellID)
-
 		if pr.lastHBJob != nil && pr.lastHBJob.IsNotComplete() {
 			// cancel last if not complete
 			pr.lastHBJob.Cancel()

@@ -418,21 +418,11 @@ func (s *Store) notify(msg interface{}) {
 }
 
 func (s *Store) onRaftMessage(msg *mraft.RaftMessage) {
-	if msg.Message.Type == raftpb.MsgVote || msg.Message.Type == raftpb.MsgVoteResp {
-		log.Infof("todo-delete: received vote, from=<%d> to=<%d>", msg.Message.From, msg.Message.To)
-	}
-
 	if !s.isRaftMsgValid(msg) {
-		if msg.Message.Type == raftpb.MsgVote || msg.Message.Type == raftpb.MsgVoteResp {
-			log.Infof("todo-delete: isRaftMsgValid, from=<%d> to=<%d>", msg.Message.From, msg.Message.To)
-		}
 		return
 	}
 
 	if msg.IsTombstone {
-		if msg.Message.Type == raftpb.MsgVote || msg.Message.Type == raftpb.MsgVoteResp {
-			log.Infof("todo-delete: IsTombstone, from=<%d> to=<%d>", msg.Message.From, msg.Message.To)
-		}
 		// we receive a message tells us to remove ourself.
 		s.handleGCPeerMsg(msg)
 		return
@@ -455,15 +445,9 @@ func (s *Store) onRaftMessage(msg *mraft.RaftMessage) {
 
 	ok, err := s.checkSnapshot(msg)
 	if err != nil {
-		if msg.Message.Type == raftpb.MsgVote || msg.Message.Type == raftpb.MsgVoteResp {
-			log.Infof("todo-delete: checkSnapshot, from=<%d> to=<%d>", msg.Message.From, msg.Message.To)
-		}
 		return
 	}
 	if !ok {
-		if msg.Message.Type == raftpb.MsgVote || msg.Message.Type == raftpb.MsgVoteResp {
-			log.Infof("todo-delete: checkSnapshot-ok, from=<%d> to=<%d>", msg.Message.From, msg.Message.To)
-		}
 		return
 	}
 
@@ -472,9 +456,6 @@ func (s *Store) onRaftMessage(msg *mraft.RaftMessage) {
 	pr := s.getPeerReplicate(msg.CellID)
 	err = pr.step(msg.Message)
 	if err != nil {
-		if msg.Message.Type == raftpb.MsgVote || msg.Message.Type == raftpb.MsgVoteResp {
-			log.Infof("todo-delete: step, from=<%d> to=<%d>", msg.Message.From, msg.Message.To)
-		}
 		return
 	}
 }
