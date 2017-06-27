@@ -114,6 +114,11 @@ func (pr *PeerReplicate) readyToServeRaft(ctx context.Context) {
 			pr.rn.Tick()
 
 		case rd := <-pr.rn.Ready():
+			if rd.SoftState != nil {
+				log.Infof("todo-delete: RaftState====================%+v",
+					rd.SoftState.RaftState)
+			}
+
 			ctx := &tempRaftContext{
 				raftState:  pr.ps.raftState,
 				applyState: pr.ps.applyState,
@@ -152,7 +157,10 @@ func (pr *PeerReplicate) handleRaftReadyAppend(ctx *tempRaftContext, rd *raft.Re
 		if rd.SoftState.RaftState == raft.StateLeader {
 			log.Infof("raftstore[cell-%d]: ********become leader now********",
 				pr.cellID)
-			pr.handleHeartbeat()
+			pr.doHeartbeat()
+		} else {
+			log.Infof("todo-delete: raftstore[cell-%d]: ********become not leader now********",
+				pr.cellID)
 		}
 	}
 
@@ -555,6 +563,10 @@ func (pr *PeerReplicate) readyToSendRaftMessage(ctx context.Context) {
 }
 
 func (pr *PeerReplicate) sendRaftMsg(msg raftpb.Message) error {
+	if msg.Type == raftpb.MsgVote || msg.Type == raftpb.MsgVoteResp {
+		log.Infof("todo-delete: sendRaftMsg, from=<%d> to=<%d>", msg.From, msg.To)
+	}
+
 	sendMsg := mraft.RaftMessage{}
 	sendMsg.CellID = pr.ps.getCell().ID
 	sendMsg.CellEpoch = pr.ps.getCell().Epoch
@@ -584,6 +596,10 @@ func (pr *PeerReplicate) sendRaftMsg(msg raftpb.Message) error {
 	sendMsg.Message = msg
 	err := pr.store.trans.send(sendMsg.ToPeer.StoreID, &sendMsg)
 	if err != nil {
+		if msg.Type == raftpb.MsgVote || msg.Type == raftpb.MsgVoteResp {
+			log.Infof("todo-delete: send ReportUnreachable, from=<%d> to=<%d>", msg.From, msg.To)
+		}
+
 		pr.rn.ReportUnreachable(sendMsg.ToPeer.ID)
 
 		if msg.Type == raftpb.MsgSnap {

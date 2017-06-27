@@ -19,6 +19,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/coreos/etcd/raft"
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/server"
 )
@@ -27,6 +28,8 @@ func main() {
 	flag.Parse()
 
 	log.InitLog()
+	raft.SetLogger(log.DefaultLogger())
+
 	cfg := server.GetCfg()
 
 	s := server.NewServer(cfg)

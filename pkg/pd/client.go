@@ -365,10 +365,11 @@ func (c *Client) proxyRPC(ctx context.Context, req pb.BaseReq, setFromFun func()
 		c.seq++
 	}
 
-	log.Debugf("pd-client: req<%s-%d>, req=<%v>",
-		req.GetFrom(),
-		req.GetID(),
-		req)
+	// todo-delete: resume
+	// log.Debugf("pd-client: req<%s-%d>, req=<%v>",
+	// 	req.GetFrom(),
+	// 	req.GetID(),
+	// 	req)
 
 	rsp, err := doRPC()
 	if err != nil {
@@ -387,10 +388,11 @@ func (c *Client) proxyRPC(ctx context.Context, req pb.BaseReq, setFromFun func()
 
 	c.mut.RUnlock()
 	if err == nil {
-		log.Debugf("pd-client: rsp<%s-%d>, rsp=<%v>",
-			req.GetFrom(),
-			req.GetID(),
-			rsp)
+		// todo-delete: resume
+		// log.Debugf("pd-client: rsp<%s-%d>, rsp=<%v>",
+		// 	req.GetFrom(),
+		// 	req.GetID(),
+		// 	rsp)
 	}
 
 	return rsp, nil

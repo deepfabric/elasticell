@@ -225,7 +225,7 @@ func (pr *PeerReplicate) doApplySnap(ctx *tempRaftContext) *applySnapResult {
 		err := pr.ps.clearExtraData(pr.ps.getCell())
 		if err != nil {
 			// No need panic here, when applying snapshot, the deletion will be tried
-			// again. But if the region range changes, like [a, c) -> [a, b) and [b, c),
+			// again. But if the cell range changes, like [a, c) -> [a, b) and [b, c),
 			// [b, c) will be kept in rocksdb until a covered snapshot is applied or
 			// store is restarted.
 			log.Errorf("raftstore[cell-%d]: cleanup data failed, may leave some dirty data, errors:\n %+v",
@@ -321,11 +321,11 @@ func (pr *PeerReplicate) doSplitCheck(epoch metapb.CellEpoch, startKey, endKey [
 		return err
 	}
 
-	if size < pr.store.cfg.CellMaxSize {
-		log.Infof("raftstore-split[cell-%d]: no need to split, size=<%d> max=<%d> start=<%v> end=<%v>",
+	if size < pr.store.cfg.CellSplitSize {
+		log.Infof("raftstore-split[cell-%d]: no need to split, size=<%d> split=<%d> start=<%v> end=<%v>",
 			pr.cellID,
 			size,
-			pr.store.cfg.CellMaxSize,
+			pr.store.cfg.CellSplitSize,
 			startKey,
 			endKey)
 		return nil
@@ -434,7 +434,7 @@ func (s *Store) doApplyConfChange(cellID uint64, cp *changePeer) {
 		log.Infof("raftstore-apply[cell-%d]: notify pd with change peer, cell=<%+v>",
 			cellID,
 			cp.cell)
-		pr.handleHeartbeat()
+		pr.doHeartbeat()
 	}
 
 	switch cp.confChange.Type {
@@ -524,8 +524,8 @@ func (s *Store) doApplySplit(cellID uint64, result *splitResult) {
 			left,
 			right)
 
-		pr.handleHeartbeat()
-		newPR.handleHeartbeat()
+		pr.doHeartbeat()
+		newPR.doHeartbeat()
 
 		err := s.startReportSpltJob(left, right)
 		if err != nil {

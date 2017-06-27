@@ -44,6 +44,6 @@ func InitLog() {
 	}
 
 	if !DebugEnabled() {
-		SetFlags(Ldate | Ltime)
+		SetFlags(Ldate | Ltime | Lmicroseconds)
 	}
 }

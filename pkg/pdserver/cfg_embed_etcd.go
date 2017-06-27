@@ -35,7 +35,8 @@ func (c *Cfg) getEmbedEtcdConfig() (*embed.Config, error) {
 	cfg.WalDir = ""
 	cfg.InitialCluster = c.EmbedEtcd.InitialCluster
 	cfg.ClusterState = c.EmbedEtcd.InitialClusterState
-	cfg.EnablePprof = true
+	cfg.EnablePprof = false
+	cfg.Debug = false
 
 	var err error
 	cfg.LPUrls, err = parseUrls(c.EmbedEtcd.PeerUrls)

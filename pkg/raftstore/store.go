@@ -253,13 +253,14 @@ func (s *Store) startStoreHeartbeatTask() {
 				if job != nil && job.IsNotComplete() {
 					// cancel last if not complete
 					job.Cancel()
-				} else {
-					job, err = s.addPDJob(s.handleStoreHeartbeat)
-					if err != nil {
-						log.Errorf("heartbeat-store[%d]: add job failed, errors:\n %+v",
-							s.GetID(),
-							err)
-					}
+				}
+
+				job, err = s.addPDJob(s.handleStoreHeartbeat)
+				if err != nil {
+					log.Errorf("heartbeat-store[%d]: add job failed, errors:\n %+v",
+						s.GetID(),
+						err)
+					job = nil
 				}
 			}
 		}
@@ -417,11 +418,21 @@ func (s *Store) notify(msg interface{}) {
 }
 
 func (s *Store) onRaftMessage(msg *mraft.RaftMessage) {
+	if msg.Message.Type == raftpb.MsgVote || msg.Message.Type == raftpb.MsgVoteResp {
+		log.Infof("todo-delete: received vote, from=<%d> to=<%d>", msg.Message.From, msg.Message.To)
+	}
+
 	if !s.isRaftMsgValid(msg) {
+		if msg.Message.Type == raftpb.MsgVote || msg.Message.Type == raftpb.MsgVoteResp {
+			log.Infof("todo-delete: isRaftMsgValid, from=<%d> to=<%d>", msg.Message.From, msg.Message.To)
+		}
 		return
 	}
 
 	if msg.IsTombstone {
+		if msg.Message.Type == raftpb.MsgVote || msg.Message.Type == raftpb.MsgVoteResp {
+			log.Infof("todo-delete: IsTombstone, from=<%d> to=<%d>", msg.Message.From, msg.Message.To)
+		}
 		// we receive a message tells us to remove ourself.
 		s.handleGCPeerMsg(msg)
 		return
@@ -444,9 +455,15 @@ func (s *Store) onRaftMessage(msg *mraft.RaftMessage) {
 
 	ok, err := s.checkSnapshot(msg)
 	if err != nil {
+		if msg.Message.Type == raftpb.MsgVote || msg.Message.Type == raftpb.MsgVoteResp {
+			log.Infof("todo-delete: checkSnapshot, from=<%d> to=<%d>", msg.Message.From, msg.Message.To)
+		}
 		return
 	}
 	if !ok {
+		if msg.Message.Type == raftpb.MsgVote || msg.Message.Type == raftpb.MsgVoteResp {
+			log.Infof("todo-delete: checkSnapshot-ok, from=<%d> to=<%d>", msg.Message.From, msg.Message.To)
+		}
 		return
 	}
 
@@ -455,6 +472,9 @@ func (s *Store) onRaftMessage(msg *mraft.RaftMessage) {
 	pr := s.getPeerReplicate(msg.CellID)
 	err = pr.step(msg.Message)
 	if err != nil {
+		if msg.Message.Type == raftpb.MsgVote || msg.Message.Type == raftpb.MsgVoteResp {
+			log.Infof("todo-delete: step, from=<%d> to=<%d>", msg.Message.From, msg.Message.To)
+		}
 		return
 	}
 }
@@ -827,11 +847,17 @@ func (s *Store) addNamedJob(worker string, task func() error) (*util.Job, error)
 func (s *Store) handleStoreHeartbeat() error {
 	stats, err := util.DiskStats(s.cfg.StoreDataPath)
 	if err != nil {
+		log.Errorf("heartbeat-store[%d]: handle store heartbeat failed, errors:\n %+v",
+			s.GetID(),
+			err)
 		return err
 	}
 
 	applySnapCount, err := s.getApplySnapshotCount()
 	if err != nil {
+		log.Errorf("heartbeat-store[%d]: handle store heartbeat failed, errors:\n %+v",
+			s.GetID(),
+			err)
 		return err
 	}
 
@@ -853,8 +879,8 @@ func (s *Store) handleStoreHeartbeat() error {
 
 	_, err = s.pdClient.StoreHeartbeat(context.TODO(), req)
 	if err != nil {
-		log.Errorf("heartbeat-store[%d]: heartbeat failed, errors:\n +%v",
-			s.id,
+		log.Errorf("heartbeat-store[%d]: handle store heartbeat failed, errors:\n %+v",
+			s.GetID(),
 			err)
 	}
 

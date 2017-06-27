@@ -78,12 +78,17 @@ const (
 var defaultLog = new()
 
 func init() {
-	SetFlags(Ldate | Ltime | Lshortfile)
+	SetFlags(Ldate | Ltime | Lmicroseconds | Lmicroseconds)
 	SetHighlighting(runtime.GOOS != "windows")
 }
 
-// Logger get default Logger
-func Logger() *log.Logger {
+// DefaultLogger get default Logger
+func DefaultLogger() *Logger {
+	return defaultLog
+}
+
+// DefaultStdLogger get default std Logger
+func DefaultStdLogger() *log.Logger {
 	return defaultLog._log
 }
 
@@ -217,7 +222,8 @@ func SetRotateByHour() {
 	defaultLog.SetRotateByHour()
 }
 
-type logger struct {
+// Logger is a logger
+type Logger struct {
 	_log         *log.Logger
 	level        Level
 	highlighting bool
@@ -232,29 +238,29 @@ type logger struct {
 	lock sync.Mutex
 }
 
-func (l *logger) SetHighlighting(highlighting bool) {
+func (l *Logger) SetHighlighting(highlighting bool) {
 	l.highlighting = highlighting
 }
 
-func (l *logger) SetLevel(level Level) {
+func (l *Logger) SetLevel(level Level) {
 	l.level = level
 }
 
-func (l *logger) SetLevelByString(level string) {
+func (l *Logger) SetLevelByString(level string) {
 	l.level = stringToLogLevel(level)
 }
 
-func (l *logger) SetRotateByDay() {
+func (l *Logger) SetRotateByDay() {
 	l.dailyRolling = true
 	l.logSuffix = genDayTime(time.Now())
 }
 
-func (l *logger) SetRotateByHour() {
+func (l *Logger) SetRotateByHour() {
 	l.hourRolling = true
 	l.logSuffix = genHourTime(time.Now())
 }
 
-func (l *logger) rotate() error {
+func (l *Logger) rotate() error {
 	l.lock.Lock()
 	defer l.lock.Unlock()
 
@@ -278,7 +284,7 @@ func (l *logger) rotate() error {
 	return nil
 }
 
-func (l *logger) doRotate(suffix string) error {
+func (l *Logger) doRotate(suffix string) error {
 	// Notice: Not check error, is this ok?
 	l.fd.Close()
 
@@ -298,11 +304,11 @@ func (l *logger) doRotate(suffix string) error {
 	return nil
 }
 
-func (l *logger) SetOutput(out io.Writer) {
+func (l *Logger) SetOutput(out io.Writer) {
 	l._log = log.New(out, l._log.Prefix(), l._log.Flags())
 }
 
-func (l *logger) SetOutputByName(path string) error {
+func (l *Logger) SetOutputByName(path string) error {
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666)
 	if err != nil {
 		log.Fatal(err)
@@ -316,7 +322,7 @@ func (l *logger) SetOutputByName(path string) error {
 	return err
 }
 
-func (l *logger) log(t Type, v ...interface{}) {
+func (l *Logger) log(t Type, v ...interface{}) {
 	if l.level|Level(t) != l.level {
 		return
 	}
@@ -343,7 +349,7 @@ func (l *logger) log(t Type, v ...interface{}) {
 	l._log.Output(4, s)
 }
 
-func (l *logger) logf(t Type, format string, v ...interface{}) {
+func (l *Logger) logf(t Type, format string, v ...interface{}) {
 	if l.level|Level(t) != l.level {
 		return
 	}
@@ -365,73 +371,81 @@ func (l *logger) logf(t Type, format string, v ...interface{}) {
 }
 
 // FatalEnabled fatal enabled
-func (l *logger) FatalEnabled() bool {
+func (l *Logger) FatalEnabled() bool {
 	return l.isLevelEnabled(fatalLevel)
 }
 
 // ErrorEnabled error enabled
-func (l *logger) ErrorEnabled() bool {
+func (l *Logger) ErrorEnabled() bool {
 	return l.isLevelEnabled(errorLevel)
 }
 
 // WarnEnabled warn enabled
-func (l *logger) WarnEnabled() bool {
+func (l *Logger) WarnEnabled() bool {
 	return l.isLevelEnabled(warnLevel)
 }
 
 // InfoEnabled info enabled
-func (l *logger) InfoEnabled() bool {
+func (l *Logger) InfoEnabled() bool {
 	return l.isLevelEnabled(infoLevel)
 }
 
 // DebugEnabled debug enabled
-func (l *logger) DebugEnabled() bool {
+func (l *Logger) DebugEnabled() bool {
 	return l.isLevelEnabled(debugLevel)
 }
 
-func (l *logger) isLevelEnabled(target Type) bool {
+func (l *Logger) isLevelEnabled(target Type) bool {
 	return int(l.level)&int(target) != 0
 }
 
-func (l *logger) Fatal(v ...interface{}) {
+func (l *Logger) Fatal(v ...interface{}) {
 	l.log(fatalLevel, v...)
 	os.Exit(-1)
 }
 
-func (l *logger) Fatalf(format string, v ...interface{}) {
+func (l *Logger) Fatalf(format string, v ...interface{}) {
 	l.logf(fatalLevel, format, v...)
 	os.Exit(-1)
 }
 
-func (l *logger) Error(v ...interface{}) {
+func (l *Logger) Panic(v ...interface{}) {
+	l.Fatal(v...)
+}
+
+func (l *Logger) Panicf(format string, v ...interface{}) {
+	l.Fatalf(format, v...)
+}
+
+func (l *Logger) Error(v ...interface{}) {
 	l.log(errorLevel, v...)
 }
 
-func (l *logger) Errorf(format string, v ...interface{}) {
+func (l *Logger) Errorf(format string, v ...interface{}) {
 	l.logf(errorLevel, format, v...)
 }
 
-func (l *logger) Warning(v ...interface{}) {
+func (l *Logger) Warning(v ...interface{}) {
 	l.log(warnLevel, v...)
 }
 
-func (l *logger) Warningf(format string, v ...interface{}) {
+func (l *Logger) Warningf(format string, v ...interface{}) {
 	l.logf(warnLevel, format, v...)
 }
 
-func (l *logger) Debug(v ...interface{}) {
+func (l *Logger) Debug(v ...interface{}) {
 	l.log(debugLevel, v...)
 }
 
-func (l *logger) Debugf(format string, v ...interface{}) {
+func (l *Logger) Debugf(format string, v ...interface{}) {
 	l.logf(debugLevel, format, v...)
 }
 
-func (l *logger) Info(v ...interface{}) {
+func (l *Logger) Info(v ...interface{}) {
 	l.log(infoLevel, v...)
 }
 
-func (l *logger) Infof(format string, v ...interface{}) {
+func (l *Logger) Infof(format string, v ...interface{}) {
 	l.logf(infoLevel, format, v...)
 }
 
@@ -477,10 +491,10 @@ func genHourTime(t time.Time) string {
 	return t.Format(formatTimeHour)
 }
 
-func new() *logger {
+func new() *Logger {
 	return newLogger(os.Stderr, "")
 }
 
-func newLogger(w io.Writer, prefix string) *logger {
-	return &logger{_log: log.New(w, prefix, LstdFlags), level: LogAll, highlighting: true}
+func newLogger(w io.Writer, prefix string) *Logger {
+	return &Logger{_log: log.New(w, prefix, LstdFlags), level: LogAll, highlighting: true}
 }
