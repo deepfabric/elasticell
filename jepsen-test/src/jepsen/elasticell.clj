@@ -40,7 +40,7 @@
   [s]
   (when s (Long/parseLong s)))
 
-(def server1-conn {:pool {:max-total 8} :spec {:host "10.214.160.200" :port 6379}}) 
+(def server1-conn {:pool {:max-total 8} :spec {:host "10.214.160.200" :port 6379 :timeout-ms 6000}}) 
 (defmacro wcar* [& body] `(car/wcar server1-conn ~@body))
 
 (defn client
