@@ -40,7 +40,7 @@
   [s]
   (when s (Long/parseLong s)))
 
-(def server1-conn {:pool {:max-total 8} :spec {:host "10.214.160.200" :port 6379}}) 
+(def server1-conn {:pool {:max-total 8} :spec {:host "10.214.160.200" :port 6379 :timeout-ms 6000}}) 
 (defmacro wcar* [& body] `(car/wcar server1-conn ~@body))
 
 (defn client
@@ -55,26 +55,32 @@
     (invoke! [this test op]
       (let [[k v] (:value op)
             crash (if (= :read (:f op)) :fail :info)]
-          (case (:f op)
-           :read (  let[value (wcar* (car/get k))]
-                    (assoc op :type :ok, :value (independent/tuple k (parse-long value))))
+        (try 
+            (case (:f op)
+              :read (  let[value (wcar* (car/get k))]
+                        (assoc op :type :ok, :value (independent/tuple k (parse-long value))))
 
-            :write (do  (wcar* (car/set k v))
-                        (assoc op :type, :ok))
+              :write (do  (wcar* (car/set k v))
+                          (assoc op :type, :ok))
 
-            :cas (let [[value value'] v
-                        res (wcar* (car/compare-and-set k value value'))]
-                   (assoc op :type (if (= res 1)
-                                     :ok
-                                     :fail)))
+              :cas (let [[value value'] v
+                          res (wcar* (car/compare-and-set k value value'))]
+                    (assoc op :type (if (= res 1)
+                                      :ok
+                                      :fail)))
 
-            :hset (let [ [member value] v
-                        _  (wcar*  (car/hset (str "hkey" k) member value))]
-                        (assoc op :type, :ok))
-            :hget (let [ [member _] v
-                        res  (wcar* (car/hget (str "hkey" k) member))]
-                        (assoc op :type, :ok :value (independent/tuple k [member (parse-long res)])))
-                                     )))
+              :hset (let [ [member value] v
+                          _  (wcar*  (car/hset (str "hkey" k) member value))]
+                          (assoc op :type, :ok))
+              :hget (let [ [member _] v
+                          res  (wcar* (car/hget (str "hkey" k) member))]
+                          (assoc op :type, :ok :value (independent/tuple k [member (parse-long res)]))))
+          (catch clojure.lang.ExceptionInfo e (do (assoc op :type :crash :error e)))
+          (catch java.net.SocketTimeoutException e (do (assoc op :type :crash :error e)))
+          (catch Exception e (do (info "Exception type: " (type e)) (assoc op :type :crash :error e)) )
+        )
+      )
+    )
 
     (teardown! [_ test]
       ; If our connection were stateful, we'd close it here.
