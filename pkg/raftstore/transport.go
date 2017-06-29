@@ -14,10 +14,10 @@
 package raftstore
 
 import (
+	"fmt"
+	"io"
 	"sync"
 	"time"
-
-	"fmt"
 
 	"github.com/coreos/etcd/raft/raftpb"
 	"github.com/deepfabric/elasticell/pkg/log"
@@ -54,8 +54,10 @@ type transport struct {
 
 	getStoreAddrFun func(storeID uint64) (string, error)
 
-	conns map[string]*goetty.Connector
+	conns map[string]goetty.IOSession
 	addrs map[uint64]string
+
+	readTimeout time.Duration
 }
 
 func newTransport(store *Store, client *pd.Client, handler func(interface{})) *transport {
@@ -65,12 +67,13 @@ func newTransport(store *Store, client *pd.Client, handler func(interface{})) *t
 	}
 
 	t := &transport{
-		server:  goetty.NewServer(addr, decoder, encoder, goetty.NewUUIDV4IdGenerator()),
-		conns:   make(map[string]*goetty.Connector),
-		addrs:   make(map[uint64]string),
-		handler: handler,
-		client:  client,
-		store:   store,
+		server:      goetty.NewServer(addr, decoder, encoder, goetty.NewUUIDV4IdGenerator()),
+		conns:       make(map[string]goetty.IOSession),
+		addrs:       make(map[uint64]string),
+		handler:     handler,
+		client:      client,
+		store:       store,
+		readTimeout: time.Millisecond * time.Duration(store.cfg.Raft.BaseTick*store.cfg.Raft.ElectionTick*2),
 	}
 
 	t.getStoreAddrFun = t.getStoreAddr
@@ -88,13 +91,23 @@ func (t *transport) stop() {
 }
 
 func (t *transport) doConnection(session goetty.IOSession) error {
+	remoteIP := session.RemoteIP()
+
+	log.Infof("transport: %s connected", remoteIP)
 	for {
-		msg, err := session.Read()
+		msg, err := session.ReadTimeout(t.readTimeout)
 		if err != nil {
-			log.Warnf("read error from conn-%s, errors:\n%+v", session.RemoteAddr(), err)
+			if err == io.EOF {
+				log.Infof("transport: closed by %s", remoteIP)
+			} else {
+				log.Warnf("transport: read error from conn-%s, errors:\n%+v", remoteIP, err)
+
+			}
+
 			return err
 		}
 
+		session.Write(ack)
 		t.handler(msg)
 	}
 }
@@ -191,16 +204,16 @@ func (t *transport) send(storeID uint64, msg *mraft.RaftMessage) error {
 	return nil
 }
 
-func (t *transport) getConn(addr string) (*goetty.Connector, error) {
+func (t *transport) getConn(addr string) (goetty.IOSession, error) {
 	conn := t.getConnLocked(addr)
-	if checkConnect(addr, conn) {
+	if t.checkConnect(addr, conn) {
 		return conn, nil
 	}
 
 	return conn, errConnect
 }
 
-func (t *transport) getConnLocked(addr string) *goetty.Connector {
+func (t *transport) getConnLocked(addr string) goetty.IOSession {
 	t.RLock()
 	conn := t.conns[addr]
 	t.RUnlock()
@@ -212,7 +225,7 @@ func (t *transport) getConnLocked(addr string) *goetty.Connector {
 	return t.createConn(addr)
 }
 
-func (t *transport) createConn(addr string) *goetty.Connector {
+func (t *transport) createConn(addr string) goetty.IOSession {
 	t.Lock()
 
 	// double check
@@ -227,7 +240,7 @@ func (t *transport) createConn(addr string) *goetty.Connector {
 	return conn
 }
 
-func checkConnect(addr string, conn *goetty.Connector) bool {
+func (t *transport) checkConnect(addr string, conn goetty.IOSession) bool {
 	if nil == conn {
 		return false
 	}
@@ -236,14 +249,28 @@ func checkConnect(addr string, conn *goetty.Connector) bool {
 		return true
 	}
 
+	t.Lock()
 	ok, err := conn.Connect()
 	if err != nil {
 		log.Errorf("transport: connect to store failure, target=<%s> errors:\n %+v",
 			addr,
 			err)
+		t.Unlock()
 		return false
 	}
-
+	go func() {
+		for {
+			_, err := conn.ReadTimeout(t.readTimeout)
+			if err != nil {
+				log.Errorf("transport: read error, target=<%s> errors:\n %+v",
+					addr,
+					err)
+				conn.Close()
+				return
+			}
+		}
+	}()
+	t.Unlock()
 	return ok
 }
 
@@ -255,8 +282,7 @@ func (t *transport) getConnectionCfg(addr string) *goetty.Conf {
 		TimeoutWrite:           defaultWriteIdle,
 		WriteTimeoutFn:         t.onTimeIdle,
 	}
-
 }
-func (t *transport) onTimeIdle(addr string, conn *goetty.Connector) {
+func (t *transport) onTimeIdle(addr string, conn goetty.IOSession) {
 
 }

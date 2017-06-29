@@ -41,7 +41,7 @@ type SnapshotManager interface {
 	Deregister(key *mraft.SnapKey, step int)
 	Create(snap *mraft.RaftSnapshotData) error
 	Exists(key *mraft.SnapKey) bool
-	WriteTo(key *mraft.SnapKey, conn *goetty.Connector) (uint64, error)
+	WriteTo(key *mraft.SnapKey, conn goetty.IOSession) (uint64, error)
 	WriteSnapData(data *mraft.SnapshotData) error
 	Apply(key *mraft.SnapKey) error
 }
@@ -166,7 +166,7 @@ func (m *defaultSnapshotManager) Exists(key *mraft.SnapKey) bool {
 	return fileutil.Exist(file)
 }
 
-func (m *defaultSnapshotManager) WriteTo(key *mraft.SnapKey, conn *goetty.Connector) (uint64, error) {
+func (m *defaultSnapshotManager) WriteTo(key *mraft.SnapKey, conn goetty.IOSession) (uint64, error) {
 	file := m.getPathOfSnapKeyGZ(key)
 
 	if !m.Exists(key) {
