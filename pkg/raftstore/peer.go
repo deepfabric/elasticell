@@ -15,17 +15,18 @@ package raftstore
 
 import (
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	"github.com/Workiva/go-datastructures/queue"
-	"github.com/coreos/etcd/raft"
-	"github.com/coreos/etcd/raft/raftpb"
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
 	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
 	"github.com/deepfabric/elasticell/pkg/pd"
 	"github.com/deepfabric/elasticell/pkg/util"
+	"github.com/deepfabric/etcd/raft"
+	"github.com/deepfabric/etcd/raft/raftpb"
 	"golang.org/x/net/context"
 )
 
@@ -36,15 +37,18 @@ const (
 
 // PeerReplicate is the cell's peer replicate. Every cell replicate has a PeerReplicate.
 type PeerReplicate struct {
-	cellID     uint64
-	peer       metapb.Peer
-	raftTicker *time.Ticker
-	rn         raft.Node
-	store      *Store
-	ps         *peerStorage
+	cellID uint64
+	peer   metapb.Peer
 
-	proposeC chan *proposalMeta
-	msgC     chan raftpb.Message
+	rn    *raft.RawNode
+	store *Store
+	ps    *peerStorage
+
+	loopC        chan struct{}
+	tickC        chan struct{}
+	proposeC     chan *proposalMeta
+	msgC         chan raftpb.Message
+	applyResultC chan *asyncApplyResult
 
 	peerHeartbeatsMap *peerHeartbeatsMap
 	pendingReads      *readIndexQueue
@@ -59,6 +63,7 @@ type PeerReplicate struct {
 	deleteKeysHint  uint64
 
 	cancelTaskIds []uint64
+	stopped       uint32
 }
 
 func createPeerReplicate(store *Store, cell *metapb.Cell) (*PeerReplicate, error) {
@@ -107,11 +112,17 @@ func newPeerReplicate(store *Store, cell *metapb.Cell, peerID uint64) (*PeerRepl
 	pr.ps = ps
 
 	c := getRaftConfig(peerID, ps.getAppliedIndex(), ps, store.cfg.Raft)
-	rn := raft.StartNode(c, nil)
+	rn, err := raft.NewRawNode(c, nil)
+	if err != nil {
+		return nil, err
+	}
 	pr.rn = rn
-	pr.raftTicker = time.NewTicker(time.Millisecond * time.Duration(store.cfg.Raft.BaseTick))
+	pr.loopC = make(chan struct{}, defaultChanBuf)
+	pr.tickC = make(chan struct{}, defaultChanBuf)
 	pr.msgC = make(chan raftpb.Message, defaultChanBuf)
 	pr.proposeC = make(chan *proposalMeta, defaultChanBuf)
+	pr.applyResultC = make(chan *asyncApplyResult, defaultChanBuf)
+
 	pr.store = store
 	pr.pendingReads = &readIndexQueue{
 		cellID:   cell.ID,
@@ -129,7 +140,7 @@ func newPeerReplicate(store *Store, cell *metapb.Cell, peerID uint64) (*PeerRepl
 
 	// If this region has only one peer and I am the one, campaign directly.
 	if len(cell.Peers) == 1 && cell.Peers[0].StoreID == store.id {
-		err = rn.Campaign(context.TODO())
+		err = rn.Campaign()
 		if err != nil {
 			return nil, err
 		}
@@ -141,6 +152,14 @@ func newPeerReplicate(store *Store, cell *metapb.Cell, peerID uint64) (*PeerRepl
 	id, _ = store.runner.RunCancelableTask(pr.readyToServeRaft)
 	pr.cancelTaskIds = append(pr.cancelTaskIds, id)
 	return pr, nil
+}
+
+func (pr *PeerReplicate) setStop() {
+	atomic.StoreUint32(&pr.stopped, 1)
+}
+
+func (pr *PeerReplicate) isStopped() bool {
+	return atomic.LoadUint32(&pr.stopped) == 1
 }
 
 func (pr *PeerReplicate) handleHeartbeat() {
@@ -264,6 +283,8 @@ func (pr *PeerReplicate) collectPendingPeers() []metapb.Peer {
 func (pr *PeerReplicate) destroy() error {
 	log.Infof("raftstore-destroy[cell-%d]: begin to destroy",
 		pr.cellID)
+
+	pr.setStop()
 
 	wb := pr.store.engine.NewWriteBatch()
 

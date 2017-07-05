@@ -21,8 +21,6 @@ import (
 	"time"
 
 	"github.com/Workiva/go-datastructures/queue"
-	"github.com/coreos/etcd/raft"
-	"github.com/coreos/etcd/raft/raftpb"
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
@@ -31,6 +29,8 @@ import (
 	"github.com/deepfabric/elasticell/pkg/pd"
 	"github.com/deepfabric/elasticell/pkg/storage"
 	"github.com/deepfabric/elasticell/pkg/util"
+	"github.com/deepfabric/etcd/raft"
+	"github.com/deepfabric/etcd/raft/raftpb"
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 )
@@ -83,6 +83,10 @@ func (q *readIndexQueue) resetReadyCnt() {
 
 func (q *readIndexQueue) getReadyCnt() int32 {
 	return atomic.LoadInt32(&q.readyCnt)
+}
+
+func (q *readIndexQueue) size() int {
+	return int(q.reads.Len())
 }
 
 // ====================== raft ready handle methods
@@ -210,7 +214,7 @@ func (pr *PeerReplicate) doSaveApplyState(ctx *tempRaftContext) error {
 	return err
 }
 
-func (pr *PeerReplicate) doApplySnap(ctx *tempRaftContext) *applySnapResult {
+func (pr *PeerReplicate) doApplySnap(ctx *tempRaftContext, rd *raft.Ready) *applySnapResult {
 	pr.ps.raftState = ctx.raftState
 	pr.ps.setApplyState(&ctx.applyState)
 	pr.ps.lastTerm = ctx.lastTerm
@@ -246,7 +250,7 @@ func (pr *PeerReplicate) doApplySnap(ctx *tempRaftContext) *applySnapResult {
 	}
 }
 
-func (pr *PeerReplicate) applyCommittedEntries(rd *raft.Ready) bool {
+func (pr *PeerReplicate) applyCommittedEntries(rd *raft.Ready) {
 	if pr.ps.isApplyingSnap() {
 		pr.ps.lastReadyIndex = pr.ps.getTruncatedIndex()
 	} else {
@@ -256,18 +260,14 @@ func (pr *PeerReplicate) applyCommittedEntries(rd *raft.Ready) bool {
 
 		if len(rd.CommittedEntries) > 0 {
 			pr.ps.lastReadyIndex = rd.CommittedEntries[len(rd.CommittedEntries)-1].Index
-
 			err := pr.startApplyCommittedEntriesJob(pr.ps.getCell().ID, pr.getCurrentTerm(), rd.CommittedEntries)
 			if err != nil {
 				log.Fatalf("raftstore[cell-%d]: add apply committed entries job failed, errors:\n %+v",
 					pr.ps.getCell().ID,
 					err)
 			}
-			return true
 		}
 	}
-
-	return false
 }
 
 func (pr *PeerReplicate) doPropose(meta *proposalMeta, isConfChange bool) error {
@@ -379,6 +379,7 @@ func (pr *PeerReplicate) doPostApply(result *asyncApplyResult) {
 
 	log.Debugf("raftstore[cell-%d]: async apply committied entries finished", pr.cellID)
 
+	pr.rn.AdvanceApply(result.applyState.AppliedIndex)
 	pr.ps.setApplyState(&result.applyState)
 	pr.ps.setAppliedIndexTerm(result.appliedIndexTerm)
 
@@ -568,6 +569,29 @@ func (s *Store) doApplyRaftLogGC(cellID uint64, result *raftGCResult) {
 }
 
 func (pr *PeerReplicate) doApplyReads(rd *raft.Ready) {
+	// Note that only after handle read_states can we identify what requests are
+	// actually stale.
+	if rd.SoftState != nil {
+		if rd.SoftState.RaftState != raft.StateLeader {
+			n := int(pr.pendingReads.size())
+			if n > 0 {
+				// all uncommitted reads will be dropped silently in raft.
+				for index := 0; index < n; index++ {
+					cmd := pr.pendingReads.pop()
+					resp := errorStaleCMDResp(cmd.getUUID(), pr.getCurrentTerm())
+
+					log.Debugf("raftstore[cell-%d]: resp stale, cmd=<%+v>",
+						pr.cellID,
+						cmd)
+					cmd.resp(resp)
+				}
+			}
+
+			pr.pendingReads.resetReadyCnt()
+			log.Infof("********todo-delete: resp all read as stale")
+		}
+	}
+
 	if pr.readyToHandleRead() {
 		for _, state := range rd.ReadStates {
 			cmd := pr.pendingReads.pop()
@@ -582,26 +606,6 @@ func (pr *PeerReplicate) doApplyReads(rd *raft.Ready) {
 	} else {
 		for _ = range rd.ReadStates {
 			pr.pendingReads.incrReadyCnt()
-		}
-	}
-
-	// Note that only after handle read_states can we identify what requests are
-	// actually stale.
-	if rd.SoftState != nil {
-		if rd.SoftState.RaftState != raft.StateLeader {
-			n := int(pr.pendingReads.getReadyCnt())
-			if n > 0 {
-				// all uncommitted reads will be dropped silently in raft.
-				for index := 0; index < n; index++ {
-					cmd := pr.pendingReads.pop()
-					resp := errorStaleCMDResp(cmd.getUUID(), pr.getCurrentTerm())
-
-					log.Infof("raftstore[cell-%d]: cmd is stale, skip. cmd=<%+v>",
-						pr.cellID,
-						cmd)
-					cmd.resp(resp)
-				}
-			}
 		}
 	}
 }

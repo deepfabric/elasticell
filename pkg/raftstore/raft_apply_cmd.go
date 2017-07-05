@@ -95,12 +95,12 @@ func (d *applyDelegate) doApplyRaftCMD(req *raftcmdpb.RaftCMDRequest, term uint6
 
 	d.applyState = ctx.applyState
 	d.term = term
-
-	log.Debugf("raftstore-apply[cell-%d]: applied command, uuid=<%v> index=<%d> resp=<%+v>",
+	log.Debugf("raftstore-apply[cell-%d]: applied command, uuid=<%v> index=<%d> resp=<%+v> state=<%+v>",
 		d.cell.ID,
 		req.Header.UUID,
 		index,
-		resp)
+		resp,
+		d.applyState)
 
 	if cmd != nil {
 		buildTerm(d.term, resp)

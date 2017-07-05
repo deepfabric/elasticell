@@ -64,6 +64,10 @@ func (c *Cfg) getSplitCellCheckDuration() time.Duration {
 	return time.Duration(c.SplitCellCheckIntervalMs) * time.Millisecond
 }
 
+func (c *Cfg) getRaftBaseTickDuration() time.Duration {
+	return time.Duration(c.Raft.BaseTick) * time.Millisecond
+}
+
 // RaftCfg is the cfg for raft
 type RaftCfg struct {
 	ElectionTick    int    `json:"electionTick"`

@@ -19,13 +19,13 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/coreos/etcd/raft"
-	"github.com/coreos/etcd/raft/raftpb"
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
 	"github.com/deepfabric/elasticell/pkg/storage"
 	"github.com/deepfabric/elasticell/pkg/util"
+	"github.com/deepfabric/etcd/raft"
+	"github.com/deepfabric/etcd/raft/raftpb"
 	"github.com/pkg/errors"
 )
 
@@ -204,7 +204,7 @@ func (ps *peerStorage) initLastTerm() error {
 }
 
 func (ps *peerStorage) isApplyComplete() bool {
-	return ps.raftState.HardState.Commit == ps.getAppliedIndex()
+	return ps.getCommittedIndex() == ps.getAppliedIndex()
 }
 
 func (ps *peerStorage) setApplyState(applyState *mraft.RaftApplyState) {
@@ -217,6 +217,10 @@ func (ps *peerStorage) getApplyState() *mraft.RaftApplyState {
 
 func (ps *peerStorage) getAppliedIndex() uint64 {
 	return ps.getApplyState().AppliedIndex
+}
+
+func (ps *peerStorage) getCommittedIndex() uint64 {
+	return ps.raftState.HardState.Commit
 }
 
 func (ps *peerStorage) getTruncatedIndex() uint64 {

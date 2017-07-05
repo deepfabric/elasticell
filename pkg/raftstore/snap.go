@@ -99,7 +99,7 @@ func (m *defaultSnapshotManager) Register(key *mraft.SnapKey, step int) bool {
 		return false
 	}
 
-	m.registry[fkey] = struct{}{}
+	m.registry[fkey] = emptyStruct
 	return true
 }
 

@@ -259,16 +259,6 @@
 			"Rev": "714e7ec8db7f8398880197be10771fe89c480ee5"
 		},
 		{
-			"ImportPath": "github.com/coreos/etcd/raft",
-			"Comment": "v3.1.2",
-			"Rev": "714e7ec8db7f8398880197be10771fe89c480ee5"
-		},
-		{
-			"ImportPath": "github.com/coreos/etcd/raft/raftpb",
-			"Comment": "v3.1.2",
-			"Rev": "714e7ec8db7f8398880197be10771fe89c480ee5"
-		},
-		{
 			"ImportPath": "github.com/coreos/etcd/rafthttp",
 			"Comment": "v3.1.2",
 			"Rev": "714e7ec8db7f8398880197be10771fe89c480ee5"

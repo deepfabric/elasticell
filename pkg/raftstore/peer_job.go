@@ -17,12 +17,12 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/coreos/etcd/raft/raftpb"
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
 	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
 	"github.com/deepfabric/elasticell/pkg/util"
+	"github.com/deepfabric/etcd/raft/raftpb"
 )
 
 func (pr *PeerReplicate) startApplyingSnapJob() {
@@ -183,8 +183,6 @@ func (ps *peerStorage) doDestroyDataJob(cellID uint64, startKey, endKey []byte) 
 
 func (pr *PeerReplicate) doApplyingSnapshotJob() error {
 	log.Infof("raftstore[cell-%d]: begin apply snap data", pr.cellID)
-	defer pr.rn.Advance()
-
 	localState, err := pr.ps.loadCellLocalState(pr.ps.applySnapJob)
 	if err != nil {
 		return err
@@ -325,15 +323,12 @@ func (s *Store) doDestroy(cellID uint64) error {
 }
 
 func (pr *PeerReplicate) doApplyCommittedEntries(cellID uint64, term uint64, commitedEntries []raftpb.Entry) error {
-	defer pr.rn.Advance()
-
 	delegate := pr.store.delegates.get(cellID)
 	if nil == delegate {
 		return fmt.Errorf("raftstore[cell-%d]: missing delegate", pr.cellID)
 	}
 
 	delegate.term = term
-
 	delegate.applyCommittedEntries(commitedEntries)
 
 	if delegate.isPendingRemove() {

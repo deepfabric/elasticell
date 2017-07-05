@@ -18,7 +18,6 @@ import (
 
 	"time"
 
-	"github.com/coreos/etcd/raft/raftpb"
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
@@ -29,6 +28,7 @@ import (
 	"github.com/deepfabric/elasticell/pkg/storage"
 	"github.com/deepfabric/elasticell/pkg/util"
 	"github.com/deepfabric/elasticell/pkg/util/uuid"
+	"github.com/deepfabric/etcd/raft/raftpb"
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 )
@@ -200,7 +200,7 @@ func (s *Store) Start() {
 	s.startCellHeartbeatTask()
 	log.Infof("bootstrap: ready to handle cell heartbeat")
 
-	s.startGCTask()
+	//s.startGCTask()	// TODO: need check!!
 	log.Infof("bootstrap: ready to handle gc task")
 
 	s.startCellSplitCheckTask()

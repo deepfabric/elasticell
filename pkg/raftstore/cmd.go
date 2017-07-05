@@ -20,7 +20,6 @@ import (
 	"github.com/deepfabric/elasticell/pkg/pb/errorpb"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
-	"golang.org/x/net/context"
 )
 
 var (
@@ -209,7 +208,27 @@ func (pr *PeerReplicate) execReadLocal(cmd *cmd) {
 	pr.doExecReadCmd(cmd)
 }
 
-func (pr *PeerReplicate) execReadIndex(cmd *cmd) {
-	pr.rn.ReadIndex(context.TODO(), cmd.getUUID())
-	pr.pendingReads.push(cmd)
+func (pr *PeerReplicate) execReadIndex(meta *proposalMeta) {
+	if !pr.isLeader() {
+		meta.cmd.respNotLeader(pr.cellID, meta.term, nil)
+		return
+	}
+
+	lastPendingReadCount := pr.pendingReadCount()
+	lastReadyReadCount := pr.readyReadCount()
+
+	pr.rn.ReadIndex(meta.cmd.getUUID())
+
+	pendingReadCount := pr.pendingReadCount()
+	readyReadCount := pr.readyReadCount()
+
+	if pendingReadCount == lastPendingReadCount &&
+		readyReadCount == lastReadyReadCount {
+		// The message gets dropped silently, can't be handled anymore.
+		meta.cmd.respNotLeader(pr.cellID, meta.term, nil)
+		return
+	}
+
+	pr.pendingReads.push(meta.cmd)
+	pr.raftReady()
 }

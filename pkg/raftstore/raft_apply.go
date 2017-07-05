@@ -18,12 +18,12 @@ import (
 
 	"bytes"
 
-	"github.com/coreos/etcd/raft/raftpb"
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
 	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
 	"github.com/deepfabric/elasticell/pkg/util"
+	"github.com/deepfabric/etcd/raft/raftpb"
 )
 
 // TODO: change every redis command apply to rocksdb
@@ -194,7 +194,10 @@ func isChangePeerCMD(req *raftcmdpb.RaftCMDRequest) bool {
 
 func (d *applyDelegate) notifyStaleCMD(cmd *pendingCmd) {
 	resp := errorStaleCMDResp(cmd.cmd.getUUID(), d.term)
-	log.Infof("raftstore-apply[cell-%d]: cmd is stale, skip. cmd=<%+v>", d.cell.ID, cmd)
+	log.Debugf("raftstore-apply[cell-%d]: resp stale, cmd=<%+v>, current=<%d>",
+		d.cell.ID,
+		cmd,
+		d.term)
 	cmd.cmd.resp(resp)
 }
 
@@ -216,11 +219,12 @@ func (d *applyDelegate) applyCommittedEntries(commitedEntries []raftpb.Entry) {
 
 		expectIndex := d.applyState.AppliedIndex + 1
 		if expectIndex != entry.Index {
-			log.Fatalf("raftstore-apply[cell-%d]: index not match, expect=<%d> get=<%d> state=<%+v>",
+			log.Fatalf("raftstore-apply[cell-%d]: index not match, expect=<%d> get=<%d> state=<%+v> entry=<%+v>",
 				d.cell.ID,
 				expectIndex,
 				entry.Index,
-				d.applyState)
+				d.applyState,
+				entry)
 		}
 
 		var result *execResult
@@ -246,11 +250,7 @@ func (d *applyDelegate) applyCommittedEntries(commitedEntries []raftpb.Entry) {
 
 		pr := d.store.replicatesMap.get(d.cell.ID)
 		if pr != nil {
-			pr.doPostApply(asyncResult)
-		}
-
-		if result != nil {
-			d.store.doPostApplyResult(asyncResult)
+			pr.addApplyResult(asyncResult)
 		}
 	}
 }

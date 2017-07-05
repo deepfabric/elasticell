@@ -19,12 +19,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/coreos/etcd/raft/raftpb"
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
 	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
 	"github.com/deepfabric/elasticell/pkg/pd"
 	"github.com/deepfabric/elasticell/pkg/util"
+	"github.com/deepfabric/etcd/raft/raftpb"
 	"github.com/fagongzi/goetty"
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
@@ -32,10 +32,6 @@ import (
 
 var (
 	errConnect = errors.New("not connected")
-)
-
-var (
-	tw = goetty.NewHashedTimeWheel(time.Millisecond*500, 60, 3)
 )
 
 const (
@@ -54,8 +50,9 @@ type transport struct {
 
 	getStoreAddrFun func(storeID uint64) (string, error)
 
-	conns map[string]goetty.IOSession
-	addrs map[uint64]string
+	conns   map[string]goetty.IOSession
+	addrs   map[uint64]string
+	ipAddrs map[string][]uint64
 
 	readTimeout time.Duration
 }
@@ -73,7 +70,7 @@ func newTransport(store *Store, client *pd.Client, handler func(interface{})) *t
 		handler:     handler,
 		client:      client,
 		store:       store,
-		readTimeout: time.Millisecond * time.Duration(store.cfg.Raft.BaseTick*store.cfg.Raft.ElectionTick*2),
+		readTimeout: time.Millisecond * time.Duration(store.cfg.Raft.BaseTick*store.cfg.Raft.ElectionTick),
 	}
 
 	t.getStoreAddrFun = t.getStoreAddr
@@ -82,7 +79,6 @@ func newTransport(store *Store, client *pd.Client, handler func(interface{})) *t
 }
 
 func (t *transport) start() error {
-	tw.Start()
 	return t.server.Start(t.doConnection)
 }
 
@@ -101,13 +97,11 @@ func (t *transport) doConnection(session goetty.IOSession) error {
 				log.Infof("transport: closed by %s", remoteIP)
 			} else {
 				log.Warnf("transport: read error from conn-%s, errors:\n%+v", remoteIP, err)
-
 			}
 
 			return err
 		}
 
-		session.Write(ack)
 		t.handler(msg)
 	}
 }
@@ -173,11 +167,13 @@ func (t *transport) send(storeID uint64, msg *mraft.RaftMessage) error {
 
 			err = conn.Write(&snapData.Key)
 			if err != nil {
+				conn.Close()
 				return errors.Wrapf(err, "")
 			}
 
 			size, err := t.store.snapshotManager.WriteTo(&snapData.Key, conn)
 			if err != nil {
+				conn.Close()
 				return errors.Wrapf(err, "")
 			}
 
@@ -192,7 +188,6 @@ func (t *transport) send(storeID uint64, msg *mraft.RaftMessage) error {
 				snapData.Key,
 				size)
 		}
-
 	}
 
 	err = conn.Write(msg)
@@ -250,6 +245,11 @@ func (t *transport) checkConnect(addr string, conn goetty.IOSession) bool {
 	}
 
 	t.Lock()
+	if conn.IsConnected() {
+		t.Unlock()
+		return true
+	}
+
 	ok, err := conn.Connect()
 	if err != nil {
 		log.Errorf("transport: connect to store failure, target=<%s> errors:\n %+v",
@@ -258,18 +258,8 @@ func (t *transport) checkConnect(addr string, conn goetty.IOSession) bool {
 		t.Unlock()
 		return false
 	}
-	go func() {
-		for {
-			_, err := conn.ReadTimeout(t.readTimeout)
-			if err != nil {
-				log.Errorf("transport: read error, target=<%s> errors:\n %+v",
-					addr,
-					err)
-				conn.Close()
-				return
-			}
-		}
-	}()
+
+	log.Infof("transport: connected to store, target=<%s>", addr)
 	t.Unlock()
 	return ok
 }
@@ -278,11 +268,5 @@ func (t *transport) getConnectionCfg(addr string) *goetty.Conf {
 	return &goetty.Conf{
 		Addr: addr,
 		TimeoutConnectToServer: defaultConnectTimeout,
-		TimeWheel:              tw,
-		TimeoutWrite:           defaultWriteIdle,
-		WriteTimeoutFn:         t.onTimeIdle,
 	}
-}
-func (t *transport) onTimeIdle(addr string, conn goetty.IOSession) {
-
 }

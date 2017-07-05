@@ -29,9 +29,6 @@ var (
 const (
 	typeRaft = 1
 	typeSnap = 2
-	typeAck  = 3
-
-	ack = 0
 )
 
 type raftDecoder struct {
@@ -68,9 +65,6 @@ func (decoder raftDecoder) Decode(in *goetty.ByteBuf) (bool, interface{}, error)
 		msg := &mraft.RaftMessage{}
 		util.MustUnmarshal(msg, data)
 		return true, msg, nil
-	case typeAck:
-		msg := goetty.Byte2Int(data)
-		return true, msg, nil
 	}
 
 	return true, nil, fmt.Errorf("decoder: not support msg type, type=<%d>", t)
@@ -87,10 +81,6 @@ func (e raftEncoder) Encode(data interface{}, out *goetty.ByteBuf) error {
 		out.WriteInt(len(d) + 1)
 		out.WriteByte(typeSnap)
 		out.Write(d)
-	} else if msg, ok := data.(int); ok {
-		out.WriteInt(5)
-		out.WriteByte(typeAck)
-		out.WriteInt(msg)
 	}
 
 	return nil

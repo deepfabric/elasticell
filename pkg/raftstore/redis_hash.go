@@ -318,6 +318,7 @@ func (s *Store) execHMGet(req *raftcmdpb.Request) *raftcmdpb.Response {
 	if errs != nil {
 		errors := make([][]byte, len(errs))
 		for idx, err := range errs {
+			// TODO: bug invalid memory address or nil pointer dereference
 			errors[idx] = util.StringToSlice(err.Error())
 		}
 
