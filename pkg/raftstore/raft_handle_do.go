@@ -328,6 +328,7 @@ func (pr *PeerReplicate) doSplitCheck(epoch metapb.CellEpoch, startKey, endKey [
 			pr.store.cfg.CellSplitSize,
 			startKey,
 			endKey)
+		pr.sizeDiffHint = int64(size)
 		return nil
 	}
 
@@ -377,11 +378,11 @@ func (pr *PeerReplicate) doPostApply(result *asyncApplyResult) {
 			pr.cellID)
 	}
 
-	log.Debugf("raftstore[cell-%d]: async apply committied entries finished", pr.cellID)
-
 	pr.rn.AdvanceApply(result.applyState.AppliedIndex)
 	pr.ps.setApplyState(&result.applyState)
 	pr.ps.setAppliedIndexTerm(result.appliedIndexTerm)
+
+	log.Debugf("raftstore[cell-%d]: async apply committied entries finished", pr.cellID)
 
 	pr.writtenBytes += uint64(result.metrics.writtenBytes)
 	pr.writtenKeys += result.metrics.writtenKeys
@@ -559,6 +560,11 @@ func (s *Store) doApplyRaftLogGC(cellID uint64, result *raftGCResult) {
 		startIndex := pr.ps.lastCompactIndex
 		endIndex := result.state.Index + 1
 		pr.ps.lastCompactIndex = endIndex
+
+		log.Debugf("raftstore-apply[cell-%d]: start to compact raft log, start=<%d> end=<%d>",
+			cellID,
+			startIndex,
+			endIndex)
 		err := pr.startRaftLogGCJob(cellID, startIndex, endIndex)
 		if err != nil {
 			log.Errorf("raftstore-compact[cell-%d]: add raft gc job failed, errors:\n %+v",
@@ -588,14 +594,12 @@ func (pr *PeerReplicate) doApplyReads(rd *raft.Ready) {
 			}
 
 			pr.pendingReads.resetReadyCnt()
-			log.Infof("********todo-delete: resp all read as stale")
 		}
 	}
 
 	if pr.readyToHandleRead() {
 		for _, state := range rd.ReadStates {
 			cmd := pr.pendingReads.pop()
-
 			if bytes.Compare(state.RequestCtx, cmd.getUUID()) != 0 {
 				log.Fatalf("raftstore[cell-%d]: apply read failed, uuid not match",
 					pr.cellID)

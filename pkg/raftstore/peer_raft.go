@@ -169,6 +169,9 @@ func (pr *PeerReplicate) doRaftReady() {
 
 	if pr.rn.HasReadySince(pr.ps.lastReadyIndex) {
 		rd := pr.rn.ReadySince(pr.ps.lastReadyIndex)
+		log.Debugf("raftstore[cell-%d]: raft ready, last ready index=<%d>",
+			pr.cellID,
+			pr.ps.lastReadyIndex)
 
 		ctx := &tempRaftContext{
 			raftState:  pr.ps.raftState,
@@ -357,6 +360,10 @@ func (pr *PeerReplicate) notifyPropose(meta *proposalMeta) {
 }
 
 func (pr *PeerReplicate) propose(meta *proposalMeta) {
+	log.Debugf("raftstore[cell-%d]: handle propose, meta=<%+v>",
+		pr.cellID,
+		meta)
+
 	if pr.proposals.contains(meta.uuid) {
 		resp := errorOtherCMDResp(fmt.Errorf("duplicated uuid %v", meta.uuid))
 		meta.cmd.resp(resp)

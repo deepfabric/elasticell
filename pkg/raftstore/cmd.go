@@ -217,6 +217,9 @@ func (pr *PeerReplicate) execReadIndex(meta *proposalMeta) {
 	lastPendingReadCount := pr.pendingReadCount()
 	lastReadyReadCount := pr.readyReadCount()
 
+	log.Debugf("raftstore[cell-%d]: to read index, meta=<%+v>",
+		pr.cellID,
+		meta)
 	pr.rn.ReadIndex(meta.cmd.getUUID())
 
 	pendingReadCount := pr.pendingReadCount()

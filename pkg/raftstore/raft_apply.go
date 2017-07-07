@@ -26,7 +26,6 @@ import (
 	"github.com/deepfabric/etcd/raft/raftpb"
 )
 
-// TODO: change every redis command apply to rocksdb
 type applyMetrics struct {
 	// an inaccurate difference in cell size since last reset.
 	sizeDiffHint int64

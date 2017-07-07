@@ -274,6 +274,11 @@ func (s *Runner) RunJobWithNamedWorker(worker string, task func() error) (*Job, 
 	}
 
 	job := newJob(task)
+	c := s.getNamedQueue(worker)
+	if c == nil {
+		return nil, fmt.Errorf("named worker %s is not exists", worker)
+	}
+
 	s.getNamedQueue(worker) <- job
 	return job, nil
 }

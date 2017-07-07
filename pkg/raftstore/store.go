@@ -103,6 +103,7 @@ func NewStore(clusterID uint64, pdClient *pd.Client, meta metapb.Store, engine s
 	s.runner.AddNamedWorker(applyWorker, defaultWorkerQueueSize)
 	s.runner.AddNamedWorker(pdWorker, defaultWorkerQueueSize)
 	s.runner.AddNamedWorker(splitWorker, defaultWorkerQueueSize)
+	s.runner.AddNamedWorker(raftGCWorker, defaultWorkerQueueSize)
 
 	s.redisReadHandles = make(map[raftcmdpb.CMDType]func(*raftcmdpb.Request) *raftcmdpb.Response)
 	s.redisWriteHandles = make(map[raftcmdpb.CMDType]func(*execContext, *raftcmdpb.Request) *raftcmdpb.Response)
@@ -200,7 +201,7 @@ func (s *Store) Start() {
 	s.startCellHeartbeatTask()
 	log.Infof("bootstrap: ready to handle cell heartbeat")
 
-	//s.startGCTask()	// TODO: need check!!
+	s.startGCTask()
 	log.Infof("bootstrap: ready to handle gc task")
 
 	s.startCellSplitCheckTask()
@@ -454,10 +455,7 @@ func (s *Store) onRaftMessage(msg *mraft.RaftMessage) {
 	s.addPeerToCache(msg.FromPeer)
 
 	pr := s.getPeerReplicate(msg.CellID)
-	err = pr.step(msg.Message)
-	if err != nil {
-		return
-	}
+	pr.step(msg.Message)
 }
 
 func (s *Store) onRaftCMD(cmd *cmd) {
@@ -954,7 +952,7 @@ func (s *Store) handleRaftGCLog() {
 
 		// When an election happened or a new peer is added, replicated_idx can be 0.
 		if replicatedIdx > 0 {
-			lastIdx, _ := pr.ps.LastIndex()
+			lastIdx := pr.rn.LastIndex()
 			if lastIdx < replicatedIdx {
 				log.Fatalf("raft-log-gc: expect last index >= replicated index, last=<%d> replicated=<%d>",
 					lastIdx,
@@ -966,7 +964,7 @@ func (s *Store) handleRaftGCLog() {
 		appliedIdx := pr.ps.getAppliedIndex()
 		firstIdx, _ := pr.ps.FirstIndex()
 
-		if appliedIdx >= firstIdx &&
+		if appliedIdx > firstIdx &&
 			appliedIdx-firstIdx >= s.cfg.RaftLogGCCountLimit {
 			compactIdx = appliedIdx
 		} else if pr.sizeDiffHint >= s.cfg.RaftLogGCSizeLimit {
@@ -974,9 +972,7 @@ func (s *Store) handleRaftGCLog() {
 		} else if replicatedIdx < firstIdx ||
 			replicatedIdx-firstIdx <= s.cfg.RaftLogGCThreshold {
 			return true, nil
-		}
-
-		if compactIdx == 0 {
+		} else {
 			compactIdx = replicatedIdx
 		}
 
@@ -991,7 +987,7 @@ func (s *Store) handleRaftGCLog() {
 			return true, nil
 		}
 
-		term, _ := pr.ps.Term(compactIdx)
+		term, _ := pr.rn.Term(compactIdx)
 
 		req := newCompactLogRequest(compactIdx, term)
 		s.sendAdminRequest(pr.getCell(), pr.peer, req)
