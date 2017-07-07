@@ -1,5 +1,6 @@
 (ns jepsen.elasticell
   (:gen-class)
+  (:import [jepsen.generator Generator])
   (:import [knossos.model Model])
   (:require [clojure.tools.logging :refer :all]
             [clojure.string :as str]
@@ -25,14 +26,15 @@
   (reify db/DB
     (setup! [_ test node]
         (info node "start cell" version)
-        (c/su (c/exec :start-cell.sh :debug))
+        (info node "is pd? " (contains? (:pd test) node) )
+        ;(c/su (c/exec :start-cell.sh :debug))
         (info "start cell over!")
         (Thread/sleep 5000)
     )
 
     (teardown! [_ test node]
         (info node "tearing down cell")
-        (c/su (c/exec :stop.sh :cell))
+        ;(c/su (c/exec :stop.sh :cell))
          )))
 
 (defn parse-long
@@ -40,7 +42,7 @@
   [s]
   (when s (Long/parseLong s)))
 
-(def server1-conn {:pool {:max-total 8} :spec {:host "10.214.160.200" :port 6379 :timeout-ms 6000}}) 
+(def server1-conn {:pool {:max-total 8} :spec {:host "n9" :port 6379 :timeout-ms 3000}})	;time out shreshold for the client connection or read ops
 (defmacro wcar* [& body] `(car/wcar server1-conn ~@body))
 
 (defn client
@@ -48,9 +50,9 @@
   [conn]
   (reify client/Client
     (setup! [_ test node]
-      ;(client (wcar* (car/flushall))
-      (client (wcar* (car/set "start" ""))
-    ))
+      (client (wcar* (car/flushall))
+      ;(client (wcar* (car/set "start" ""))
+))
 
     (invoke! [this test op]
       (let [[k v] (:value op)
@@ -68,7 +70,7 @@
                     (assoc op :type (if (= res 1)
                                       :ok
                                       :fail)))
-
+              :final (assoc op :type :ok, :value (independent/tuple k nil))
               :hset (let [ [member value] v
                           _  (wcar*  (car/hset (str "hkey" k) member value))]
                           (assoc op :type, :ok))
@@ -88,22 +90,29 @@
       ; close it.
       )))
 
-
+(defn final   [_ _] {:type :invoke, :f :final, :value nil})
 (defn r   [_ _] {:type :invoke, :f :read, :value nil})
-(defn w   [_ _] {:type :invoke, :f :write, :value (rand-int 100)})
-(defn cas [_ _] {:type :invoke, :f :cas, :value [(rand-int 100) (rand-int 100)]})
-(defn hget [_ _] {:type :invoke, :f :hget, :value [(rand-int 100) nil]})
-(defn hset [_ _] {:type :invoke, :f :hset, :value [(rand-int 100) (rand-int 100)]})
+(defn w   [_ _] {:type :invoke, :f :write, :value (rand-int 10)})			;generate random value for write operation
+(defn cas [_ _] {:type :invoke, :f :cas, :value [(rand-int 10) (rand-int 10)]})
+(defn hget [_ _] {:type :invoke, :f :hget, :value [(rand-int 10) nil]})
+(defn hset [_ _] {:type :invoke, :f :hset, :value [(rand-int 10) (rand-int 10000)]})
 
-(defrecord CellRegister [value hashtable list set zset]
+(def tables (transient {}))
+
+(defn tables-get  [k]   (get tables k))
+(defn tables-set  [k v] (assoc! tables k v))
+(defn tables-count [] (count tables))
+(defn tables-print []  (prn (persistent! tables)))
+
+(defrecord CellRegister [value hashtable]
   Model
   (step [r op]
     do  
         (condp = (:f op)
-          :write (CellRegister. (:value op) hashtable list set zset)
+          :write (CellRegister. (:value op) hashtable)
           :cas   (let [[cur new] (:value op)]
                   (if (= cur value)
-                    (CellRegister. new hashtable list set zset)
+                    (CellRegister. new hashtable)
                     (inconsistent (str "can't CAS " value " from " cur
                                         " to " new))))
           :read  (if (or (nil? (:value op))
@@ -111,21 +120,44 @@
                   r
                   (inconsistent (str "can't read " (:value op)
                                       " from register " value)))
-          :hset  (let [[new-member new-value] (:value op)]
-                     (CellRegister. value (assoc hashtable new-member new-value) list set zset ))
-          :hget  (let [[new-member new-value] (:value op)]
-                    (if (= (get hashtable new-member) new-value)
+          :hset  (let [ [new-member new-value] (:value op)]
+                    (do (tables-set new-member new-value)
+                        (CellRegister. value  (tables-count))))
+          :hget  (let [ [new-member new-value] (:value op)]
+                    (if  (= (tables-get new-member) new-value)
                           r
-                          (inconsistent (str "can't read " (:value op)
-                                        " from register " value))))
+                          (do ;(throw (ex-info (str "hget wrong, new-member " new-member
+                              ;         " tables-get from register: " (tables-get new-member)
+                              ;        " client get new-value " new-value) {}))
+                              (inconsistent (str "hget wrong, new-member " new-member
+                                        " tables-get from register: " (tables-get new-member)
+                                        " client get new-value " new-value)))
+                    ))
+          :final (do (def tables (transient {})) r)
                           ))
   Object
   (toString [this] (pr-str "value:" value " hashtable:" hashtable)))
 
 (defn elasticell-register
-  "A register"
+  "A cell register"
   ([] (elasticell-register nil))
-  ([value] (CellRegister. value {} nil nil nil)))
+  ([value] (do (info "call elasticell-register") (CellRegister. value 0)) ))
+
+(defn nemesis-gen
+  "A generator which emits a start after a t1 second delay, and then a stop
+  after a t2 second delay."
+  []
+  (gen/seq [
+	(gen/sleep 1)
+        {:type :info :f :start}
+	(gen/sleep 2)
+        {:type :info :f :paused}
+	(gen/sleep 3)
+        {:type :info :f :stop}
+	(gen/sleep 4)
+        {:type :info :f :resumed}
+       ])
+)
 
 (defn elasticell-test
   "Given an options map from the command-line runner (e.g. :nodes, :ssh,
@@ -136,30 +168,56 @@
          {:name "elasticell"
           :os debian/os
           :db (db "latest")
+          :pd   #{"n5" "n6" "n1" "localhost"}
           :client (client nil)
-          :nemesis (nemesis/partition-random-halves)
-          :model  (elasticell-register)
-          :checker (checker/compose
-                     {
-                      :perf     (checker/perf)
-                      :indep (independent/checker
-                               (checker/compose
-                                 {:timeline (timeline/html)
-                                  :linear   (checker/linearizable)}))})
-          :generator (->> (independent/concurrent-generator
-                            1
-                            (range)
-                            (fn [k]
-                              (->> (gen/mix [r w])
-                                   (gen/stagger 1/100)
-                                   (gen/limit 500))))
-                          (gen/nemesis
-                            (gen/seq (cycle [(gen/sleep 4)
-                                             {:type :info, :f :start}
-                                             (gen/sleep 4)
-                                             {:type :info, :f :stop}])))
-                          (gen/time-limit (:time-limit opts)))}
-         opts))
+                :nemesis (
+            nemesis/compose {
+            ;(nemesis/partition-majorities-ring)				;Every node can see a majority, but no node sees the *same* majority
+                    ;(nemesis/partition-random-halves)
+            {:start :start :stop :stop} (nemesis/partition-halves) 		;first partion is smaller
+            ;(nemesis/clock-scrambler 1)		;
+            {:paused :start :resumed :stop} (nemesis/hammer-time :redis-server)}	;pause and resume the proccess named redis-server
+            )
+                :model  (elasticell-register)
+                :checker (checker/compose
+                          {
+                            :perf     (checker/perf)
+                            :indep (independent/checker
+                                    (checker/compose
+                                      {:timeline (timeline/html)
+                                        :linear   (checker/linearizable)}))})
+                :generator (->> (independent/concurrent-generator
+                                  1
+                                  (range)		     ;generated key range from 0 to 1
+                                  (fn [k]
+                                    (gen/concat
+                                      (->> (gen/mix [hset hget])
+                                          (gen/stagger 1/100) ;average time interval between 2 client operation
+                                          (gen/limit 160)     ;total operations of a single independent key
+                                      )
+                                      ;(gen/sleep 1)	     ;sleep 1 seconds after a single independent key operation; comment it if you don't want to pause the operation
+                                      (gen/once {:type :invoke, :f :final})
+                                    )
+                                  )
+                                )
+                                (gen/nemesis
+                                  (gen/concat
+                                      (gen/start-stop 1 6) ;start network partition 1 seconds after previous nemesis stop, resume at 3 seconds later
+                                      ;(nemesis-gen) 
+                                  )
+                                ;(gen/seq (cycle 
+                                ;	  [(gen/sleep 1)   ;generate a nemesis loops until time limit
+                                                  ;           {:type :info, :f :start}
+                                ;	   (gen/sleep 2)
+                                ;	      {:type :info, :f :paused}
+                                ;	   (gen/sleep 3)
+                                ;	      {:type :info, :f :resumed}
+                                                  ;        (gen/sleep 4)
+                                                  ;           {:type :info, :f :stop}
+                                ;	  ]))
+                                )
+                                (gen/time-limit (:time-limit opts)))}
+          opts))
 
 (defn -main
   "Handles command line arguments. Can either run a test, or a web server for
