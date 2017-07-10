@@ -103,6 +103,8 @@ func (q *proposalQueue) clear() {
 
 func (pr *PeerReplicate) onRaftTick(arg interface{}) {
 	if pr.isStopped() {
+		log.Infof("raftstore[cell-%d]: raft tick stopped",
+			pr.ps.getCell().ID)
 		return
 	}
 
@@ -112,6 +114,8 @@ func (pr *PeerReplicate) onRaftTick(arg interface{}) {
 
 func (pr *PeerReplicate) onRaftLoop(arg interface{}) {
 	if pr.isStopped() {
+		log.Infof("raftstore[cell-%d]: raft loop stopped",
+			pr.ps.getCell().ID)
 		return
 	}
 

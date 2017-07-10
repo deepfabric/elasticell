@@ -27,8 +27,10 @@ var (
 )
 
 const (
-	typeRaft = 1
-	typeSnap = 2
+	typeRaft     = 1
+	typeSnap     = 2
+	typeSnapData = 3
+	typeSnapEnd  = 4
 )
 
 type raftDecoder struct {
@@ -58,7 +60,15 @@ func (decoder raftDecoder) Decode(in *goetty.ByteBuf) (bool, interface{}, error)
 
 	switch t {
 	case typeSnap:
+		msg := &mraft.SnapKey{}
+		util.MustUnmarshal(msg, data)
+		return true, msg, nil
+	case typeSnapData:
 		msg := &mraft.SnapshotData{}
+		util.MustUnmarshal(msg, data)
+		return true, msg, nil
+	case typeSnapEnd:
+		msg := &mraft.SnapshotDataEnd{}
 		util.MustUnmarshal(msg, data)
 		return true, msg, nil
 	case typeRaft:
@@ -76,10 +86,20 @@ func (e raftEncoder) Encode(data interface{}, out *goetty.ByteBuf) error {
 		out.WriteInt(len(d) + 1)
 		out.WriteByte(typeRaft)
 		out.Write(d)
-	} else if msg, ok := data.(*mraft.SnapshotData); ok {
+	} else if msg, ok := data.(*mraft.SnapKey); ok {
 		d := util.MustMarshal(msg)
 		out.WriteInt(len(d) + 1)
 		out.WriteByte(typeSnap)
+		out.Write(d)
+	} else if msg, ok := data.(*mraft.SnapshotData); ok {
+		d := util.MustMarshal(msg)
+		out.WriteInt(len(d) + 1)
+		out.WriteByte(typeSnapData)
+		out.Write(d)
+	} else if msg, ok := data.(*mraft.SnapshotDataEnd); ok {
+		d := util.MustMarshal(msg)
+		out.WriteInt(len(d) + 1)
+		out.WriteByte(typeSnapEnd)
 		out.Write(d)
 	}
 

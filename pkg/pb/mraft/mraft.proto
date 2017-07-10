@@ -41,6 +41,12 @@ message SnapshotData {
     optional bytes   data = 2;
 }
 
+message SnapshotDataEnd {
+    optional SnapKey key      = 1 [(gogoproto.nullable) = false];
+    optional uint64  fileSize = 2 [(gogoproto.nullable) = false];
+    optional uint64  checkSum = 3 [(gogoproto.nullable) = false];
+}
+
 message RaftSnapshotData {
     optional metapb.Cell  cell     = 1 [(gogoproto.nullable) = false];
     optional SnapKey      key      = 2 [(gogoproto.nullable) = false];

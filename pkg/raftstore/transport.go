@@ -182,8 +182,17 @@ func (t *transport) send(storeID uint64, msg *mraft.RaftMessage) error {
 					snapData.FileSize, size)
 			}
 
-			t.store.sendingSnapCount++
+			err = conn.Write(&mraft.SnapshotDataEnd{
+				Key:      snapData.Key,
+				FileSize: snapData.FileSize,
+				CheckSum: snapData.CheckSum,
+			})
+			if err != nil {
+				conn.Close()
+				return errors.Wrapf(err, "")
+			}
 
+			t.store.sendingSnapCount++
 			log.Debugf("transport: sent snapshot file complete, key=<%+v> size=<%d>",
 				snapData.Key,
 				size)

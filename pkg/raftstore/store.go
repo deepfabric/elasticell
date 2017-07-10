@@ -230,7 +230,26 @@ func (s *Store) startHandleNotifyMsg() {
 				} else if msg, ok := n.(*splitCheckResult); ok {
 					s.onSplitCheckResult(msg)
 				} else if msg, ok := n.(*mraft.SnapshotData); ok {
-					s.snapshotManager.WriteSnapData(msg)
+					err := s.snapshotManager.ReceiveSnapData(msg)
+					if err != nil {
+						log.Errorf("raftstore-snap[cell-%d]: received snap data failed, errors:\n%+v",
+							msg.Key.CellID,
+							err)
+					}
+				} else if msg, ok := n.(*mraft.SnapKey); ok {
+					err := s.snapshotManager.CleanSnap(msg)
+					if err != nil {
+						log.Errorf("raftstore-snap[cell-%d]: start received snap data failed, errors:\n%+v",
+							msg.CellID,
+							err)
+					}
+				} else if msg, ok := n.(*mraft.SnapshotDataEnd); ok {
+					err := s.snapshotManager.ReceiveSnapDataComplete(msg)
+					if err != nil {
+						log.Errorf("raftstore-snap[cell-%d]: received snap data complete failed, errors:\n%+v",
+							msg.Key.CellID,
+							err)
+					}
 				}
 			}
 		}

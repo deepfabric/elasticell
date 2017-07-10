@@ -355,15 +355,7 @@ func (ps *peerStorage) applySnapshot(job *util.Job) error {
 		Index:  ps.applyState.TruncatedState.Index,
 	}
 
-	err := ps.store.snapshotManager.Apply(key)
-	if err != nil {
-		log.Errorf("raftstore[cell-%d]: apply snapshot failed, errors:\n %+v",
-			ps.getCell().ID,
-			err)
-		return err
-	}
-
-	return nil
+	return ps.store.snapshotManager.Apply(key)
 }
 
 func (ps *peerStorage) loadApplyState() (*mraft.RaftApplyState, error) {

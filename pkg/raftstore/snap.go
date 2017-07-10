@@ -42,7 +42,9 @@ type SnapshotManager interface {
 	Create(snap *mraft.RaftSnapshotData) error
 	Exists(key *mraft.SnapKey) bool
 	WriteTo(key *mraft.SnapKey, conn goetty.IOSession) (uint64, error)
-	WriteSnapData(data *mraft.SnapshotData) error
+	CleanSnap(key *mraft.SnapKey) error
+	ReceiveSnapData(data *mraft.SnapshotData) error
+	ReceiveSnapDataComplete(data *mraft.SnapshotDataEnd) error
 	Apply(key *mraft.SnapKey) error
 }
 
@@ -87,6 +89,10 @@ func (m *defaultSnapshotManager) getPathOfSnapKey(key *mraft.SnapKey) string {
 
 func (m *defaultSnapshotManager) getPathOfSnapKeyGZ(key *mraft.SnapKey) string {
 	return fmt.Sprintf("%s.gz", m.getPathOfSnapKey(key))
+}
+
+func (m *defaultSnapshotManager) getTmpPathOfSnapKeyGZ(key *mraft.SnapKey) string {
+	return fmt.Sprintf("%s.tmp", m.getPathOfSnapKey(key))
 }
 
 func (m *defaultSnapshotManager) Register(key *mraft.SnapKey, step int) bool {
@@ -207,10 +213,74 @@ func (m *defaultSnapshotManager) WriteTo(key *mraft.SnapKey, conn goetty.IOSessi
 	return uint64(written), nil
 }
 
-func (m *defaultSnapshotManager) WriteSnapData(data *mraft.SnapshotData) error {
-	key := &data.Key
+func (m *defaultSnapshotManager) CleanSnap(key *mraft.SnapKey) error {
+	var err error
+
+	tmpFile := m.getTmpPathOfSnapKeyGZ(key)
+	if fileutil.Exist(tmpFile) {
+		log.Infof("raftstore-snap[cell-%d]: delete exists snap tmp file, file=<%s>, key=<%+v>",
+			key.CellID,
+			tmpFile,
+			key)
+		err = os.RemoveAll(tmpFile)
+	}
+
+	if err != nil {
+		return err
+	}
 
 	file := m.getPathOfSnapKeyGZ(key)
+	if fileutil.Exist(file) {
+		log.Infof("raftstore-snap[cell-%d]: delete exists snap gz file, file=<%s>, key=<%+v>",
+			key.CellID,
+			file,
+			key)
+		err = os.RemoveAll(file)
+	}
+
+	if err != nil {
+		return err
+	}
+
+	dir := m.getPathOfSnapKey(key)
+	if fileutil.Exist(dir) {
+		log.Infof("raftstore-snap[cell-%d]: delete exists snap dir, file=<%s>, key=<%+v>",
+			key.CellID,
+			dir,
+			key)
+		err = os.RemoveAll(dir)
+	}
+
+	return err
+}
+
+func (m *defaultSnapshotManager) ReceiveSnapDataComplete(data *mraft.SnapshotDataEnd) error {
+	key := &data.Key
+
+	file := m.getTmpPathOfSnapKeyGZ(key)
+	if fileutil.Exist(file) {
+		info, err := os.Stat(file)
+		if err != nil {
+			return errors.Wrapf(err, "")
+		}
+
+		if data.FileSize != uint64(info.Size()) {
+			return fmt.Errorf("snap file size not match, got=<%d> expect=<%d> path=<%s>",
+				info.Size(),
+				data.FileSize,
+				file)
+		}
+
+		return os.Rename(file, m.getPathOfSnapKeyGZ(key))
+	}
+
+	return fmt.Errorf("missing snapshot file, path=%s", file)
+}
+
+func (m *defaultSnapshotManager) ReceiveSnapData(data *mraft.SnapshotData) error {
+	key := &data.Key
+
+	file := m.getTmpPathOfSnapKeyGZ(key)
 	var f *os.File
 	var err error
 	if m.Exists(key) {
@@ -250,6 +320,7 @@ func (m *defaultSnapshotManager) Apply(key *mraft.SnapKey) error {
 	if err != nil {
 		return err
 	}
+	defer os.RemoveAll(m.getPathOfSnapKey(key))
 
 	return m.db.ApplySnapshot(m.getPathOfSnapKey(key))
 }
