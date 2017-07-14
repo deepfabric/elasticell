@@ -24,7 +24,7 @@ func (s *Store) execLIndex(req *raftcmdpb.Request) *raftcmdpb.Response {
 	args := cmd.Args()
 
 	if len(args) != 2 {
-		return redis.ErrInvalidCommandResp
+		return &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp}
 	}
 
 	index, err := util.StrInt64(args[1])
@@ -53,7 +53,7 @@ func (s *Store) execLLEN(req *raftcmdpb.Request) *raftcmdpb.Response {
 	args := cmd.Args()
 
 	if len(args) != 1 {
-		return redis.ErrInvalidCommandResp
+		return &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp}
 	}
 
 	value, err := s.getListEngine().LLen(args[0])
@@ -73,7 +73,7 @@ func (s *Store) execLRange(req *raftcmdpb.Request) *raftcmdpb.Response {
 	args := cmd.Args()
 
 	if len(args) != 3 {
-		return redis.ErrInvalidCommandResp
+		return &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp}
 	}
 
 	start, err := util.StrInt64(args[1])
@@ -109,7 +109,7 @@ func (s *Store) execLInsert(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb
 	args := cmd.Args()
 
 	if len(args) != 4 {
-		return redis.ErrInvalidCommandResp
+		return &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp}
 	}
 
 	pos, err := util.StrInt64(args[1])
@@ -148,7 +148,7 @@ func (s *Store) execLPop(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.Re
 	args := cmd.Args()
 
 	if len(args) != 1 {
-		return redis.ErrInvalidCommandResp
+		return &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp}
 	}
 
 	value, err := s.getListEngine().LPop(args[0])
@@ -173,7 +173,7 @@ func (s *Store) execLPush(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.R
 	args := cmd.Args()
 
 	if len(args) < 2 {
-		return redis.ErrInvalidCommandResp
+		return &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp}
 	}
 
 	value, err := s.getListEngine().LPush(args[0], args[1:]...)
@@ -208,7 +208,7 @@ func (s *Store) execLPushX(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.
 	args := cmd.Args()
 
 	if len(args) != 2 {
-		return redis.ErrInvalidCommandResp
+		return &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp}
 	}
 
 	value, err := s.getListEngine().LPushX(args[0], args[1])
@@ -241,7 +241,7 @@ func (s *Store) execLRem(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.Re
 	args := cmd.Args()
 
 	if len(args) != 3 {
-		return redis.ErrInvalidCommandResp
+		return &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp}
 	}
 
 	count, err := util.StrInt64(args[1])
@@ -273,7 +273,7 @@ func (s *Store) execLSet(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.Re
 	args := cmd.Args()
 
 	if len(args) != 3 {
-		return redis.ErrInvalidCommandResp
+		return &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp}
 	}
 
 	index, err := util.StrInt64(args[1])
@@ -290,7 +290,7 @@ func (s *Store) execLSet(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.Re
 		}
 	}
 
-	return redis.OKStatusResp
+	return &raftcmdpb.Response{StatusResult: redis.OKStatusResp}
 }
 
 func (s *Store) execLTrim(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.Response {
@@ -298,7 +298,7 @@ func (s *Store) execLTrim(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.R
 	args := cmd.Args()
 
 	if len(args) != 3 {
-		return redis.ErrInvalidCommandResp
+		return &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp}
 	}
 
 	begin, err := util.StrInt64(args[1])
@@ -322,7 +322,7 @@ func (s *Store) execLTrim(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.R
 		}
 	}
 
-	return redis.OKStatusResp
+	return &raftcmdpb.Response{StatusResult: redis.OKStatusResp}
 }
 
 func (s *Store) execRPop(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.Response {
@@ -330,7 +330,7 @@ func (s *Store) execRPop(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.Re
 	args := cmd.Args()
 
 	if len(args) != 1 {
-		return redis.ErrInvalidCommandResp
+		return &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp}
 	}
 
 	value, err := s.getListEngine().RPop(args[0])
@@ -355,7 +355,7 @@ func (s *Store) execRPush(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.R
 	args := cmd.Args()
 
 	if len(args) < 2 {
-		return redis.ErrInvalidCommandResp
+		return &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp}
 	}
 
 	value, err := s.getListEngine().RPush(args[0], args[1:]...)
@@ -390,7 +390,7 @@ func (s *Store) execRPushX(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.
 	args := cmd.Args()
 
 	if len(args) != 2 {
-		return redis.ErrInvalidCommandResp
+		return &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp}
 	}
 
 	value, err := s.getListEngine().RPushX(args[0], args[1])

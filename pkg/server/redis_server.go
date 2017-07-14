@@ -200,7 +200,7 @@ func (s *RedisServer) onRedisCommand(cmd redis.Command, session *session) error 
 
 	h, ok := s.handlers[t]
 	if !ok {
-		session.onResp(nil, redis.ErrNotSupportCommand)
+		session.onResp(nil, &raftcmdpb.Response{ErrorResult: redis.ErrNotSupportCommand})
 		return nil
 	}
 
@@ -216,7 +216,7 @@ func (s *RedisServer) onRedisCommand(cmd redis.Command, session *session) error 
 func (s *RedisServer) onDel(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
 	args := cmd.Args()
 	if len(args) != 1 {
-		session.onResp(nil, redis.ErrInvalidCommandResp)
+		session.onResp(nil, &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp})
 		return nil, nil
 	}
 

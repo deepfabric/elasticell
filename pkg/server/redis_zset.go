@@ -21,7 +21,7 @@ import (
 func (s *RedisServer) onZAdd(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
 	args := cmd.Args()
 	if len(args) != 3 {
-		session.onResp(nil, redis.ErrInvalidCommandResp)
+		session.onResp(nil, &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp})
 		return nil, nil
 	}
 
@@ -31,7 +31,7 @@ func (s *RedisServer) onZAdd(cmdType raftcmdpb.CMDType, cmd redis.Command, sessi
 func (s *RedisServer) onZCard(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
 	args := cmd.Args()
 	if len(args) != 1 {
-		session.onResp(nil, redis.ErrInvalidCommandResp)
+		session.onResp(nil, &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp})
 		return nil, nil
 	}
 
@@ -41,7 +41,7 @@ func (s *RedisServer) onZCard(cmdType raftcmdpb.CMDType, cmd redis.Command, sess
 func (s *RedisServer) onZCount(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
 	args := cmd.Args()
 	if len(args) != 3 {
-		session.onResp(nil, redis.ErrInvalidCommandResp)
+		session.onResp(nil, &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp})
 		return nil, nil
 	}
 
@@ -51,7 +51,7 @@ func (s *RedisServer) onZCount(cmdType raftcmdpb.CMDType, cmd redis.Command, ses
 func (s *RedisServer) onZIncrBy(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
 	args := cmd.Args()
 	if len(args) != 3 {
-		session.onResp(nil, redis.ErrInvalidCommandResp)
+		session.onResp(nil, &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp})
 		return nil, nil
 	}
 
@@ -61,7 +61,7 @@ func (s *RedisServer) onZIncrBy(cmdType raftcmdpb.CMDType, cmd redis.Command, se
 func (s *RedisServer) onZLexCount(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
 	args := cmd.Args()
 	if len(args) != 3 {
-		session.onResp(nil, redis.ErrInvalidCommandResp)
+		session.onResp(nil, &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp})
 		return nil, nil
 	}
 
@@ -71,7 +71,7 @@ func (s *RedisServer) onZLexCount(cmdType raftcmdpb.CMDType, cmd redis.Command, 
 func (s *RedisServer) onZRange(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
 	args := cmd.Args()
 	if len(args) < 3 {
-		session.onResp(nil, redis.ErrInvalidCommandResp)
+		session.onResp(nil, &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp})
 		return nil, nil
 	}
 
@@ -81,7 +81,7 @@ func (s *RedisServer) onZRange(cmdType raftcmdpb.CMDType, cmd redis.Command, ses
 func (s *RedisServer) onZRangeByLex(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
 	args := cmd.Args()
 	if len(args) != 3 {
-		session.onResp(nil, redis.ErrInvalidCommandResp)
+		session.onResp(nil, &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp})
 		return nil, nil
 	}
 
@@ -91,7 +91,7 @@ func (s *RedisServer) onZRangeByLex(cmdType raftcmdpb.CMDType, cmd redis.Command
 func (s *RedisServer) onZRangeByScore(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
 	args := cmd.Args()
 	if len(args) < 3 {
-		session.onResp(nil, redis.ErrInvalidCommandResp)
+		session.onResp(nil, &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp})
 		return nil, nil
 	}
 
@@ -101,7 +101,7 @@ func (s *RedisServer) onZRangeByScore(cmdType raftcmdpb.CMDType, cmd redis.Comma
 func (s *RedisServer) onZRank(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
 	args := cmd.Args()
 	if len(args) != 2 {
-		session.onResp(nil, redis.ErrInvalidCommandResp)
+		session.onResp(nil, &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp})
 		return nil, nil
 	}
 
@@ -111,7 +111,7 @@ func (s *RedisServer) onZRank(cmdType raftcmdpb.CMDType, cmd redis.Command, sess
 func (s *RedisServer) onZRem(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
 	args := cmd.Args()
 	if len(args) < 2 {
-		session.onResp(nil, redis.ErrInvalidCommandResp)
+		session.onResp(nil, &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp})
 		return nil, nil
 	}
 
@@ -121,7 +121,7 @@ func (s *RedisServer) onZRem(cmdType raftcmdpb.CMDType, cmd redis.Command, sessi
 func (s *RedisServer) onZRemRangeByLex(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
 	args := cmd.Args()
 	if len(args) != 3 {
-		session.onResp(nil, redis.ErrInvalidCommandResp)
+		session.onResp(nil, &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp})
 		return nil, nil
 	}
 
@@ -131,7 +131,7 @@ func (s *RedisServer) onZRemRangeByLex(cmdType raftcmdpb.CMDType, cmd redis.Comm
 func (s *RedisServer) onZRemRangeByRank(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
 	args := cmd.Args()
 	if len(args) != 3 {
-		session.onResp(nil, redis.ErrInvalidCommandResp)
+		session.onResp(nil, &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp})
 		return nil, nil
 	}
 
@@ -141,7 +141,7 @@ func (s *RedisServer) onZRemRangeByRank(cmdType raftcmdpb.CMDType, cmd redis.Com
 func (s *RedisServer) onZRemRangeByScore(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
 	args := cmd.Args()
 	if len(args) != 3 {
-		session.onResp(nil, redis.ErrInvalidCommandResp)
+		session.onResp(nil, &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp})
 		return nil, nil
 	}
 
@@ -151,7 +151,7 @@ func (s *RedisServer) onZRemRangeByScore(cmdType raftcmdpb.CMDType, cmd redis.Co
 func (s *RedisServer) onZScore(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
 	args := cmd.Args()
 	if len(args) != 2 {
-		session.onResp(nil, redis.ErrInvalidCommandResp)
+		session.onResp(nil, &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp})
 		return nil, nil
 	}
 

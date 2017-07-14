@@ -16,6 +16,7 @@ package raftstore
 import (
 	"bytes"
 
+	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/errorpb"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
@@ -151,5 +152,6 @@ func SaveFirstCell(driver storage.Driver, cell metapb.Cell) error {
 		return err
 	}
 
+	log.Infof("bootstrap: begin to write first cell to local")
 	return driver.Write(wb)
 }

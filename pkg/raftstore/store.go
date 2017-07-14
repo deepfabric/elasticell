@@ -377,22 +377,7 @@ func (s *Store) OnProxyReq(req *raftcmdpb.Request, cb func(*raftcmdpb.RaftCMDRes
 		return err
 	}
 
-	cell := pr.getCell()
-
-	raftCMD := new(raftcmdpb.RaftCMDRequest)
-	raftCMD.Header = &raftcmdpb.RaftRequestHeader{
-		CellId:     cell.ID,
-		Peer:       pr.getPeer(),
-		ReadQuorum: true, // TODO: configuration
-		UUID:       uuid.NewV4().Bytes(),
-		CellEpoch:  cell.Epoch,
-	}
-
-	req.Cmd[1] = getDataKey(key)
-
-	// TODO: batch process
-	raftCMD.Requests = append(raftCMD.Requests, req)
-	s.notify(newCMD(raftCMD, cb))
+	pr.onReq(req, cb)
 	return nil
 }
 
@@ -408,28 +393,14 @@ func (s *Store) OnRedisCommand(cmdType raftcmdpb.CMDType, cmd redis.Command, cb 
 		return nil, err
 	}
 
-	cell := pr.getCell()
-
-	req := new(raftcmdpb.RaftCMDRequest)
-	req.Header = &raftcmdpb.RaftRequestHeader{
-		CellId:     cell.ID,
-		Peer:       pr.getPeer(),
-		ReadQuorum: true, // TODO: configuration
-		UUID:       uuid.NewV4().Bytes(),
-		CellEpoch:  cell.Epoch,
-	}
-
-	cmd.Args()[0] = getDataKey(key)
-
-	// TODO: batch process
 	uuid := uuid.NewV4().Bytes()
-	req.Requests = append(req.Requests, &raftcmdpb.Request{
+	req := &raftcmdpb.Request{
 		UUID: uuid,
 		Type: cmdType,
 		Cmd:  cmd,
-	})
+	}
 
-	s.notify(newCMD(req, cb))
+	pr.onReq(req, cb)
 	return uuid, nil
 }
 
@@ -450,9 +421,6 @@ func (s *Store) onRaftMessage(msg *mraft.RaftMessage) {
 
 	yes, err := s.isMsgStale(msg)
 	if err != nil || yes {
-		log.Errorf("raftstore[store-%d]: check msg stale failed, errors:\n%+v",
-			s.id,
-			err)
 		return
 	}
 
@@ -505,7 +473,6 @@ func (s *Store) onRaftCMD(cmd *cmd) {
 	// command log entry can't be committed.
 	meta := &proposalMeta{
 		cmd:  cmd,
-		uuid: cmd.req.Header.UUID,
 		term: term,
 	}
 
@@ -590,14 +557,7 @@ func (s *Store) handleStaleMsg(msg *mraft.RaftMessage, currEpoch metapb.CellEpoc
 	gc.CellEpoch = currEpoch
 	gc.IsTombstone = true
 
-	err := s.trans.send(fromPeer.StoreID, gc)
-	if err != nil {
-		log.Errorf("raftstore[cell-%d]: raft msg is stale, send gc msg failed, msg=<%+v> current=<%+v> errors:\n %+v",
-			cellID,
-			msg,
-			currEpoch,
-			err)
-	}
+	s.trans.send(gc)
 }
 
 // If target peer doesn't exist, create it.

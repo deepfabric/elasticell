@@ -378,11 +378,13 @@ func (pr *PeerReplicate) doPostApply(result *asyncApplyResult) {
 			pr.cellID)
 	}
 
-	pr.rn.AdvanceApply(result.applyState.AppliedIndex)
 	pr.ps.setApplyState(&result.applyState)
 	pr.ps.setAppliedIndexTerm(result.appliedIndexTerm)
+	pr.rn.AdvanceApply(result.applyState.AppliedIndex)
 
-	log.Debugf("raftstore[cell-%d]: async apply committied entries finished", pr.cellID)
+	log.Debugf("raftstore[cell-%d]: async apply committied entries finished, applied=<%d>",
+		pr.cellID,
+		result.applyState.AppliedIndex)
 
 	pr.writtenBytes += uint64(result.metrics.writtenBytes)
 	pr.writtenKeys += result.metrics.writtenKeys
@@ -575,6 +577,26 @@ func (s *Store) doApplyRaftLogGC(cellID uint64, result *raftGCResult) {
 }
 
 func (pr *PeerReplicate) doApplyReads(rd *raft.Ready) {
+	if pr.readyToHandleRead() {
+		for _, state := range rd.ReadStates {
+			cmd := pr.pendingReads.pop()
+			if bytes.Compare(state.RequestCtx, cmd.getUUID()) != 0 {
+				log.Fatalf("raftstore[cell-%d]: apply read failed, uuid not match",
+					pr.cellID)
+			}
+
+			pr.doExecReadCmd(cmd)
+		}
+
+		if len(rd.ReadStates) > 0 {
+			pr.proposeNextBatch()
+		}
+	} else {
+		for _ = range rd.ReadStates {
+			pr.pendingReads.incrReadyCnt()
+		}
+	}
+
 	// Note that only after handle read_states can we identify what requests are
 	// actually stale.
 	if rd.SoftState != nil {
@@ -594,22 +616,6 @@ func (pr *PeerReplicate) doApplyReads(rd *raft.Ready) {
 			}
 
 			pr.pendingReads.resetReadyCnt()
-		}
-	}
-
-	if pr.readyToHandleRead() {
-		for _, state := range rd.ReadStates {
-			cmd := pr.pendingReads.pop()
-			if bytes.Compare(state.RequestCtx, cmd.getUUID()) != 0 {
-				log.Fatalf("raftstore[cell-%d]: apply read failed, uuid not match",
-					pr.cellID)
-			}
-
-			pr.doExecReadCmd(cmd)
-		}
-	} else {
-		for _ = range rd.ReadStates {
-			pr.pendingReads.incrReadyCnt()
 		}
 	}
 }

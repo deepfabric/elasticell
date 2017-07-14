@@ -24,7 +24,9 @@ func (s *Store) execKVSet(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.R
 	args := cmd.Args()
 
 	if len(args) != 2 {
-		return redis.ErrInvalidCommandResp
+		return &raftcmdpb.Response{
+			ErrorResult: redis.ErrInvalidCommandResp,
+		}
 	}
 
 	err := s.getKVEngine().Set(args[0], args[1])
@@ -39,7 +41,7 @@ func (s *Store) execKVSet(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.R
 	ctx.metrics.writtenBytes += size
 	ctx.metrics.sizeDiffHint += size
 
-	return redis.OKStatusResp
+	return &raftcmdpb.Response{StatusResult: redis.OKStatusResp}
 }
 
 func (s *Store) execKVGet(req *raftcmdpb.Request) *raftcmdpb.Response {
@@ -47,7 +49,9 @@ func (s *Store) execKVGet(req *raftcmdpb.Request) *raftcmdpb.Response {
 	args := cmd.Args()
 
 	if len(args) != 1 {
-		return redis.ErrInvalidCommandResp
+		return &raftcmdpb.Response{
+			ErrorResult: redis.ErrInvalidCommandResp,
+		}
 	}
 
 	value, err := s.getKVEngine().Get(args[0])
@@ -67,7 +71,9 @@ func (s *Store) execKVStrLen(req *raftcmdpb.Request) *raftcmdpb.Response {
 	args := cmd.Args()
 
 	if len(args) != 1 {
-		return redis.ErrInvalidCommandResp
+		return &raftcmdpb.Response{
+			ErrorResult: redis.ErrInvalidCommandResp,
+		}
 	}
 
 	n, err := s.getKVEngine().StrLen(args[0])
@@ -87,12 +93,16 @@ func (s *Store) execKVIncrBy(ctx *execContext, req *raftcmdpb.Request) *raftcmdp
 	args := cmd.Args()
 
 	if len(args) != 2 {
-		return redis.ErrInvalidCommandResp
+		return &raftcmdpb.Response{
+			ErrorResult: redis.ErrInvalidCommandResp,
+		}
 	}
 
 	incrment, err := util.StrInt64(args[1])
 	if err != nil {
-		return redis.ErrInvalidCommandResp
+		return &raftcmdpb.Response{
+			ErrorResult: redis.ErrInvalidCommandResp,
+		}
 	}
 
 	n, err := s.getKVEngine().IncrBy(args[0], incrment)
@@ -112,7 +122,9 @@ func (s *Store) execKVIncr(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.
 	args := cmd.Args()
 
 	if len(args) != 1 {
-		return redis.ErrInvalidCommandResp
+		return &raftcmdpb.Response{
+			ErrorResult: redis.ErrInvalidCommandResp,
+		}
 	}
 
 	n, err := s.getKVEngine().IncrBy(args[0], 1)
@@ -132,12 +144,16 @@ func (s *Store) execKVDecrby(ctx *execContext, req *raftcmdpb.Request) *raftcmdp
 	args := cmd.Args()
 
 	if len(args) != 2 {
-		return redis.ErrInvalidCommandResp
+		return &raftcmdpb.Response{
+			ErrorResult: redis.ErrInvalidCommandResp,
+		}
 	}
 
 	incrment, err := util.StrInt64(args[1])
 	if err != nil {
-		return redis.ErrInvalidCommandResp
+		return &raftcmdpb.Response{
+			ErrorResult: redis.ErrInvalidCommandResp,
+		}
 	}
 
 	n, err := s.getKVEngine().DecrBy(args[0], incrment)
@@ -157,7 +173,7 @@ func (s *Store) execKVDecr(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.
 	args := cmd.Args()
 
 	if len(args) != 1 {
-		return redis.ErrInvalidCommandResp
+		return &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp}
 	}
 
 	n, err := s.getKVEngine().DecrBy(args[0], 1)
@@ -177,7 +193,7 @@ func (s *Store) execKVGetSet(ctx *execContext, req *raftcmdpb.Request) *raftcmdp
 	args := cmd.Args()
 
 	if len(args) != 2 {
-		return redis.ErrInvalidCommandResp
+		return &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp}
 	}
 
 	value, err := s.getKVEngine().GetSet(args[0], args[1])
@@ -197,7 +213,7 @@ func (s *Store) execKVAppend(ctx *execContext, req *raftcmdpb.Request) *raftcmdp
 	args := cmd.Args()
 
 	if len(args) != 2 {
-		return redis.ErrInvalidCommandResp
+		return &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp}
 	}
 
 	n, err := s.getKVEngine().Append(args[0], args[1])
@@ -221,7 +237,7 @@ func (s *Store) execKVSetNX(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb
 	args := cmd.Args()
 
 	if len(args) != 2 {
-		return redis.ErrInvalidCommandResp
+		return &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp}
 	}
 
 	n, err := s.getKVEngine().SetNX(args[0], args[1])

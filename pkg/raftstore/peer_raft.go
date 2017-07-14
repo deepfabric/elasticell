@@ -48,57 +48,7 @@ const (
 
 type proposalMeta struct {
 	cmd  *cmd
-	uuid []byte
 	term uint64
-}
-
-// TODO: use a better impl.
-type proposalQueue struct {
-	queue []*proposalMeta
-	uuids map[string]struct{}
-}
-
-func newProposalQueue() *proposalQueue {
-	return &proposalQueue{
-		queue: make([]*proposalMeta, 0, 1024),
-		uuids: make(map[string]struct{}, 1024),
-	}
-}
-
-func (q *proposalQueue) contains(uuid []byte) bool {
-	key := util.SliceToString(uuid)
-	_, ok := q.uuids[key]
-	return ok
-}
-
-func (q *proposalQueue) pop(term uint64) *proposalMeta {
-	if len(q.queue) <= 0 {
-		return nil
-	}
-
-	m := q.queue[0]
-
-	if m.term > term {
-		return nil
-	}
-
-	q.queue[0] = nil
-	q.queue = q.queue[1:]
-	delete(q.uuids, util.SliceToString(m.uuid))
-	return m
-}
-
-func (q *proposalQueue) push(meta *proposalMeta) {
-	q.uuids[util.SliceToString(meta.uuid)] = emptyStruct
-	q.queue = append(q.queue, meta)
-}
-
-func (q *proposalQueue) clear() {
-	for k := range q.uuids {
-		delete(q.uuids, k)
-	}
-
-	q.queue = make([]*proposalMeta, 0, 1024)
 }
 
 func (pr *PeerReplicate) onRaftTick(arg interface{}) {
@@ -128,6 +78,14 @@ func (pr *PeerReplicate) raftReady() {
 }
 
 func (pr *PeerReplicate) readyToServeRaft(ctx context.Context) {
+	defer func() {
+		if err := recover(); err != nil {
+			log.Errorf("raftstore[cell-%d]: stopped panic, errors:\n%+v",
+				pr.cellID,
+				err)
+		}
+	}()
+
 	pr.onRaftTick(nil)
 	pr.onRaftLoop(nil)
 
@@ -137,14 +95,23 @@ func (pr *PeerReplicate) readyToServeRaft(ctx context.Context) {
 			close(pr.tickC)
 			close(pr.loopC)
 			close(pr.applyResultC)
+			close(pr.stepC)
 
 			log.Infof("raftstore[cell-%d]: handle serve raft stopped",
-				pr.ps.getCell().ID)
+				pr.cellID)
 			return
 		case <-pr.tickC:
 			pr.rn.Tick()
+		case msg := <-pr.stepC:
+			if nil != msg {
+				err := pr.rn.Step(*msg)
+				if err != nil {
+					pr.raftReady()
+				}
+			}
 		case <-pr.loopC:
 			pr.doRaftReady()
+			pr.handlePollApply()
 		}
 	}
 }
@@ -186,8 +153,6 @@ func (pr *PeerReplicate) doRaftReady() {
 		pr.handleRaftReadyAppend(ctx, &rd)
 		pr.handleRaftReadyApply(ctx, &rd)
 	}
-
-	pr.handlePollApply()
 }
 
 func (pr *PeerReplicate) addApplyResult(result *asyncApplyResult) {
@@ -214,6 +179,8 @@ func (pr *PeerReplicate) doPollApply(result *asyncApplyResult) {
 	if result.result != nil {
 		pr.store.doPostApplyResult(result)
 	}
+
+	pr.proposeNextBatch()
 }
 
 func (pr *PeerReplicate) handleRaftReadyAppend(ctx *tempRaftContext, rd *raft.Ready) {
@@ -340,6 +307,21 @@ func (pr *PeerReplicate) handleSaveApplyState(ctx *tempRaftContext) {
 	}
 }
 
+func (pr *PeerReplicate) readyToReceiveCMD(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			close(pr.batchC)
+			log.Infof("raftstore[cell-%d]: handle req stopped", pr.cellID)
+			return
+		case c := <-pr.batchC:
+			if nil != c {
+				pr.store.notify(c)
+			}
+		}
+	}
+}
+
 func (pr *PeerReplicate) readyToProcessPropose(ctx context.Context) {
 	for {
 		select {
@@ -367,12 +349,6 @@ func (pr *PeerReplicate) propose(meta *proposalMeta) {
 	log.Debugf("raftstore[cell-%d]: handle propose, meta=<%+v>",
 		pr.cellID,
 		meta)
-
-	if pr.proposals.contains(meta.uuid) {
-		resp := errorOtherCMDResp(fmt.Errorf("duplicated uuid %v", meta.uuid))
-		meta.cmd.resp(resp)
-		return
-	}
 
 	isConfChange := false
 	policy, err := pr.getHandlePolicy(meta.cmd.req)
@@ -408,7 +384,6 @@ func (pr *PeerReplicate) propose(meta *proposalMeta) {
 		meta.cmd.respOtherError(err)
 		return
 	}
-	pr.proposals.push(meta)
 }
 
 func (pr *PeerReplicate) proposeNormal(meta *proposalMeta) bool {
@@ -436,7 +411,6 @@ func (pr *PeerReplicate) proposeNormal(meta *proposalMeta) bool {
 		cmd.respNotLeader(pr.cellID, meta.term, nil)
 		return false
 	}
-
 	pr.raftReady()
 	return true
 }
@@ -624,27 +598,13 @@ func (pr *PeerReplicate) send(msgs []raftpb.Message) {
 	}
 
 	for _, msg := range msgs {
-		pr.msgC <- msg
-	}
-}
-
-func (pr *PeerReplicate) readyToSendRaftMessage(ctx context.Context) {
-	for {
-		select {
-		case <-ctx.Done():
-			close(pr.msgC)
-			log.Infof("raftstore[cell-%d]: handle send raft msg stopped",
-				pr.ps.getCell().ID)
-			return
-		case msg := <-pr.msgC:
-			err := pr.sendRaftMsg(msg)
-			if err != nil {
-				// We don't care that the message is sent failed, so here just log this error
-				log.Warnf("raftstore[cell-%d]: send msg failure, from_peer=<%d> to_peer=<%d>",
-					pr.ps.getCell().ID,
-					msg.From,
-					msg.To)
-			}
+		err := pr.sendRaftMsg(msg)
+		if err != nil {
+			// We don't care that the message is sent failed, so here just log this error
+			log.Warnf("raftstore[cell-%d]: send msg failure, from_peer=<%d> to_peer=<%d>",
+				pr.ps.getCell().ID,
+				msg.From,
+				msg.To)
 		}
 	}
 }
@@ -677,22 +637,23 @@ func (pr *PeerReplicate) sendRaftMsg(msg raftpb.Message) error {
 	}
 
 	sendMsg.Message = msg
-	err := pr.store.trans.send(sendMsg.ToPeer.StoreID, &sendMsg)
-	if err != nil {
-		pr.rn.ReportUnreachable(sendMsg.ToPeer.ID)
-
-		if msg.Type == raftpb.MsgSnap {
-			pr.rn.ReportSnapshot(sendMsg.ToPeer.ID, raft.SnapshotFailure)
-		}
-
-		return err
-	}
+	pr.store.trans.send(&sendMsg)
 
 	if msg.Type == raftpb.MsgSnap {
 		pr.rn.ReportSnapshot(sendMsg.ToPeer.ID, raft.SnapshotFinish)
 	}
 
 	return nil
+}
+
+func (pr *PeerReplicate) isRead(req *raftcmdpb.Request) bool {
+	_, ok := pr.store.redisReadHandles[req.Type]
+	return ok
+}
+
+func (pr *PeerReplicate) isWrite(req *raftcmdpb.Request) bool {
+	_, ok := pr.store.redisWriteHandles[req.Type]
+	return ok
 }
 
 func (pr *PeerReplicate) getHandlePolicy(req *raftcmdpb.RaftCMDRequest) (requestPolicy, error) {
@@ -709,8 +670,8 @@ func (pr *PeerReplicate) getHandlePolicy(req *raftcmdpb.RaftCMDRequest) (request
 
 	var isRead, isWrite bool
 	for _, r := range req.Requests {
-		_, isRead = pr.store.redisReadHandles[r.Type]
-		_, isWrite = pr.store.redisWriteHandles[r.Type]
+		isRead = pr.isRead(r)
+		isWrite = pr.isWrite(r)
 	}
 
 	if isRead && isWrite {
@@ -737,12 +698,7 @@ func (pr *PeerReplicate) step(msg raftpb.Message) error {
 		pr.peerHeartbeatsMap.put(msg.From, time.Now())
 	}
 
-	err := pr.rn.Step(msg)
-	if err != nil {
-		return err
-	}
-
-	pr.raftReady()
+	pr.stepC <- &msg
 	return nil
 }
 

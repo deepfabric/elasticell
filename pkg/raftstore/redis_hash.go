@@ -24,7 +24,9 @@ func (s *Store) execHSet(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.Re
 	args := cmd.Args()
 
 	if len(args) != 3 {
-		return redis.ErrInvalidCommandResp
+		return &raftcmdpb.Response{
+			ErrorResult: redis.ErrInvalidCommandResp,
+		}
 	}
 
 	n, err := s.getHashEngine().HSet(args[0], args[1], args[2])
@@ -51,7 +53,9 @@ func (s *Store) execHDel(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.Re
 	args := cmd.Args()
 
 	if len(args) < 2 {
-		return redis.ErrInvalidCommandResp
+		return &raftcmdpb.Response{
+			ErrorResult: redis.ErrInvalidCommandResp,
+		}
 	}
 
 	n, err := s.getHashEngine().HDel(args[0], args[1:]...)
@@ -83,7 +87,9 @@ func (s *Store) execHMSet(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.R
 
 	l := len(args)
 	if l < 3 || l%2 == 0 {
-		return redis.ErrInvalidCommandResp
+		return &raftcmdpb.Response{
+			ErrorResult: redis.ErrInvalidCommandResp,
+		}
 	}
 
 	key := args[0]
@@ -111,7 +117,9 @@ func (s *Store) execHMSet(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.R
 	ctx.metrics.writtenBytes += size
 	ctx.metrics.sizeDiffHint += size
 
-	return redis.OKStatusResp
+	return &raftcmdpb.Response{
+		StatusResult: redis.OKStatusResp,
+	}
 }
 
 func (s *Store) execHSetNX(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.Response {
@@ -119,7 +127,9 @@ func (s *Store) execHSetNX(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.
 	args := cmd.Args()
 
 	if len(args) != 3 {
-		return redis.ErrInvalidCommandResp
+		return &raftcmdpb.Response{
+			ErrorResult: redis.ErrInvalidCommandResp,
+		}
 	}
 
 	value, err := s.getHashEngine().HSetNX(args[0], args[1], args[2])
@@ -145,7 +155,9 @@ func (s *Store) execHIncrBy(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb
 	args := cmd.Args()
 
 	if len(args) != 3 {
-		return redis.ErrInvalidCommandResp
+		return &raftcmdpb.Response{
+			ErrorResult: redis.ErrInvalidCommandResp,
+		}
 	}
 
 	incrment, err := util.StrInt64(args[2])
@@ -178,7 +190,9 @@ func (s *Store) execHGet(req *raftcmdpb.Request) *raftcmdpb.Response {
 	args := cmd.Args()
 
 	if len(args) != 2 {
-		return redis.ErrInvalidCommandResp
+		return &raftcmdpb.Response{
+			ErrorResult: redis.ErrInvalidCommandResp,
+		}
 	}
 
 	value, err := s.getHashEngine().HGet(args[0], args[1])
@@ -200,7 +214,9 @@ func (s *Store) execHExists(req *raftcmdpb.Request) *raftcmdpb.Response {
 	args := cmd.Args()
 
 	if len(args) != 2 {
-		return redis.ErrInvalidCommandResp
+		return &raftcmdpb.Response{
+			ErrorResult: redis.ErrInvalidCommandResp,
+		}
 	}
 
 	exists, err := s.getHashEngine().HExists(args[0], args[1])
@@ -225,7 +241,9 @@ func (s *Store) execHKeys(req *raftcmdpb.Request) *raftcmdpb.Response {
 	args := cmd.Args()
 
 	if len(args) != 1 {
-		return redis.ErrInvalidCommandResp
+		return &raftcmdpb.Response{
+			ErrorResult: redis.ErrInvalidCommandResp,
+		}
 	}
 
 	value, err := s.getHashEngine().HKeys(args[0])
@@ -247,7 +265,9 @@ func (s *Store) execHVals(req *raftcmdpb.Request) *raftcmdpb.Response {
 	args := cmd.Args()
 
 	if len(args) != 1 {
-		return redis.ErrInvalidCommandResp
+		return &raftcmdpb.Response{
+			ErrorResult: redis.ErrInvalidCommandResp,
+		}
 	}
 
 	value, err := s.getHashEngine().HVals(args[0])
@@ -269,7 +289,9 @@ func (s *Store) execHGetAll(req *raftcmdpb.Request) *raftcmdpb.Response {
 	args := cmd.Args()
 
 	if len(args) != 1 {
-		return redis.ErrInvalidCommandResp
+		return &raftcmdpb.Response{
+			ErrorResult: redis.ErrInvalidCommandResp,
+		}
 	}
 
 	value, err := s.getHashEngine().HGetAll(args[0])
@@ -291,7 +313,9 @@ func (s *Store) execHLen(req *raftcmdpb.Request) *raftcmdpb.Response {
 	args := cmd.Args()
 
 	if len(args) != 1 {
-		return redis.ErrInvalidCommandResp
+		return &raftcmdpb.Response{
+			ErrorResult: redis.ErrInvalidCommandResp,
+		}
 	}
 
 	value, err := s.getHashEngine().HLen(args[0])
@@ -311,7 +335,9 @@ func (s *Store) execHMGet(req *raftcmdpb.Request) *raftcmdpb.Response {
 	args := cmd.Args()
 
 	if len(args) < 2 {
-		return redis.ErrInvalidCommandResp
+		return &raftcmdpb.Response{
+			ErrorResult: redis.ErrInvalidCommandResp,
+		}
 	}
 
 	value, errs := s.getHashEngine().HMGet(args[0], args[1:]...)
@@ -339,7 +365,9 @@ func (s *Store) execHStrLen(req *raftcmdpb.Request) *raftcmdpb.Response {
 	args := cmd.Args()
 
 	if len(args) != 2 {
-		return redis.ErrInvalidCommandResp
+		return &raftcmdpb.Response{
+			ErrorResult: redis.ErrInvalidCommandResp,
+		}
 	}
 
 	value, err := s.getHashEngine().HStrLen(args[0], args[1])

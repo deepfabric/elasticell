@@ -18,11 +18,14 @@ import (
 	"sync/atomic"
 	"time"
 
+	"sync"
+
 	"github.com/Workiva/go-datastructures/queue"
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
 	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
+	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
 	"github.com/deepfabric/elasticell/pkg/pd"
 	"github.com/deepfabric/elasticell/pkg/util"
 	"github.com/deepfabric/etcd/raft"
@@ -44,15 +47,19 @@ type PeerReplicate struct {
 	store *Store
 	ps    *peerStorage
 
-	loopC        chan struct{}
-	tickC        chan struct{}
+	batch       *proposeBatch
+	proposeLock sync.Mutex
+
+	loopC chan struct{}
+	tickC chan struct{}
+
+	batchC       chan *cmd
 	proposeC     chan *proposalMeta
-	msgC         chan raftpb.Message
 	applyResultC chan *asyncApplyResult
+	stepC        chan *raftpb.Message
 
 	peerHeartbeatsMap *peerHeartbeatsMap
 	pendingReads      *readIndexQueue
-	proposals         *proposalQueue
 
 	lastHBJob *util.Job
 
@@ -110,6 +117,7 @@ func newPeerReplicate(store *Store, cell *metapb.Cell, peerID uint64) (*PeerRepl
 	pr.peer = newPeer(peerID, store.id)
 	pr.cellID = cell.ID
 	pr.ps = ps
+	pr.batch = newBatch(pr)
 
 	c := getRaftConfig(peerID, ps.getAppliedIndex(), ps, store.cfg.Raft)
 	rn, err := raft.NewRawNode(c, nil)
@@ -119,9 +127,10 @@ func newPeerReplicate(store *Store, cell *metapb.Cell, peerID uint64) (*PeerRepl
 	pr.rn = rn
 	pr.loopC = make(chan struct{}, defaultChanBuf)
 	pr.tickC = make(chan struct{}, defaultChanBuf)
-	pr.msgC = make(chan raftpb.Message, defaultChanBuf)
 	pr.proposeC = make(chan *proposalMeta, defaultChanBuf)
 	pr.applyResultC = make(chan *asyncApplyResult, defaultChanBuf)
+	pr.stepC = make(chan *raftpb.Message, defaultChanBuf)
+	pr.batchC = make(chan *cmd)
 
 	pr.store = store
 	pr.pendingReads = &readIndexQueue{
@@ -130,12 +139,8 @@ func newPeerReplicate(store *Store, cell *metapb.Cell, peerID uint64) (*PeerRepl
 		readyCnt: 0,
 	}
 	pr.peerHeartbeatsMap = newPeerHeartbeatsMap()
-	pr.proposals = newProposalQueue()
 
 	id, _ := store.runner.RunCancelableTask(pr.readyToProcessPropose)
-	pr.cancelTaskIds = append(pr.cancelTaskIds, id)
-
-	id, _ = store.runner.RunCancelableTask(pr.readyToSendRaftMessage)
 	pr.cancelTaskIds = append(pr.cancelTaskIds, id)
 
 	// If this region has only one peer and I am the one, campaign directly.
@@ -151,7 +156,32 @@ func newPeerReplicate(store *Store, cell *metapb.Cell, peerID uint64) (*PeerRepl
 
 	id, _ = store.runner.RunCancelableTask(pr.readyToServeRaft)
 	pr.cancelTaskIds = append(pr.cancelTaskIds, id)
+
+	id, _ = store.runner.RunCancelableTask(pr.readyToReceiveCMD)
+	pr.cancelTaskIds = append(pr.cancelTaskIds, id)
 	return pr, nil
+}
+
+func (pr *PeerReplicate) onReq(req *raftcmdpb.Request, cb func(*raftcmdpb.RaftCMDResponse)) {
+	pr.batch.push(&reqCtx{
+		req: req,
+		cb:  cb,
+	})
+
+	pr.proposeLock.Lock()
+	if pr.batch.isPreEntriesSaved() {
+		pr.proposeNextBatch()
+	}
+	pr.proposeLock.Unlock()
+}
+
+func (pr *PeerReplicate) proposeNextBatch() {
+	if pr.batch.hasCMD() {
+		pr.batch.prePropose()
+		pr.batchC <- pr.batch.pop()
+	} else {
+		pr.batch.postPropose()
+	}
 }
 
 func (pr *PeerReplicate) setStop() {

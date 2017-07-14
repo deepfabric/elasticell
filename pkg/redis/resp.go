@@ -27,21 +27,10 @@ const (
 )
 
 var (
-	ErrNotSupportCommand = &raftcmdpb.Response{
-		ErrorResult: []byte("command is not support"),
-	}
-
-	ErrInvalidCommandResp = &raftcmdpb.Response{
-		ErrorResult: []byte("invalid command"),
-	}
-
-	PongResp = &raftcmdpb.Response{
-		StatusResult: []byte("PONG"),
-	}
-
-	OKStatusResp = &raftcmdpb.Response{
-		StatusResult: []byte("OK"),
-	}
+	ErrNotSupportCommand  = []byte("command is not support")
+	ErrInvalidCommandResp = []byte("invalid command")
+	PongResp              = []byte("PONG")
+	OKStatusResp          = []byte("OK")
 )
 
 // WriteFVPairArray write field value pair array resp

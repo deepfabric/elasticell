@@ -11,7 +11,7 @@ func (s *Store) execSAdd(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.Re
 	args := cmd.Args()
 
 	if len(args) < 2 {
-		return redis.ErrInvalidCommandResp
+		return &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp}
 	}
 
 	value, err := s.getSetEngine().SAdd(args[0], args[1:]...)
@@ -46,7 +46,7 @@ func (s *Store) execSRem(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.Re
 	args := cmd.Args()
 
 	if len(args) < 2 {
-		return redis.ErrInvalidCommandResp
+		return &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp}
 	}
 
 	value, err := s.getSetEngine().SRem(args[0], args[1:]...)
@@ -77,7 +77,7 @@ func (s *Store) execSCard(req *raftcmdpb.Request) *raftcmdpb.Response {
 	args := cmd.Args()
 
 	if len(args) != 1 {
-		return redis.ErrInvalidCommandResp
+		return &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp}
 	}
 
 	value, err := s.getSetEngine().SCard(args[0])
@@ -97,7 +97,7 @@ func (s *Store) execSMembers(req *raftcmdpb.Request) *raftcmdpb.Response {
 	args := cmd.Args()
 
 	if len(args) != 1 {
-		return redis.ErrInvalidCommandResp
+		return &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp}
 	}
 
 	value, err := s.getSetEngine().SMembers(args[0])
@@ -119,7 +119,7 @@ func (s *Store) execSIsMember(req *raftcmdpb.Request) *raftcmdpb.Response {
 	args := cmd.Args()
 
 	if len(args) != 2 {
-		return redis.ErrInvalidCommandResp
+		return &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp}
 	}
 
 	value, err := s.getSetEngine().SIsMember(args[0], args[1])
@@ -139,7 +139,7 @@ func (s *Store) execSPop(req *raftcmdpb.Request) *raftcmdpb.Response {
 	args := cmd.Args()
 
 	if len(args) != 1 {
-		return redis.ErrInvalidCommandResp
+		return &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp}
 	}
 
 	value, err := s.getSetEngine().SPop(args[0])

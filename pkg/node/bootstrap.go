@@ -126,6 +126,8 @@ func (n *Node) bootstrapFirstCell() metapb.Cell {
 		log.Fatalf("bootstrap: bootstrap first cell failed, errors:\n %+v", err)
 	}
 
+	log.Infof("bootstrap: save first cell complete")
+
 	return cell
 }
 

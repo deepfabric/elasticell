@@ -11,7 +11,7 @@ func (s *Store) execZAdd(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.Re
 	args := cmd.Args()
 
 	if len(args) != 3 {
-		return redis.ErrInvalidCommandResp
+		return &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp}
 	}
 
 	score, err := util.StrFloat64(args[1])
@@ -53,7 +53,7 @@ func (s *Store) execZCard(req *raftcmdpb.Request) *raftcmdpb.Response {
 	args := cmd.Args()
 
 	if len(args) != 1 {
-		return redis.ErrInvalidCommandResp
+		return &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp}
 	}
 
 	value, err := s.getZSetEngine().ZCard(args[0])
@@ -73,7 +73,7 @@ func (s *Store) execZCount(req *raftcmdpb.Request) *raftcmdpb.Response {
 	args := cmd.Args()
 
 	if len(args) != 3 {
-		return redis.ErrInvalidCommandResp
+		return &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp}
 	}
 
 	value, err := s.getZSetEngine().ZCount(args[0], args[1], args[2])
@@ -93,7 +93,7 @@ func (s *Store) execZIncrBy(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb
 	args := cmd.Args()
 
 	if len(args) != 3 {
-		return redis.ErrInvalidCommandResp
+		return &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp}
 	}
 
 	by, err := util.StrFloat64(args[2])
@@ -122,7 +122,7 @@ func (s *Store) execZLexCount(req *raftcmdpb.Request) *raftcmdpb.Response {
 	args := cmd.Args()
 
 	if len(args) != 3 {
-		return redis.ErrInvalidCommandResp
+		return &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp}
 	}
 
 	value, err := s.getZSetEngine().ZLexCount(args[0], args[1], args[2])
@@ -142,7 +142,7 @@ func (s *Store) execZRange(req *raftcmdpb.Request) *raftcmdpb.Response {
 	args := cmd.Args()
 
 	if len(args) < 3 {
-		return redis.ErrInvalidCommandResp
+		return &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp}
 	}
 
 	start, err := util.StrInt64(args[1])
@@ -179,7 +179,7 @@ func (s *Store) execZRangeByLex(req *raftcmdpb.Request) *raftcmdpb.Response {
 	args := cmd.Args()
 
 	if len(args) != 3 {
-		return redis.ErrInvalidCommandResp
+		return &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp}
 	}
 
 	value, err := s.getZSetEngine().ZRangeByLex(args[0], args[1], args[2])
@@ -201,7 +201,7 @@ func (s *Store) execZRangeByScore(req *raftcmdpb.Request) *raftcmdpb.Response {
 	args := cmd.Args()
 
 	if len(args) < 3 {
-		return redis.ErrInvalidCommandResp
+		return &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp}
 	}
 
 	value, err := s.getZSetEngine().ZRangeByScore(args[0], args[1], args[2])
@@ -223,7 +223,7 @@ func (s *Store) execZRank(req *raftcmdpb.Request) *raftcmdpb.Response {
 	args := cmd.Args()
 
 	if len(args) != 2 {
-		return redis.ErrInvalidCommandResp
+		return &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp}
 	}
 
 	value, err := s.getZSetEngine().ZRank(args[0], args[1])
@@ -251,7 +251,7 @@ func (s *Store) execZRem(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.Re
 	args := cmd.Args()
 
 	if len(args) < 2 {
-		return redis.ErrInvalidCommandResp
+		return &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp}
 	}
 
 	value, err := s.getZSetEngine().ZRem(args[0], args[1:]...)
@@ -281,7 +281,7 @@ func (s *Store) execZRemRangeByLex(ctx *execContext, req *raftcmdpb.Request) *ra
 	args := cmd.Args()
 
 	if len(args) != 3 {
-		return redis.ErrInvalidCommandResp
+		return &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp}
 	}
 
 	value, err := s.getZSetEngine().ZRemRangeByLex(args[0], args[1], args[2])
@@ -301,7 +301,7 @@ func (s *Store) execZRemRangeByRank(ctx *execContext, req *raftcmdpb.Request) *r
 	args := cmd.Args()
 
 	if len(args) != 3 {
-		return redis.ErrInvalidCommandResp
+		return &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp}
 	}
 
 	start, err := util.StrInt64(args[1])
@@ -335,7 +335,7 @@ func (s *Store) execZRemRangeByScore(ctx *execContext, req *raftcmdpb.Request) *
 	args := cmd.Args()
 
 	if len(args) != 3 {
-		return redis.ErrInvalidCommandResp
+		return &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp}
 	}
 
 	value, err := s.getZSetEngine().ZRemRangeByScore(args[0], args[1], args[2])
@@ -355,7 +355,7 @@ func (s *Store) execZScore(req *raftcmdpb.Request) *raftcmdpb.Response {
 	args := cmd.Args()
 
 	if len(args) != 2 {
-		return redis.ErrInvalidCommandResp
+		return &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp}
 	}
 
 	value, err := s.getZSetEngine().ZScore(args[0], args[1])

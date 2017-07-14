@@ -14,6 +14,8 @@
 package util
 
 import (
+	"runtime"
+
 	"github.com/deepfabric/elasticell/pkg/log"
 )
 
@@ -31,10 +33,14 @@ type Unmarshal interface {
 func MustUnmarshal(target Unmarshal, data []byte) {
 	err := target.Unmarshal(data)
 	if err != nil {
-		log.Fatalf("unmarshal failed, data=<%v>, target=<%+v> errors:\n %+v",
+		buf := make([]byte, 2048)
+		runtime.Stack(buf, true)
+		log.Fatalf("unmarshal failed, data=<%v>, target=<%+v> string=<%s> errors:\n %+v \n %s",
 			data,
 			target,
-			err)
+			data,
+			err,
+			buf)
 	}
 }
 
