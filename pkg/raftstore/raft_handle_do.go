@@ -518,8 +518,17 @@ func (s *Store) doApplySplit(cellID uint64, result *splitResult) {
 	// In this worst case scenario, the new split raft group will not be available
 	// since there is no leader established during one election timeout after the split.
 	if pr.isLeader() && len(right.Peers) > 1 {
-		// TODO: accelerate tick for first election timeout, it will most become leader
+		succ, err := newPR.maybeCampaign()
+		if err != nil {
+			log.Fatalf("raftstore-apply[cell-%d]: new split cell campaign failed, newCell=<%d> errors:\n %+v",
+				cellID,
+				right,
+				err)
+		}
 
+		if succ {
+			newPR.raftReady()
+		}
 	}
 
 	if pr.isLeader() {
@@ -616,6 +625,17 @@ func (pr *PeerReplicate) doApplyReads(rd *raft.Ready) {
 			}
 
 			pr.pendingReads.resetReadyCnt()
+
+			for i := 0; i < pr.batch.size(); i++ {
+				cmd := pr.batch.pop()
+				resp := errorStaleCMDResp(cmd.getUUID(), pr.getCurrentTerm())
+				log.Debugf("raftstore[cell-%d]: resp stale, cmd=<%+v>",
+					pr.cellID,
+					cmd)
+				cmd.resp(resp)
+			}
+
+			pr.proposeNextBatch()
 		}
 	}
 }

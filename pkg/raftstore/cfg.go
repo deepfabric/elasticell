@@ -37,7 +37,8 @@ type Cfg struct {
 	CellMaxSize       uint64 `json:"cellMaxSize"`
 	CellSplitSize     uint64 `json:"cellSplitSize"`
 
-	Raft *RaftCfg `json:"raft"`
+	Raft             *RaftCfg `json:"raft"`
+	ApplyWorkerCount uint64   `json:"applyWorkerCount"`
 }
 
 func (c *Cfg) getSnapDir() string {

@@ -1,8 +1,6 @@
 package raftstore
 
 import (
-	"sync"
-
 	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
 	"github.com/deepfabric/elasticell/pkg/util/uuid"
 )
@@ -18,12 +16,9 @@ type reqCtx struct {
 }
 
 type proposeBatch struct {
-	sync.RWMutex
-
-	pr       *PeerReplicate
-	lastType int
-	cmds     []*cmd
-
+	pr              *PeerReplicate
+	lastType        int
+	cmds            []*cmd
 	preEntriesSaved bool
 }
 
@@ -43,31 +38,19 @@ func (b *proposeBatch) getType(req *raftcmdpb.Request) int {
 }
 
 func (b *proposeBatch) isPreEntriesSaved() bool {
-	b.RLock()
-	value := b.preEntriesSaved
-	b.RUnlock()
-
-	return value
+	return b.preEntriesSaved
 }
 
 func (b *proposeBatch) prePropose() {
-	b.Lock()
 	b.preEntriesSaved = false
-	b.Unlock()
 }
 
 func (b *proposeBatch) postPropose() {
-	b.Lock()
 	b.preEntriesSaved = true
-	b.Unlock()
 }
 
 func (b *proposeBatch) hasCMD() bool {
-	b.RLock()
-	value := b.size() > 0
-	b.RUnlock()
-
-	return value
+	return b.size() > 0
 }
 
 func (b *proposeBatch) size() int {
@@ -79,22 +62,18 @@ func (b *proposeBatch) isEmpty() bool {
 }
 
 func (b *proposeBatch) pop() *cmd {
-	b.RLock()
 	if b.isEmpty() {
-		b.RUnlock()
 		return nil
 	}
 
 	value := b.cmds[0]
 	b.cmds[0] = nil
 	b.cmds = b.cmds[1:]
-	b.RUnlock()
 
 	return value
 }
 
 func (b *proposeBatch) push(c *reqCtx) {
-	b.Lock()
 	req := c.req
 	cb := c.cb
 
@@ -121,7 +100,6 @@ func (b *proposeBatch) push(c *reqCtx) {
 	}
 
 	b.lastType = tp
-	b.Unlock()
 }
 
 func (b *proposeBatch) lastCmd() *cmd {

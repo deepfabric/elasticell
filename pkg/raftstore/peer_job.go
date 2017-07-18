@@ -27,7 +27,7 @@ import (
 
 func (pr *PeerReplicate) startApplyingSnapJob() {
 	pr.ps.applySnapJobLock.Lock()
-	job, err := pr.store.addApplyJob("apply-snap", pr.doApplyingSnapshotJob)
+	job, err := pr.store.addApplyJob(pr.cellID, pr.doApplyingSnapshotJob)
 	if err != nil {
 		log.Fatalf("raftstore[cell-%d]: add apply snapshot task fail, errors:\n %+v",
 			pr.cellID,
@@ -39,7 +39,7 @@ func (pr *PeerReplicate) startApplyingSnapJob() {
 }
 
 func (ps *peerStorage) startDestroyDataJob(cellID uint64, start, end []byte) error {
-	_, err := ps.store.addApplyJob("destroy-data", func() error {
+	_, err := ps.store.addApplyJob(cellID, func() error {
 		return ps.doDestroyDataJob(cellID, start, end)
 	})
 
@@ -57,7 +57,7 @@ func (pr *PeerReplicate) startRegistrationJob() {
 		appliedIndexTerm: pr.ps.getAppliedIndexTerm(),
 	}
 
-	_, err := pr.store.addApplyJob("registration", func() error {
+	_, err := pr.store.addApplyJob(pr.cellID, func() error {
 		return pr.doRegistrationJob(delegate)
 	})
 
@@ -69,7 +69,7 @@ func (pr *PeerReplicate) startRegistrationJob() {
 }
 
 func (pr *PeerReplicate) startApplyCommittedEntriesJob(cellID uint64, term uint64, commitedEntries []raftpb.Entry) error {
-	_, err := pr.store.addApplyJob("apply-commited-entries", func() error {
+	_, err := pr.store.addApplyJob(pr.cellID, func() error {
 		return pr.doApplyCommittedEntries(cellID, term, commitedEntries)
 	})
 	return err
@@ -84,7 +84,7 @@ func (pr *PeerReplicate) startRaftLogGCJob(cellID, startIndex, endIndex uint64) 
 }
 
 func (s *Store) startDestroyJob(cellID uint64) error {
-	_, err := s.addApplyJob("destroy-cell", func() error {
+	_, err := s.addApplyJob(cellID, func() error {
 		return s.doDestroy(cellID)
 	})
 
@@ -92,7 +92,7 @@ func (s *Store) startDestroyJob(cellID uint64) error {
 }
 
 func (pr *PeerReplicate) startProposeJob(meta *proposalMeta, isConfChange bool) error {
-	_, err := pr.store.addApplyJob("propose", func() error {
+	_, err := pr.store.addApplyJob(pr.cellID, func() error {
 		return pr.doPropose(meta, isConfChange)
 	})
 

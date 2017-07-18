@@ -78,14 +78,6 @@ func (pr *PeerReplicate) raftReady() {
 }
 
 func (pr *PeerReplicate) readyToServeRaft(ctx context.Context) {
-	defer func() {
-		if err := recover(); err != nil {
-			log.Errorf("raftstore[cell-%d]: stopped panic, errors:\n%+v",
-				pr.cellID,
-				err)
-		}
-	}()
-
 	pr.onRaftTick(nil)
 	pr.onRaftLoop(nil)
 
@@ -96,6 +88,8 @@ func (pr *PeerReplicate) readyToServeRaft(ctx context.Context) {
 			close(pr.loopC)
 			close(pr.applyResultC)
 			close(pr.stepC)
+			close(pr.proposeC)
+			close(pr.reqCtxC)
 
 			log.Infof("raftstore[cell-%d]: handle serve raft stopped",
 				pr.cellID)
@@ -104,14 +98,29 @@ func (pr *PeerReplicate) readyToServeRaft(ctx context.Context) {
 			pr.rn.Tick()
 		case msg := <-pr.stepC:
 			if nil != msg {
+				if pr.isLeader() && msg.From != 0 {
+					pr.peerHeartbeatsMap.put(msg.From, time.Now())
+				}
+
 				err := pr.rn.Step(*msg)
 				if err != nil {
 					pr.raftReady()
 				}
 			}
+		case reqCtx := <-pr.reqCtxC:
+			if nil != reqCtx {
+				pr.batch.push(reqCtx)
+				if pr.batch.isPreEntriesSaved() {
+					pr.proposeNextBatch()
+				}
+			}
 		case <-pr.loopC:
 			pr.doRaftReady()
 			pr.handlePollApply()
+		case meta := <-pr.proposeC:
+			if nil != meta {
+				pr.propose(meta)
+			}
 		}
 	}
 }
@@ -143,7 +152,6 @@ func (pr *PeerReplicate) doRaftReady() {
 		log.Debugf("raftstore[cell-%d]: raft ready, last ready index=<%d>",
 			pr.cellID,
 			pr.ps.lastReadyIndex)
-
 		ctx := &tempRaftContext{
 			raftState:  pr.ps.raftState,
 			applyState: pr.ps.applyState,
@@ -190,6 +198,7 @@ func (pr *PeerReplicate) handleRaftReadyAppend(ctx *tempRaftContext, rd *raft.Re
 			log.Infof("raftstore[cell-%d]: ********become leader now********",
 				pr.cellID)
 			pr.doHeartbeat()
+			pr.proposeNextBatch()
 		}
 	}
 
@@ -317,21 +326,6 @@ func (pr *PeerReplicate) readyToReceiveCMD(ctx context.Context) {
 		case c := <-pr.batchC:
 			if nil != c {
 				pr.store.notify(c)
-			}
-		}
-	}
-}
-
-func (pr *PeerReplicate) readyToProcessPropose(ctx context.Context) {
-	for {
-		select {
-		case <-ctx.Done():
-			close(pr.proposeC)
-			log.Infof("raftstore[cell-%d]: handle propose stopped", pr.cellID)
-			return
-		case meta := <-pr.proposeC:
-			if nil != meta {
-				pr.propose(meta)
 			}
 		}
 	}
@@ -694,10 +688,6 @@ func (pr *PeerReplicate) getCurrentTerm() uint64 {
 }
 
 func (pr *PeerReplicate) step(msg raftpb.Message) error {
-	if pr.isLeader() && msg.From != 0 {
-		pr.peerHeartbeatsMap.put(msg.From, time.Now())
-	}
-
 	pr.stepC <- &msg
 	return nil
 }

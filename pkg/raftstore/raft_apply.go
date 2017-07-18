@@ -215,7 +215,6 @@ func (d *applyDelegate) applyCommittedEntries(commitedEntries []raftpb.Entry) {
 			// This peer is about to be destroyed, skip everything.
 			break
 		}
-
 		expectIndex := d.applyState.AppliedIndex + 1
 		if expectIndex != entry.Index {
 			log.Fatalf("raftstore-apply[cell-%d]: index not match, expect=<%d> get=<%d> state=<%+v> entry=<%+v>",

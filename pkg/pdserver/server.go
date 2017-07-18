@@ -70,8 +70,6 @@ func NewServer(cfg *Cfg) *Server {
 
 // Start start the pd server
 func (s *Server) Start() {
-	s.printStartENV()
-
 	go s.listenToStop()
 	go s.startRPC()
 
@@ -118,21 +116,6 @@ func (s *Server) notifyElectionComplete() {
 // GetCfg returns cfg, just for test
 func (s *Server) GetCfg() *Cfg {
 	return s.cfg
-}
-
-func (s *Server) printStartENV() {
-	// TODO: print env
-	// info := `
-	//                     PD Server
-	// ----------------------------------------------------
-	// Version: %s
-	// OS     : %s
-	// Cfg    : %v
-	// `
-
-	// log.Infof(info,
-	// Version,
-	// host.GetOSInfo())
 }
 
 func (s *Server) initCluster() {

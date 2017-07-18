@@ -30,11 +30,12 @@ import (
 type RedisServer struct {
 	sync.RWMutex
 
-	store       *raftstore.Store
-	s           *goetty.Server
-	typeMapping map[string]raftcmdpb.CMDType
-	handlers    map[raftcmdpb.CMDType]func(raftcmdpb.CMDType, redis.Command, *session) ([]byte, error)
-	routing     *routing
+	store         *raftstore.Store
+	s             *goetty.Server
+	typeMapping   map[string]raftcmdpb.CMDType
+	localHandlers map[raftcmdpb.CMDType]func(*raftcmdpb.Request, *session) ([]byte, error)
+	handlers      map[raftcmdpb.CMDType]func(raftcmdpb.CMDType, redis.Command, *session) ([]byte, error)
+	routing       *routing
 }
 
 // Start used for start the redis server
@@ -50,12 +51,15 @@ func (s *RedisServer) Stop() error {
 
 func (s *RedisServer) init() {
 	s.routing = newRouting()
+	s.localHandlers = make(map[raftcmdpb.CMDType]func(*raftcmdpb.Request, *session) ([]byte, error))
 	s.handlers = make(map[raftcmdpb.CMDType]func(raftcmdpb.CMDType, redis.Command, *session) ([]byte, error))
 	s.typeMapping = make(map[string]raftcmdpb.CMDType)
 
 	for k, v := range raftcmdpb.CMDType_value {
 		s.typeMapping[strings.ToLower(k)] = raftcmdpb.CMDType(v)
 	}
+
+	s.localHandlers[raftcmdpb.Ping] = s.onPing
 
 	// server
 	s.handlers[raftcmdpb.Del] = s.onDel
@@ -186,6 +190,19 @@ func (s *RedisServer) onResp(resp *raftcmdpb.RaftCMDResponse) {
 
 func (s *RedisServer) onProxyReq(req *raftcmdpb.Request, session *session) error {
 	req.Type = s.typeMapping[strings.ToLower(util.SliceToString(req.Cmd[0]))]
+
+	if h, ok := s.localHandlers[req.Type]; ok {
+		h(req, session)
+		return nil
+	}
+
+	if len(req.Cmd) < 2 {
+		session.onResp(nil, &raftcmdpb.Response{
+			UUID:        req.UUID,
+			ErrorResult: redis.ErrNotSupportCommand})
+		return nil
+	}
+
 	err := s.store.OnProxyReq(req, s.onResp)
 	if err != nil {
 		return err
@@ -197,6 +214,13 @@ func (s *RedisServer) onProxyReq(req *raftcmdpb.Request, session *session) error
 
 func (s *RedisServer) onRedisCommand(cmd redis.Command, session *session) error {
 	t := s.typeMapping[cmd.CmdString()]
+
+	if h, ok := s.localHandlers[t]; ok {
+		h(&raftcmdpb.Request{
+			Cmd: cmd,
+		}, session)
+		return nil
+	}
 
 	h, ok := s.handlers[t]
 	if !ok {
@@ -221,4 +245,11 @@ func (s *RedisServer) onDel(cmdType raftcmdpb.CMDType, cmd redis.Command, sessio
 	}
 
 	return s.store.OnRedisCommand(cmdType, cmd, s.onResp)
+}
+
+func (s *RedisServer) onPing(req *raftcmdpb.Request, session *session) ([]byte, error) {
+	session.onResp(nil, &raftcmdpb.Response{
+		UUID:         req.UUID,
+		StatusResult: redis.PongResp})
+	return nil, nil
 }

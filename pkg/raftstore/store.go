@@ -18,6 +18,8 @@ import (
 
 	"time"
 
+	"fmt"
+
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
@@ -33,12 +35,8 @@ import (
 	"golang.org/x/net/context"
 )
 
-var (
-	defaultJobQueueCap uint64 = 10000
-)
-
 const (
-	applyWorker            = "apply-work"
+	applyWorker            = "apply-work-%d"
 	snapWorker             = "snap-work"
 	pdWorker               = "pd-work"
 	splitWorker            = "split-work"
@@ -99,8 +97,10 @@ func NewStore(clusterID uint64, pdClient *pd.Client, meta metapb.Store, engine s
 	s.delegates = newApplyDelegateMap()
 
 	s.runner = util.NewRunner()
+	for i := 0; i < int(s.cfg.ApplyWorkerCount); i++ {
+		s.runner.AddNamedWorker(fmt.Sprintf(applyWorker, i), defaultWorkerQueueSize)
+	}
 	s.runner.AddNamedWorker(snapWorker, defaultWorkerQueueSize)
-	s.runner.AddNamedWorker(applyWorker, defaultWorkerQueueSize)
 	s.runner.AddNamedWorker(pdWorker, defaultWorkerQueueSize)
 	s.runner.AddNamedWorker(splitWorker, defaultWorkerQueueSize)
 	s.runner.AddNamedWorker(raftGCWorker, defaultWorkerQueueSize)
@@ -617,7 +617,7 @@ func (s *Store) tryToCreatePeerReplicate(cellID uint64, msg *mraft.RaftMessage) 
 	message := msg.Message
 	if message.Type != raftpb.MsgVote &&
 		(message.Type != raftpb.MsgHeartbeat || message.Commit != invalidIndex) {
-		log.Debugf("raftstore[cell-%d]: target peer doesn't exist, peer=<%s> message=<%s>",
+		log.Infof("raftstore[cell-%d]: target peer doesn't exist, peer=<%s> message=<%s>",
 			cellID,
 			target,
 			message.Type)
@@ -628,12 +628,10 @@ func (s *Store) tryToCreatePeerReplicate(cellID uint64, msg *mraft.RaftMessage) 
 	item := s.keyRanges.Search(msg.Start)
 	if item.ID > 0 {
 		if bytes.Compare(encStartKey(&item), getDataEndKey(msg.End)) < 0 {
-			if log.DebugEnabled() {
-				log.Debugf("raftstore[cell-%d]: msg is overlapped with cell, cell=<%s> msg=<%s>",
-					cellID,
-					item.String(),
-					msg.String())
-			}
+			log.Infof("raftstore[cell-%d]: msg is overlapped with cell, cell=<%s> msg=<%s>",
+				cellID,
+				item.String(),
+				msg.String())
 			return false
 		}
 	}
@@ -790,8 +788,9 @@ func (s *Store) addSnapJob(task func() error) (*util.Job, error) {
 	return s.addNamedJob(snapWorker, task)
 }
 
-func (s *Store) addApplyJob(name string, task func() error) (*util.Job, error) {
-	return s.addNamedJob(applyWorker, task)
+func (s *Store) addApplyJob(cellID uint64, task func() error) (*util.Job, error) {
+	index := (s.cfg.ApplyWorkerCount - 1) & cellID
+	return s.addNamedJob(fmt.Sprintf(applyWorker, index), task)
 }
 
 func (s *Store) addSplitJob(task func() error) (*util.Job, error) {

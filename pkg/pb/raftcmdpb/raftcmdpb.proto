@@ -17,7 +17,7 @@ enum CMDType {
     Snap      = 2;
 
     // common
-    Keys     = 100;
+    Ping     = 100;
     Del      = 101;
 
     // kv 

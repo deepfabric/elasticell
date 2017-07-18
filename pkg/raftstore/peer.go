@@ -18,8 +18,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"sync"
-
 	"github.com/Workiva/go-datastructures/queue"
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
@@ -47,13 +45,12 @@ type PeerReplicate struct {
 	store *Store
 	ps    *peerStorage
 
-	batch       *proposeBatch
-	proposeLock sync.Mutex
+	batch *proposeBatch
 
-	loopC chan struct{}
-	tickC chan struct{}
-
+	loopC        chan struct{}
+	tickC        chan struct{}
 	batchC       chan *cmd
+	reqCtxC      chan *reqCtx
 	proposeC     chan *proposalMeta
 	applyResultC chan *asyncApplyResult
 	stepC        chan *raftpb.Message
@@ -127,6 +124,7 @@ func newPeerReplicate(store *Store, cell *metapb.Cell, peerID uint64) (*PeerRepl
 	pr.rn = rn
 	pr.loopC = make(chan struct{}, defaultChanBuf)
 	pr.tickC = make(chan struct{}, defaultChanBuf)
+	pr.reqCtxC = make(chan *reqCtx, defaultChanBuf)
 	pr.proposeC = make(chan *proposalMeta, defaultChanBuf)
 	pr.applyResultC = make(chan *asyncApplyResult, defaultChanBuf)
 	pr.stepC = make(chan *raftpb.Message, defaultChanBuf)
@@ -140,9 +138,6 @@ func newPeerReplicate(store *Store, cell *metapb.Cell, peerID uint64) (*PeerRepl
 	}
 	pr.peerHeartbeatsMap = newPeerHeartbeatsMap()
 
-	id, _ := store.runner.RunCancelableTask(pr.readyToProcessPropose)
-	pr.cancelTaskIds = append(pr.cancelTaskIds, id)
-
 	// If this region has only one peer and I am the one, campaign directly.
 	if len(cell.Peers) == 1 && cell.Peers[0].StoreID == store.id {
 		err = rn.Campaign()
@@ -154,7 +149,7 @@ func newPeerReplicate(store *Store, cell *metapb.Cell, peerID uint64) (*PeerRepl
 			pr.cellID)
 	}
 
-	id, _ = store.runner.RunCancelableTask(pr.readyToServeRaft)
+	id, _ := store.runner.RunCancelableTask(pr.readyToServeRaft)
 	pr.cancelTaskIds = append(pr.cancelTaskIds, id)
 
 	id, _ = store.runner.RunCancelableTask(pr.readyToReceiveCMD)
@@ -162,17 +157,27 @@ func newPeerReplicate(store *Store, cell *metapb.Cell, peerID uint64) (*PeerRepl
 	return pr, nil
 }
 
+func (pr *PeerReplicate) maybeCampaign() (bool, error) {
+	if len(pr.ps.cell.Peers) <= 1 {
+		// The peer campaigned when it was created, no need to do it again.
+		return false, nil
+	}
+
+	err := pr.rn.Campaign()
+	if err != nil {
+		return false, err
+	}
+
+	log.Debugf("raft-cell[%d]: try to campaign leader",
+		pr.cellID)
+	return true, nil
+}
+
 func (pr *PeerReplicate) onReq(req *raftcmdpb.Request, cb func(*raftcmdpb.RaftCMDResponse)) {
-	pr.batch.push(&reqCtx{
+	pr.reqCtxC <- &reqCtx{
 		req: req,
 		cb:  cb,
-	})
-
-	pr.proposeLock.Lock()
-	if pr.batch.isPreEntriesSaved() {
-		pr.proposeNextBatch()
 	}
-	pr.proposeLock.Unlock()
 }
 
 func (pr *PeerReplicate) proposeNextBatch() {
