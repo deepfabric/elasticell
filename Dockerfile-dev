@@ -9,4 +9,4 @@ RUN apt-get update \
 
 RUN go get github.com/fagongzi/goetty \
     && go get github.com/deepfabric/c-nemo \
-    && go get github.com/deepfabric/go-nemo 
+    && go get github.com/deepfabric/go-nemo
