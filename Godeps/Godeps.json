@@ -259,6 +259,16 @@
 			"Rev": "714e7ec8db7f8398880197be10771fe89c480ee5"
 		},
 		{
+			"ImportPath": "github.com/coreos/etcd/raft",
+			"Comment": "v3.1.2",
+			"Rev": "714e7ec8db7f8398880197be10771fe89c480ee5"
+		},
+		{
+			"ImportPath": "github.com/coreos/etcd/raft/raftpb",
+			"Comment": "v3.1.2",
+			"Rev": "714e7ec8db7f8398880197be10771fe89c480ee5"
+		},
+		{
 			"ImportPath": "github.com/coreos/etcd/rafthttp",
 			"Comment": "v3.1.2",
 			"Rev": "714e7ec8db7f8398880197be10771fe89c480ee5"
@@ -307,6 +317,33 @@
 			"ImportPath": "github.com/coreos/pkg/capnslog",
 			"Comment": "v3-5-g1c941d7",
 			"Rev": "1c941d73110817a80b9fa6e14d5d2b00d977ce2a"
+		},
+		{
+			"ImportPath": "github.com/deepfabric/c-nemo",
+			"Comment": "nemo-v0.1.2-101-gb1f832e",
+			"Rev": "b1f832eb608f78ccfee94d9fee3ae440c8b09b03"
+		},
+		{
+			"ImportPath": "github.com/deepfabric/etcd/raft",
+			"Comment": "v3.1.9-2-gf8c66a5",
+			"Rev": "f8c66a5abeb737f1aeeafe0fbe2aa16e9813b0dd"
+		},
+		{
+			"ImportPath": "github.com/deepfabric/etcd/raft/raftpb",
+			"Comment": "v3.1.9-2-gf8c66a5",
+			"Rev": "f8c66a5abeb737f1aeeafe0fbe2aa16e9813b0dd"
+		},
+		{
+			"ImportPath": "github.com/deepfabric/go-nemo",
+			"Rev": "4797ad2b216dde57710829e94b30f74122c1ac88"
+		},
+		{
+			"ImportPath": "github.com/fagongzi/goetty",
+			"Rev": "23d7f937b369df7017300c85a43680baf044f0bb"
+		},
+		{
+			"ImportPath": "github.com/fagongzi/goetty/protocol/redis",
+			"Rev": "23d7f937b369df7017300c85a43680baf044f0bb"
 		},
 		{
 			"ImportPath": "github.com/garyburd/redigo/internal",
