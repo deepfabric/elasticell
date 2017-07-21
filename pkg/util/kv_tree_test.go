@@ -85,7 +85,7 @@ func (s *testKVTreeSuite) TestKVTreeRangeDelete(c *C) {
 	tree.Put(key3, value3)
 	tree.Put(key4, value4)
 
-	tree.RangeDelete(key1, key3)
+	tree.RangeDelete(key1, key4)
 
 	v := tree.Get(key1)
 	c.Assert(v, IsNil)

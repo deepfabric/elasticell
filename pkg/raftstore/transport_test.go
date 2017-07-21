@@ -1,62 +1,94 @@
-// Copyright 2016 DeepFabric, Inc.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
 package raftstore
 
 import (
 	"time"
 
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
+	"github.com/deepfabric/elasticell/pkg/util"
 	. "github.com/pingcap/check"
 )
 
-type testTransportSuite struct {
-	trans *transport
+type transportTestSuite struct {
+	from *transport
+	to   *transport
+
+	fromAddr     string
+	toAddr       string
+	fromID, toID uint64
 }
 
-func (s *testTransportSuite) SetUpSuite(c *C) {
-	cfg := newTestStoreCfg(1)
-	store := new(Store)
-	store.cfg = cfg
+func (s *transportTestSuite) SetUpSuite(c *C) {
+	s.fromAddr = "127.0.0.1:12345"
+	s.toAddr = "127.0.0.1:22345"
 
-	s.trans = newTransport(store, nil, nil)
-	go s.trans.start()
-	<-s.trans.server.Started()
+	s.fromID = 1
+	s.toID = 2
+
+	s1 := new(Store)
+	s1.cfg = newTestStoreCfg(s.fromID, s.fromAddr)
+	s1.runner = util.NewRunner()
+	s.from = newTransport(s1, nil, nil)
+	s.from.getStoreAddrFun = s.parse
+
+	s2 := new(Store)
+	s2.cfg = newTestStoreCfg(s.toID, s.toAddr)
+	s2.runner = util.NewRunner()
+	s.to = newTransport(s2, nil, nil)
+	s.to.getStoreAddrFun = s.parse
+
+	go s.from.start()
+	go s.to.start()
+
+	<-s.from.server.Started()
+	<-s.to.server.Started()
 }
 
-func (s *testTransportSuite) TearDownSuite(c *C) {
-	s.trans.stop()
+func (s *transportTestSuite) TearDownSuite(c *C) {
+	s.from.stop()
+	s.to.stop()
 }
 
-func (s *testTransportSuite) TestSendRaftMsg(c *C) {
-	complete := make(chan struct{}, 1)
-	cnt := 0
-	s.trans.handler = func(msg interface{}) {
-		cnt++
-		complete <- struct{}{}
+func (s *transportTestSuite) TestSend(c *C) {
+	ch := make(chan interface{})
+	defer close(ch)
+
+	msg := &mraft.RaftMessage{}
+	msg.ToPeer.StoreID = s.toID
+	s.from.send(msg)
+
+	s.to.handler = func(msg interface{}) {
+		ch <- msg
 	}
-
-	s.trans.getStoreAddrFun = func(storeID uint64) (string, error) {
-		return s.trans.store.cfg.StoreAddr, nil
-	}
-
-	msg := new(mraft.RaftMessage)
-	s.trans.send(msg)
 
 	select {
-	case <-complete:
-		c.Assert(cnt, Equals, 1)
+	case msg := <-ch:
+		_, ok := msg.(*mraft.RaftMessage)
+		c.Assert(ok, IsTrue)
 	case <-time.After(time.Second):
-		c.Fatal("send raft msg timeout")
+		c.Fail()
 	}
+}
+
+func (s *transportTestSuite) parse(storeID uint64) (string, error) {
+	if storeID == s.fromID {
+		return s.fromAddr, nil
+	} else if storeID == s.toID {
+		return s.toAddr, nil
+	}
+
+	return "", nil
+}
+
+func newTestStoreCfg(id uint64, addr string) *Cfg {
+	c := new(Cfg)
+	c.StoreAddr = addr
+	c.StoreAdvertiseAddr = c.StoreAddr
+	c.Raft = new(RaftCfg)
+	c.Raft.ElectionTick = 2
+	c.Raft.BaseTick = 1000
+	c.Raft.HeartbeatTick = 1
+	c.Raft.MaxSizePerMsg = 1024 * 1024
+	c.Raft.MaxSizePerEntry = 8 * 1024 * 1024
+	c.Raft.MaxInflightMsgs = 256
+	return c
 }

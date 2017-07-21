@@ -10,22 +10,18 @@
 // distributed under the License is distributed on an "AS IS" BASIS,
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package raftstore
 
 import (
+	"testing"
+
 	. "github.com/pingcap/check"
 )
 
-func (s *testStoreSuite) TestFirstGroup(c *C) {
-	stores := s.startFirstRaftGroup(c, 3)
+var _ = Suite(&utilTestSuite{})
+var _ = Suite(&transportTestSuite{})
+var _ = Suite(&storeTestSuite{})
 
-	defer func() {
-		for _, store := range stores {
-			store.Stop()
-		}
-		s.stopMultiPDServers(c)
-	}()
-
-	s.checkPeers(c, 3, stores)
+func TestRaftStore(t *testing.T) {
+	TestingT(t)
 }
