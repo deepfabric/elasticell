@@ -69,7 +69,7 @@ func (s *testNemoDataSuite) TestRangeDelete(c *C) {
 	hashKey := []byte("TestRangeDelete-e")
 	s.addHash(hashKey, c)
 
-	err := s.driver.GetDataEngine().RangeDelete(kvKey, hashKey)
+	err := s.driver.GetDataEngine().RangeDelete(kvKey, []byte("TestRangeDelete-f"))
 	c.Assert(err, IsNil)
 
 	s.checkKV(kvKey, c)
@@ -97,7 +97,7 @@ func (s *testNemoDataSuite) TestScanSize(c *C) {
 
 	cnt := 0
 	var total uint64
-	err := s.driver.GetDataEngine().ScanSize(kvKey, hashKey, func(key []byte, size uint64) (bool, error) {
+	err := s.driver.GetDataEngine().ScanSize(kvKey, []byte("TestRangeDelete-f"), func(key []byte, size uint64) (bool, error) {
 		cnt++
 		total = total + size
 		return true, nil

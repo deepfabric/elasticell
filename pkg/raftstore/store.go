@@ -880,7 +880,7 @@ func (s *Store) handleCellSplitCheck() {
 			return true, nil
 		}
 
-		log.Infof("raftstore-split[cell-%d]: cell need to check whether should split, diff=<%d> max=<%d>",
+		log.Debugf("raftstore-split[cell-%d]: cell need to check whether should split, diff=<%d> max=<%d>",
 			pr.cellID,
 			pr.sizeDiffHint,
 			s.cfg.CellCheckSizeDiff)

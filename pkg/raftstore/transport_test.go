@@ -51,8 +51,7 @@ func (s *testTransportSuite) TestSendRaftMsg(c *C) {
 	}
 
 	msg := new(mraft.RaftMessage)
-	err := s.trans.send(1, msg)
-	c.Assert(err, IsNil)
+	s.trans.send(msg)
 
 	select {
 	case <-complete:

@@ -88,7 +88,7 @@ func (s *testNemoMetaSuite) TestRangeDelete(c *C) {
 	s.driver.GetEngine().Set(key3, value)
 	s.driver.GetEngine().Set(key4, value)
 
-	err := s.driver.GetEngine().RangeDelete(key1, key4)
+	err := s.driver.GetEngine().RangeDelete(key1, []byte("TestRangeDelete-e"))
 	c.Assert(err, IsNil)
 
 	v, err := s.driver.GetEngine().Get(key1)
@@ -121,7 +121,7 @@ func (s *testNemoMetaSuite) TestScan(c *C) {
 	s.driver.GetEngine().Set(key4, value)
 
 	cnt := 0
-	err := s.driver.GetEngine().Scan(key1, key4, func(key, value []byte) (bool, error) {
+	err := s.driver.GetEngine().Scan(key1, []byte("TestScan-e"), func(key, value []byte) (bool, error) {
 		cnt++
 		return true, nil
 	})

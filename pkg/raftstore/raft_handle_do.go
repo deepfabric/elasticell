@@ -322,7 +322,7 @@ func (pr *PeerReplicate) doSplitCheck(epoch metapb.CellEpoch, startKey, endKey [
 	}
 
 	if size < pr.store.cfg.CellSplitSize {
-		log.Infof("raftstore-split[cell-%d]: no need to split, size=<%d> split=<%d> start=<%v> end=<%v>",
+		log.Debugf("raftstore-split[cell-%d]: no need to split, size=<%d> split=<%d> start=<%v> end=<%v>",
 			pr.cellID,
 			size,
 			pr.store.cfg.CellSplitSize,

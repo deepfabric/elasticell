@@ -19,7 +19,6 @@ import (
 	"os"
 	"sync"
 
-	"github.com/coreos/etcd/pkg/fileutil"
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
 	"github.com/deepfabric/elasticell/pkg/storage"
@@ -61,7 +60,7 @@ type defaultSnapshotManager struct {
 func newDefaultSnapshotManager(cfg *Cfg, db storage.DataEngine) SnapshotManager {
 	dir := cfg.getSnapDir()
 
-	if !fileutil.Exist(dir) {
+	if !exist(dir) {
 		if err := os.Mkdir(dir, 0750); err != nil {
 			log.Fatalf("raftstore-snap: cannot create dir for snapshot, errors:\n %+v",
 				err)
@@ -132,7 +131,7 @@ func (m *defaultSnapshotManager) Create(snap *mraft.RaftSnapshotData) error {
 	start := encStartKey(&snap.Cell)
 	end := encEndKey(&snap.Cell)
 
-	if fileutil.Exist(path) {
+	if exist(path) {
 		if !m.inRegistry(&snap.Key, sending) {
 			err := os.RemoveAll(path)
 			if err != nil {
@@ -169,7 +168,7 @@ func (m *defaultSnapshotManager) Create(snap *mraft.RaftSnapshotData) error {
 
 func (m *defaultSnapshotManager) Exists(key *mraft.SnapKey) bool {
 	file := m.getPathOfSnapKeyGZ(key)
-	return fileutil.Exist(file)
+	return exist(file)
 }
 
 func (m *defaultSnapshotManager) WriteTo(key *mraft.SnapKey, conn goetty.IOSession) (uint64, error) {
@@ -217,7 +216,7 @@ func (m *defaultSnapshotManager) CleanSnap(key *mraft.SnapKey) error {
 	var err error
 
 	tmpFile := m.getTmpPathOfSnapKeyGZ(key)
-	if fileutil.Exist(tmpFile) {
+	if exist(tmpFile) {
 		log.Infof("raftstore-snap[cell-%d]: delete exists snap tmp file, file=<%s>, key=<%+v>",
 			key.CellID,
 			tmpFile,
@@ -230,7 +229,7 @@ func (m *defaultSnapshotManager) CleanSnap(key *mraft.SnapKey) error {
 	}
 
 	file := m.getPathOfSnapKeyGZ(key)
-	if fileutil.Exist(file) {
+	if exist(file) {
 		log.Infof("raftstore-snap[cell-%d]: delete exists snap gz file, file=<%s>, key=<%+v>",
 			key.CellID,
 			file,
@@ -243,7 +242,7 @@ func (m *defaultSnapshotManager) CleanSnap(key *mraft.SnapKey) error {
 	}
 
 	dir := m.getPathOfSnapKey(key)
-	if fileutil.Exist(dir) {
+	if exist(dir) {
 		log.Infof("raftstore-snap[cell-%d]: delete exists snap dir, file=<%s>, key=<%+v>",
 			key.CellID,
 			dir,
@@ -258,7 +257,7 @@ func (m *defaultSnapshotManager) ReceiveSnapDataComplete(data *mraft.SnapshotDat
 	key := &data.Key
 
 	file := m.getTmpPathOfSnapKeyGZ(key)
-	if fileutil.Exist(file) {
+	if exist(file) {
 		info, err := os.Stat(file)
 		if err != nil {
 			return errors.Wrapf(err, "")
@@ -283,28 +282,32 @@ func (m *defaultSnapshotManager) ReceiveSnapData(data *mraft.SnapshotData) error
 	file := m.getTmpPathOfSnapKeyGZ(key)
 	var f *os.File
 	var err error
-	if m.Exists(key) {
-		f, err = os.OpenFile(file, os.O_APPEND, 0)
+	if exist(file) {
+		f, err = os.OpenFile(file, os.O_APPEND|os.O_WRONLY, 0600)
 		if err != nil {
+			f.Close()
 			return err
 		}
 	} else {
 		f, err = os.Create(file)
 		if err != nil {
+			f.Close()
 			return err
 		}
 	}
 
-	defer f.Close()
 	n, err := f.Write(data.Data)
 	if err != nil {
+		f.Close()
 		return err
 	}
 
 	if n != len(data.Data) {
+		f.Close()
 		return fmt.Errorf("write snapshot file failed, expect=<%d> actual=<%d>", len(data.Data), n)
 	}
 
+	f.Close()
 	return nil
 }
 
@@ -323,4 +326,9 @@ func (m *defaultSnapshotManager) Apply(key *mraft.SnapKey) error {
 	defer os.RemoveAll(m.getPathOfSnapKey(key))
 
 	return m.db.ApplySnapshot(m.getPathOfSnapKey(key))
+}
+
+func exist(name string) bool {
+	_, err := os.Stat(name)
+	return err == nil
 }
