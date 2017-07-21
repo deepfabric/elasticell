@@ -6,12 +6,12 @@ COPY ./ /go/src/github.com/deepfabric/elasticell
 
 RUN cd /go/src/github.com/deepfabric/elasticell/cmd/pd \
     && go build -ldflags "-w -s" pd.go \
-    && chmod +x ./pd
+    && chmod +x ./pd \
     && mv ./pd /apps/deepfabric
 
 RUN cd /go/src/github.com/deepfabric/elasticell/cmd/cell \
     && go build -ldflags "-w -s" cell.go \
-    && chmod +x ./cell
+    && chmod +x ./cell \
     && mv ./cell /apps/deepfabric
 
 WORKDIR /apps/deepfabric
