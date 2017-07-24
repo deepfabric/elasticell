@@ -2,6 +2,7 @@ site_name: "Elasticell Documentation"
 repo_url: https://github.com/deepfabric/elasticell
 docs_dir: docs
 pages:
+- Index: index.md
 - User Guide:
   - Installation: user-guide/installation.md
   - Quick Start: user-guide/quick-start.md
