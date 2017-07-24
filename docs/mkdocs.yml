@@ -1,0 +1,5 @@
+site_name: Elasticell documentation
+pages:
+  - [index.md, Home]
+  - [QUCKSTART.md, Quickstart]
+  - [ROADMAP.md, Roadmap]
