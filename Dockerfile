@@ -1,6 +1,13 @@
-FROM deepfabric/elasticell
+FROM deepfabric/elasticell-dev
 
 RUN mkdir -p /apps/deepfabric
+
+RUN apt-get update \
+    && apt-get -y install libsnappy-dev  \
+    && apt-get -y install zlib1g-dev \
+    && apt-get -y install libbz2-dev \
+    && apt-get -y install libgtest-dev \
+    && apt-get -y install libjemalloc-dev
 
 COPY ./ /go/src/github.com/deepfabric/elasticell
 
