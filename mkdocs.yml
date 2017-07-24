@@ -9,7 +9,7 @@ pages:
 - Architecture:
   - Concept: architecture/concept.md
   - PD: architecture/pd.md
-  - Cell: architecture/cell.pd
+  - Cell: architecture/cell.md
   - Proxy: architecture/proxy.md
 - Dev Guide:
   - Requirements: dev-guide/requirements.md

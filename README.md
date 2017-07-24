@@ -7,7 +7,7 @@
 Elasticell is a distributed NoSQL database with strong consistency and reliability.
 
 - __Compatible with Redis protocol__
-Use Elasticell as Redis. You can replace Redis with Elasticell to power your application without changing a single line of code in most cases[unsupport-redis-commands](./docs/unsupport-command.md).
+Use Elasticell as Redis. You can replace Redis with Elasticell to power your application without changing a single line of code in most cases([unsupport-redis-commands](./docs/unsupport-command.md)).
 
 - __Horizontal scalability__
 Grow Elasticell as your business grows. You can increase the capacity simply by adding more machines.
