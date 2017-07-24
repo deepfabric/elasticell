@@ -2,24 +2,14 @@ sudo: required
 
 language: go
 
-cache: 
-  apt: true
-  directories:
-    - $HOME/gopath/src/github.com/deepfabric
-    - $HOME/gopath/pkg
+services:
+  - docker
+
 
 before_install:
-  - apt-get install libsnappy-dev 
-  - apt-get install zlib1g-dev
-  - apt-get install libbz2-dev
-  - apt-get install libgtest-dev
-  - apt-get install libjemalloc-dev
-  
-install: 
-  - go get github.com/fagongzi/goetty
-  - go get github.com/deepfabric/c-nemo
-  - go get github.com/deepfabric/go-nemo
+  - docker pull deepfabric/elasticell-dev
+
+install: true
 
 script:
-  - go test -v ./...
-  - go build ./...
+  - docker build -t deepfabric/elasticell .
