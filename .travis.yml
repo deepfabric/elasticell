@@ -9,11 +9,11 @@ cache:
     - $HOME/gopath/pkg
 
 before_install:
-  - apt-get -y install libsnappy-dev 
-  - apt-get -y install zlib1g-dev
-  - apt-get -y install libbz2-dev
-  - apt-get -y install libgtest-dev
-  - apt-get -y install libjemalloc-dev
+  - apt-get install libsnappy-dev 
+  - apt-get install zlib1g-dev
+  - apt-get install libbz2-dev
+  - apt-get install libgtest-dev
+  - apt-get install libjemalloc-dev
   
 install: 
   - go get github.com/fagongzi/goetty
