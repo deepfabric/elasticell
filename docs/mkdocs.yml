@@ -1,5 +1,6 @@
-site_name: Elasticell documentation
+site_name: "Elasticell Documentation"
+repo_url: https://github.com/deepfabric/elasticell
+docs_dir: docs
 pages:
-  - [index.md, Home]
-  - [QUCKSTART.md, Quickstart]
-  - [ROADMAP.md, Roadmap]
+- Home: index.md
+- Quick start: QUICKSTART.md 
