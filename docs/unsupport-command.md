@@ -1,22 +1,22 @@
-## server
+#### server
 * keys
 
-## KV 
+#### KV 
 * mset
 * mget
 * setrange
 
-## Hash
+#### Hash
 * hscan
 * hincrbyfloat
 
-## Lists
+#### Lists
 * blpop
 * brpop
 * brpoplpush
 * rpoplpush 
 
-## Sets
+#### Sets
 * sdiff
 * sdiffstore
 * sinter
@@ -27,7 +27,7 @@
 * sunionstore
 * sscan
 
-## ZSet
+#### ZSet
 * zinterstore
 * zrevrangebylex
 * zrevrange

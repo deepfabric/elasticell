@@ -2,5 +2,18 @@ site_name: "Elasticell Documentation"
 repo_url: https://github.com/deepfabric/elasticell
 docs_dir: docs
 pages:
-- Home: index.md
-- Quick start: QUICKSTART.md 
+- User Guide:
+  - Installation: user-guide/installation.md
+  - Quick Start: user-guide/quick-start.md
+  - Configuation: user-guide/configuration.md
+- Architecture:
+  - Concept: architecture/concept.md
+  - PD: architecture/pd.md
+  - Cell: architecture/cell.pd
+  - Proxy: architecture/proxy.md
+- Dev Guide:
+  - Requirements: dev-guide/requirements.md
+  - Development: dev-guide/development.md 
+  - Deployment: dev-guide/deployment.md  
+- Unsupport Redis Command: unsupport-command.md
+- Roadmap: ROADMAP.md
