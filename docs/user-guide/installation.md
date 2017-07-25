@@ -338,28 +338,28 @@ On each node, use `/apps/deepfabric` as base folder, and create configuration fi
 ```bash
 docker pull deepfabric/pd
 docker pull deepfabric/cell
-docker pull deepfabric/redis-proxy
+docker pull deepfabric/proxy
 ```
 
 #### Run PD
 Execute the following command on each machine(192.168.1.101,192.168.1.102,192.168.1.103)
 
 ```bash
-docker run -d -v /apps/deepfabric:/apps/deepfabric deepfabric/pd --log-level=debug --log-file=/apps/deepfabric/log/pd.log
+docker run -d -v /apps/deepfabric/cfg:/apps/deepfabric/cfg -v /apps/deepfabric/data:/apps/deepfabric/data deepfabric/pd
 ```
 
 #### Run Cell
 Execute the following command on each machine(192.168.1.201,192.168.1.202,192.168.1.203)
 
 ```bash
-docker run -d -v /apps/deepfabric:/apps/deepfabric deepfabric/cell --log-level=debug --log-file=/apps/deepfabric/log/cell.log
+docker run -d -v /apps/deepfabric/cfg:/apps/deepfabric/cfg -v /apps/deepfabric/data:/apps/deepfabric/data deepfabric/cell
 ```
 
 #### Run Redis-Proxy
 Execute the following command on 192.168.1.91
 
 ```bash
-docker run -d -v /apps/deepfabric:/apps/deepfabric deepfabric/redis-proxy --log-level=debug --log-file=/apps/deepfabric/log/proxy.log
+docker run -d -v /apps/deepfabric/cfg:/apps/deepfabric/cfg -v /apps/deepfabric/data:/apps/deepfabric/data deepfabric/proxy
 ```
 
 ### Install from source
@@ -367,49 +367,35 @@ Elasticell use RocksDB as storage engine, so need install some dependency packag
 
 #### Pull Elasticell Image
 ```bash
-docker pull deepfabric/elasticell-dev
+docker pull deepfabric/elasticell-build
 ```
 
-#### Clone Elasticell
+##### Create dist folder
 ```bash
-git clone https://github.com/deepfabric/elasticell.git
-```
-
-#### Clone Redis-Proxy
-```bash
-git clone https://github.com/deepfabric/elasticell-proxy.git
-```
-
-#### Build
-For example, put the Elasticell components source to `/source/deepfabric`
-
-##### Run docker image
-```bash
-docker run -it --rm -v /go/src/github.com/deepfabric/elasticell:/source/deepfabric/elasticell -v /go/src/github.com/deepfabric/elasticell-proxy:/source/deepfabric/elasticell-proxy deepfabric/elasticell-dev
+/apps/deepfabric
 ```
 
 ##### Build PD
 ```bash
-cd /go/src/github.com/deepfabric/elasticell/cmd/pd
-go build -ldflags "-w -s" pd.go
+docker run -it --rm -v /apps/deepfabric/dist:/apps/deepfabric/dist -e ELASTICELL_BUILD_TARGET=pd -e ELASTICELL_BUILD_VERSION=master deepfabric/elasticell-build 
 ```
 
 ##### Build Cell
 ```bash
-cd /go/src/github.com/deepfabric/elasticell/cmd/cell
-go build -ldflags "-w -s" cell.go
+docker run -it --rm -v /apps/deepfabric/dist:/apps/deepfabric/dist -e ELASTICELL_BUILD_TARGET=cell -e ELASTICELL_BUILD_VERSION=master deepfabric/elasticell-build 
 ```
 
 ##### Build Redis-Proxy
 ```bash
-cd /go/src/github.com/deepfabric/elasticell-proxy/cmd/redis
-go build -ldflags "-w -s" redis-proxy.go
+docker run -it --rm -v /apps/deepfabric/dist:/apps/deepfabric/dist -e ELASTICELL_BUILD_TARGET=proxy -e ELASTICELL_BUILD_VERSION=master deepfabric/elasticell-build 
 ```
 
-##### Move binary to node
-You can use `docker cp` command to get the binary package of Elasticell components, and move these to the target node.
+##### Build all binary
+```bash
+docker run -it --rm -v /apps/deepfabric/dist:/apps/deepfabric/dist -e ELASTICELL_BUILD_TARGET=all -e ELASTICELL_BUILD_VERSION=master deepfabric/elasticell-build 
+```
 
-##### Install some package on each node
+##### Install some package on Cell node
 ```bash
 apt-get update
 apt-get -y install libsnappy-dev  
