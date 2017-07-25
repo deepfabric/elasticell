@@ -32,8 +32,7 @@ func (s *testNemoHashSuite) SetUpSuite(c *C) {
 }
 
 func (s *testNemoHashSuite) TearDownSuite(c *C) {
-	err := os.RemoveAll("/tmp/nemo-hash")
-	c.Assert(err, IsNil)
+	os.RemoveAll("/tmp/nemo-hash")
 }
 
 func (s *testNemoHashSuite) TestHSet(c *C) {

@@ -32,8 +32,7 @@ func (s *testNemoListSuite) SetUpSuite(c *C) {
 }
 
 func (s *testNemoListSuite) TearDownSuite(c *C) {
-	err := os.RemoveAll("/tmp/nemo-list")
-	c.Assert(err, IsNil)
+	os.RemoveAll("/tmp/nemo-list")
 }
 
 func (s *testNemoListSuite) TestLIndex(c *C) {

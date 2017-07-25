@@ -32,8 +32,7 @@ func (s *testNemoMetaSuite) SetUpSuite(c *C) {
 }
 
 func (s *testNemoMetaSuite) TearDownSuite(c *C) {
-	err := os.RemoveAll("/tmp/nemo-meta")
-	c.Assert(err, IsNil)
+	os.RemoveAll("/tmp/nemo-meta")
 }
 
 func (s *testNemoMetaSuite) TestSet(c *C) {

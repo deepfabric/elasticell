@@ -33,8 +33,7 @@ func (s *testNemoZSetSuite) SetUpSuite(c *C) {
 }
 
 func (s *testNemoZSetSuite) TearDownSuite(c *C) {
-	err := os.RemoveAll("/tmp/nemo-zset")
-	c.Assert(err, IsNil)
+	os.RemoveAll("/tmp/nemo-zset")
 }
 
 func (s *testNemoZSetSuite) TestZAdd(c *C) {

@@ -1,0 +1,25 @@
+FROM ubuntu:16.04
+
+RUN mkdir -p /apps/deepfabric
+
+COPY ./dist/cell  /apps/deepfabric
+COPY ./entrypoint.sh /apps/deepfabric
+
+RUN apt-get update \
+    && apt-get -y install libsnappy-dev  \
+    && apt-get -y install zlib1g-dev \
+    && apt-get -y install libbz2-dev \
+    && apt-get -y install libgtest-dev \
+    && apt-get -y install libjemalloc-dev
+
+RUN chmod +x /apps/deepfabric/cell \
+    && chmod +x /apps/deepfabric/entrypoint.sh \
+
+ENV ELASTICELL_HOME=/apps/deepfabric
+ENV ELASTICELL_EXEC=cell
+ENV ELASTICELL_LOG_LEVEL=INFO
+ENV ELASTICELL_LOG_TARGET=CONSOLE
+
+WORKDIR /apps/deepfabric
+
+ENTRYPOINT ./entrypoint.sh

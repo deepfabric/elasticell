@@ -32,8 +32,7 @@ func (s *testNemoWBSuite) SetUpSuite(c *C) {
 }
 
 func (s *testNemoWBSuite) TearDownSuite(c *C) {
-	err := os.RemoveAll("/tmp/nemo-wb")
-	c.Assert(err, IsNil)
+	os.RemoveAll("/tmp/nemo-wb")
 }
 
 func (s *testNemoWBSuite) TestWB(c *C) {

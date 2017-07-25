@@ -32,8 +32,7 @@ func (s *testNemoKVSuite) SetUpSuite(c *C) {
 }
 
 func (s *testNemoKVSuite) TearDownSuite(c *C) {
-	err := os.RemoveAll("/tmp/nemo-kv")
-	c.Assert(err, IsNil)
+	os.RemoveAll("/tmp/nemo-kv")
 }
 
 func (s *testNemoKVSuite) TestSet(c *C) {

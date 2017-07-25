@@ -40,17 +40,10 @@ func (s *testNemoDataSuite) SetUpSuite(c *C) {
 }
 
 func (s *testNemoDataSuite) TearDownSuite(c *C) {
-	err := os.RemoveAll("/tmp/nemo-data")
-	c.Assert(err, IsNil)
-
-	err = os.RemoveAll(snapPath)
-	c.Assert(err, IsNil)
-
-	err = os.RemoveAll(snapCreatePath)
-	c.Assert(err, IsNil)
-
-	err = os.RemoveAll(applyPath)
-	c.Assert(err, IsNil)
+	os.RemoveAll("/tmp/nemo-data")
+	os.RemoveAll(snapPath)
+	os.RemoveAll(snapCreatePath)
+	os.RemoveAll(applyPath)
 }
 
 func (s *testNemoDataSuite) TestRangeDelete(c *C) {
