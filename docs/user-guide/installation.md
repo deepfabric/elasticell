@@ -138,7 +138,8 @@ On each node, use `/apps/deepfabric` as base folder, and create configuration fi
                 "maxInflightMsgs": 256,
                 "maxSizePerEntry": 8388608,
                 "baseTick": 1000
-            }
+            },
+            "applyWorkerCount": 8
         }
     }
 }
@@ -193,7 +194,8 @@ On each node, use `/apps/deepfabric` as base folder, and create configuration fi
                 "maxInflightMsgs": 256,
                 "maxSizePerEntry": 8388608,
                 "baseTick": 1000
-            }
+            },
+            "applyWorkerCount": 8
         }
     }
 }
@@ -248,7 +250,8 @@ On each node, use `/apps/deepfabric` as base folder, and create configuration fi
                 "maxInflightMsgs": 256,
                 "maxSizePerEntry": 8388608,
                 "baseTick": 1000
-            }
+            },
+            "applyWorkerCount": 8
         }
     }
 }
