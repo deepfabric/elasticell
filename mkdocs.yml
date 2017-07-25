@@ -4,8 +4,8 @@ docs_dir: docs
 pages:
 - Index: index.md
 - User Guide:
-  - Installation: user-guide/installation.md
   - Quick Start: user-guide/quick-start.md
+  - Installation: user-guide/installation.md
   - Configuation: user-guide/configuration.md
 - Architecture:
   - Concept: architecture/concept.md

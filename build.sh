@@ -28,7 +28,4 @@ build_binary $1
 build_image $1 pd
 build_image $1 cell
 build_image $1 proxy
-
-
-
-
+build_image $1 quickstart
