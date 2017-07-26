@@ -5,7 +5,7 @@ To better understand Elasticell’s architecture, you need to understand the Ela
 Store is a service that runs on a single disk. A store manage many cells, and provide data storage for cells, and dispatch messages to cells.
 
 ### Cell
-A cell manage some data in range of [start, end), every cell has some replication on different stores, we called these replications Peer. All cell replications with has same id makes up a raft group. Cell's peer maybe scheduled by PD move to another store, or removed from the store.
+A cell manage data in range of [start, end), every cell has some replication on different stores, we called these replications Peer. All cell replications with has same id makes up a raft group. Cell's peer maybe scheduled by PD move to another store, or removed from the store.
 
 A cell has three meta data:
 

@@ -10,9 +10,7 @@ pages:
 - Architecture: 
   - Overview: architecture/index.md
   - Concept: architecture/concept.md
-  - PD: architecture/pd.md
-  - Cell: architecture/cell.md
-  - Proxy: architecture/proxy.md
+  - Multi-Raft: architecture/multi-raft.md
 - Dev Guide:
   - Requirements: dev-guide/requirements.md
   - Development: dev-guide/development.md 
