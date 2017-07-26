@@ -7,7 +7,7 @@ pages:
   - Quick Start: user-guide/quick-start.md
   - Installation: user-guide/installation.md
   - Configuation: user-guide/configuration.md
-- Architecture:
+- Architecture: architecture/index.md
   - Concept: architecture/concept.md
   - PD: architecture/pd.md
   - Cell: architecture/cell.md

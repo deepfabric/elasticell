@@ -1,6 +1,9 @@
-## What is Elasticell?
+## Architecture
+To better understand Elasticell’s features, you need to understand the Elasticell architecture.
 
-Elasticell is a distributed NoSQL database with strong consistency and reliability.
+![architecture](../imgs/architecture.png)
+
+The Elasticell has threee components: PD server, cell server, and proxy server.
 
 ### __Compatible with Redis protocol__
 Use Elasticell as Redis. You can replace Redis with Elasticell to power your application without changing a single line of code in most cases([unsupport-redis-commands](./unsupport-command.md)).
