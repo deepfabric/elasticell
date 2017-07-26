@@ -10,10 +10,5 @@ pages:
 - Architecture: 
   - Overview: architecture/index.md
   - Concept: architecture/concept.md
-  - Multi-Raft: architecture/multi-raft.md
-- Dev Guide:
-  - Requirements: dev-guide/requirements.md
-  - Development: dev-guide/development.md 
-  - Deployment: dev-guide/deployment.md  
+  - Multi-Raft: architecture/multi-raft.md 
 - Unsupport Redis Command: unsupport-command.md
-- Roadmap: ROADMAP.md
