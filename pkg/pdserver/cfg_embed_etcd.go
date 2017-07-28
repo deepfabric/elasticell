@@ -39,22 +39,22 @@ func (c *Cfg) getEmbedEtcdConfig() (*embed.Config, error) {
 	cfg.Debug = false
 
 	var err error
-	cfg.LPUrls, err = parseUrls(c.EmbedEtcd.PeerUrls)
+	cfg.LPUrls, err = ParseUrls(c.EmbedEtcd.PeerUrls)
 	if err != nil {
 		return nil, err
 	}
 
-	cfg.APUrls, err = parseUrls(util.GetStringValue(c.EmbedEtcd.AdvertisePeerUrls, c.EmbedEtcd.PeerUrls))
+	cfg.APUrls, err = ParseUrls(util.GetStringValue(c.EmbedEtcd.AdvertisePeerUrls, c.EmbedEtcd.PeerUrls))
 	if err != nil {
 		return nil, err
 	}
 
-	cfg.LCUrls, err = parseUrls(c.EmbedEtcd.ClientUrls)
+	cfg.LCUrls, err = ParseUrls(c.EmbedEtcd.ClientUrls)
 	if err != nil {
 		return nil, err
 	}
 
-	cfg.ACUrls, err = parseUrls(util.GetStringValue(c.EmbedEtcd.AdvertiseClientUrls, c.EmbedEtcd.ClientUrls))
+	cfg.ACUrls, err = ParseUrls(util.GetStringValue(c.EmbedEtcd.AdvertiseClientUrls, c.EmbedEtcd.ClientUrls))
 	if err != nil {
 		return nil, err
 	}

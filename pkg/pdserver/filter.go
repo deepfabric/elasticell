@@ -19,11 +19,11 @@ const (
 
 // Filter is used for filter store
 type Filter interface {
-	FilterSource(store *storeRuntimeInfo) bool
-	FilterTarget(store *storeRuntimeInfo) bool
+	FilterSource(store *StoreInfo) bool
+	FilterTarget(store *StoreInfo) bool
 }
 
-func filterSource(store *storeRuntimeInfo, filters []Filter) bool {
+func filterSource(store *StoreInfo, filters []Filter) bool {
 	for _, filter := range filters {
 		if filter.FilterSource(store) {
 			return true
@@ -32,7 +32,7 @@ func filterSource(store *storeRuntimeInfo, filters []Filter) bool {
 	return false
 }
 
-func filterTarget(store *storeRuntimeInfo, filters []Filter) bool {
+func filterTarget(store *StoreInfo, filters []Filter) bool {
 	for _, filter := range filters {
 		if filter.FilterTarget(store) {
 			return true
@@ -72,32 +72,32 @@ func newExcludedFilter(sources, targets map[uint64]struct{}) *excludedFilter {
 	}
 }
 
-func (f *stateFilter) filter(store *storeRuntimeInfo) bool {
+func (f *stateFilter) filter(store *StoreInfo) bool {
 	return !(store.isUp() && store.downTime() < f.cfg.Schedule.getMaxStoreDownTimeDuration())
 }
 
-func (f *stateFilter) FilterSource(store *storeRuntimeInfo) bool {
+func (f *stateFilter) FilterSource(store *StoreInfo) bool {
 	return f.filter(store)
 }
 
-func (f *stateFilter) FilterTarget(store *storeRuntimeInfo) bool {
+func (f *stateFilter) FilterTarget(store *StoreInfo) bool {
 	return f.filter(store)
 }
 
-func (f *storageThresholdFilter) FilterSource(store *storeRuntimeInfo) bool {
+func (f *storageThresholdFilter) FilterSource(store *StoreInfo) bool {
 	return false
 }
 
-func (f *storageThresholdFilter) FilterTarget(store *storeRuntimeInfo) bool {
+func (f *storageThresholdFilter) FilterTarget(store *StoreInfo) bool {
 	return store.storageRatio() > storageRatioThreshold
 }
 
-func (f *excludedFilter) FilterSource(store *storeRuntimeInfo) bool {
+func (f *excludedFilter) FilterSource(store *StoreInfo) bool {
 	_, ok := f.sources[store.getID()]
 	return ok
 }
 
-func (f *excludedFilter) FilterTarget(store *storeRuntimeInfo) bool {
+func (f *excludedFilter) FilterTarget(store *StoreInfo) bool {
 	_, ok := f.targets[store.getID()]
 	return ok
 }
@@ -108,11 +108,11 @@ func newBlockFilter() *blockFilter {
 	return &blockFilter{}
 }
 
-func (f *blockFilter) FilterSource(store *storeRuntimeInfo) bool {
+func (f *blockFilter) FilterSource(store *StoreInfo) bool {
 	return store.isBlocked()
 }
 
-func (f *blockFilter) FilterTarget(store *storeRuntimeInfo) bool {
+func (f *blockFilter) FilterTarget(store *StoreInfo) bool {
 	return store.isBlocked()
 }
 
@@ -124,19 +124,19 @@ func newHealthFilter(cfg *Cfg) *healthFilter {
 	return &healthFilter{cfg: cfg}
 }
 
-func (f *healthFilter) filter(store *storeRuntimeInfo) bool {
-	if store.status == nil || store.status.stats.IsBusy {
+func (f *healthFilter) filter(store *StoreInfo) bool {
+	if store.Status == nil || store.Status.Stats.IsBusy {
 		return true
 	}
 
 	return store.downTime() > f.cfg.Schedule.getMaxStoreDownTimeDuration()
 }
 
-func (f *healthFilter) FilterSource(store *storeRuntimeInfo) bool {
+func (f *healthFilter) FilterSource(store *StoreInfo) bool {
 	return f.filter(store)
 }
 
-func (f *healthFilter) FilterTarget(store *storeRuntimeInfo) bool {
+func (f *healthFilter) FilterTarget(store *StoreInfo) bool {
 	return f.filter(store)
 }
 
@@ -148,11 +148,11 @@ func newCacheFilter(cache *idCache) *cacheFilter {
 	return &cacheFilter{cache: cache}
 }
 
-func (f *cacheFilter) FilterSource(store *storeRuntimeInfo) bool {
+func (f *cacheFilter) FilterSource(store *StoreInfo) bool {
 	return f.cache.get(store.getID())
 }
 
-func (f *cacheFilter) FilterTarget(store *storeRuntimeInfo) bool {
+func (f *cacheFilter) FilterTarget(store *StoreInfo) bool {
 	return false
 }
 
@@ -164,29 +164,29 @@ func newSnapshotCountFilter(cfg *Cfg) *snapshotCountFilter {
 	return &snapshotCountFilter{cfg: cfg}
 }
 
-func (f *snapshotCountFilter) filter(store *storeRuntimeInfo) bool {
-	return uint64(store.status.stats.SendingSnapCount) > f.cfg.Schedule.MaxSnapshotCount ||
-		uint64(store.status.stats.ReceivingSnapCount) > f.cfg.Schedule.MaxSnapshotCount ||
-		uint64(store.status.stats.ApplyingSnapCount) > f.cfg.Schedule.MaxSnapshotCount
+func (f *snapshotCountFilter) filter(store *StoreInfo) bool {
+	return uint64(store.Status.Stats.SendingSnapCount) > f.cfg.Schedule.MaxSnapshotCount ||
+		uint64(store.Status.Stats.ReceivingSnapCount) > f.cfg.Schedule.MaxSnapshotCount ||
+		uint64(store.Status.Stats.ApplyingSnapCount) > f.cfg.Schedule.MaxSnapshotCount
 }
 
-func (f *snapshotCountFilter) FilterSource(store *storeRuntimeInfo) bool {
+func (f *snapshotCountFilter) FilterSource(store *StoreInfo) bool {
 	return f.filter(store)
 }
 
-func (f *snapshotCountFilter) FilterTarget(store *storeRuntimeInfo) bool {
+func (f *snapshotCountFilter) FilterTarget(store *StoreInfo) bool {
 	return f.filter(store)
 }
 
 // distinctScoreFilter ensures that distinct score will not decrease.
 type distinctScoreFilter struct {
 	cfg       *Cfg
-	stores    []*storeRuntimeInfo
+	stores    []*StoreInfo
 	safeScore float64
 }
 
-func newDistinctScoreFilter(cfg *Cfg, stores []*storeRuntimeInfo, source *storeRuntimeInfo) *distinctScoreFilter {
-	newStores := make([]*storeRuntimeInfo, 0, len(stores)-1)
+func newDistinctScoreFilter(cfg *Cfg, stores []*StoreInfo, source *StoreInfo) *distinctScoreFilter {
+	newStores := make([]*StoreInfo, 0, len(stores)-1)
 	for _, s := range stores {
 		if s.getID() == source.getID() {
 			continue
@@ -201,10 +201,10 @@ func newDistinctScoreFilter(cfg *Cfg, stores []*storeRuntimeInfo, source *storeR
 	}
 }
 
-func (f *distinctScoreFilter) FilterSource(store *storeRuntimeInfo) bool {
+func (f *distinctScoreFilter) FilterSource(store *StoreInfo) bool {
 	return false
 }
 
-func (f *distinctScoreFilter) FilterTarget(store *storeRuntimeInfo) bool {
+func (f *distinctScoreFilter) FilterTarget(store *StoreInfo) bool {
 	return f.cfg.getDistinctScore(f.stores, store) < f.safeScore
 }

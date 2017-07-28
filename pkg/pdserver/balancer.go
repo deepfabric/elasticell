@@ -59,7 +59,7 @@ func newBalanceCellScheduler(cfg *Cfg) *balanceCellScheduler {
 // shouldBalance returns true if we should balance the source and target store.
 // The min balance diff provides a buffer to make the cluster stable, so that we
 // don't need to schedule very frequently.
-func shouldBalance(source, target *storeRuntimeInfo, kind ResourceKind) bool {
+func shouldBalance(source, target *StoreInfo, kind ResourceKind) bool {
 	sourceCount := source.resourceCount(kind)
 	sourceScore := source.resourceScore(kind)
 	targetScore := target.resourceScore(kind)
@@ -72,7 +72,7 @@ func shouldBalance(source, target *storeRuntimeInfo, kind ResourceKind) bool {
 }
 
 func adjustBalanceLimit(cache *cache, kind ResourceKind) uint64 {
-	stores := cache.getStores()
+	stores := cache.getStoreCache().getStores()
 	counts := make([]float64, 0, len(stores))
 	for _, s := range stores {
 		counts = append(counts, float64(s.resourceCount(kind)))

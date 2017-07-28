@@ -38,7 +38,7 @@ func (op *changePeerOperator) GetResourceKind() ResourceKind {
 	return cellKind
 }
 
-func (op *changePeerOperator) Do(cell *cellRuntimeInfo) (*pdpb.CellHeartbeatRsp, bool) {
+func (op *changePeerOperator) Do(cell *CellInfo) (*pdpb.CellHeartbeatRsp, bool) {
 	// Check if operator is finished.
 	peer := op.ChangePeer.Peer
 

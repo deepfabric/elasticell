@@ -19,23 +19,23 @@ import (
 )
 
 func (t *testCacheSuite) TestClone(c *C) {
-	s := newStoreRuntime(t.newTestStore(1, ":10000"))
+	s := newStoreInfo(t.newTestStore(1, ":10000"))
 	s2 := s.clone()
 
-	s.store.Address = ":10001"
-	c.Assert(s2.store.Address == s.store.Address, IsFalse)
+	s.Meta.Address = ":10001"
+	c.Assert(s2.Meta.Address == s.Meta.Address, IsFalse)
 
-	s.store.Lables = []metapb.Label{
+	s.Meta.Lables = []metapb.Label{
 		metapb.Label{
 			Key:   "1",
 			Value: "2",
 		},
 	}
-	c.Assert(len(s2.store.Lables) == len(s.store.Lables), IsFalse)
+	c.Assert(len(s2.Meta.Lables) == len(s.Meta.Lables), IsFalse)
 
-	s.status.LeaderCount = 100
-	c.Assert(s2.status.LeaderCount == s.status.LeaderCount, IsFalse)
+	s.Status.LeaderCount = 100
+	c.Assert(s2.Status.LeaderCount == s.Status.LeaderCount, IsFalse)
 
-	s.status.stats.Capacity = 100
-	c.Assert(s2.status.stats.Capacity == s.status.stats.Capacity, IsFalse)
+	s.Status.Stats.Capacity = 100
+	c.Assert(s2.Status.Stats.Capacity == s.Status.Stats.Capacity, IsFalse)
 }

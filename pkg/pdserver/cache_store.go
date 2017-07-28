@@ -14,67 +14,214 @@
 package pdserver
 
 import (
+	"errors"
+	"sync"
 	"time"
 
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
 )
 
-func newStoreRuntime(store metapb.Store) *storeRuntimeInfo {
-	return &storeRuntimeInfo{
-		store: store,
-		status: &StoreStatus{
-			stats: &pdpb.StoreStats{},
+func newStoreInfo(store metapb.Store) *StoreInfo {
+	return &StoreInfo{
+		Meta: store,
+		Status: &StoreStatus{
+			Stats: &pdpb.StoreStats{},
 		},
 	}
 }
 
 func newStoreCache() *storeCache {
 	sc := new(storeCache)
-	sc.stores = make(map[uint64]*storeRuntimeInfo)
+	sc.stores = make(map[uint64]*StoreInfo)
 
 	return sc
 }
 
 type storeCache struct {
-	stores map[uint64]*storeRuntimeInfo
+	sync.RWMutex
+	stores map[uint64]*StoreInfo
+}
+
+func (sc *storeCache) createStoreInfo(store metapb.Store) {
+	sc.Lock()
+	defer sc.Unlock()
+
+	if _, ok := sc.stores[store.ID]; ok {
+		return
+	}
+
+	sc.stores[store.ID] = newStoreInfo(store)
+}
+
+func (sc *storeCache) updateStoreInfo(store *StoreInfo) {
+	sc.Lock()
+	defer sc.Unlock()
+	sc.stores[store.Meta.ID] = store
+}
+
+func (sc *storeCache) getStores() []*StoreInfo {
+	sc.RLock()
+	defer sc.RUnlock()
+
+	stores := make([]*StoreInfo, 0, len(sc.stores))
+	for _, store := range sc.stores {
+		stores = append(stores, store.clone())
+	}
+	return stores
+}
+
+func (sc *storeCache) getStore(storeID uint64) *StoreInfo {
+	sc.RLock()
+	defer sc.RUnlock()
+
+	return sc.getStoreWithoutLock(storeID)
+}
+
+func (sc *storeCache) setStoreOffline(storeID uint64) (*StoreInfo, error) {
+	sc.Lock()
+	defer sc.Unlock()
+
+	store := sc.getStoreWithoutLock(storeID)
+	if nil == store {
+		return nil, errStoreNotFound
+	}
+
+	if store.isOffline() {
+		return nil, nil
+	}
+
+	if store.isTombstone() {
+		return nil, errors.New("store has been removed")
+	}
+
+	store.Meta.State = metapb.Down
+	return store, nil
+}
+
+func (sc *storeCache) setStoreTombstone(storeID uint64, force bool) (*StoreInfo, error) {
+	sc.Lock()
+	defer sc.Unlock()
+
+	store := sc.getStoreWithoutLock(storeID)
+	if nil == store {
+		return nil, errStoreNotFound
+	}
+
+	if store.isTombstone() {
+		return nil, nil
+	}
+
+	if store.isUp() {
+		if !force {
+			return nil, errors.New("store is still up, please remove store gracefully")
+		}
+	}
+
+	store.Meta.State = metapb.Tombstone
+	store.Status = newStoreStatus()
+	return store, nil
+}
+
+func (sc *storeCache) getCellStores(cell *CellInfo) []*StoreInfo {
+	sc.RLock()
+	defer sc.RUnlock()
+
+	var stores []*StoreInfo
+	for id := range cell.getStoreIDs() {
+		if store := sc.getStoreWithoutLock(id); store != nil {
+			stores = append(stores, store.clone())
+		}
+	}
+	return stores
+}
+
+func (sc *storeCache) getFollowerStores(cell *CellInfo) []*StoreInfo {
+	sc.RLock()
+	defer sc.RUnlock()
+
+	var stores []*StoreInfo
+	for id := range cell.getFollowers() {
+		if store := sc.getStoreWithoutLock(id); store != nil {
+			stores = append(stores, store)
+		}
+	}
+	return stores
+}
+
+func (sc *storeCache) foreach(fn func(*StoreInfo) (bool, error)) error {
+	sc.RLock()
+	defer sc.RUnlock()
+
+	for _, s := range sc.stores {
+		next, err := fn(s)
+		if err != nil {
+			return err
+		}
+
+		if !next {
+			break
+		}
+	}
+
+	return nil
+}
+
+func (sc *storeCache) getStoreWithoutLock(storeID uint64) *StoreInfo {
+	store, ok := sc.stores[storeID]
+	if !ok {
+		return nil
+	}
+	return store.clone()
+}
+
+func newStoreStatus() *StoreStatus {
+	return &StoreStatus{
+		Stats: &pdpb.StoreStats{},
+	}
 }
 
 // StoreStatus contains information about a store's status.
 type StoreStatus struct {
-	stats *pdpb.StoreStats
 	// Blocked means that the store is blocked from balance.
-	blocked         bool
-	LeaderCount     uint32    `json:"leader_count"`
-	LastHeartbeatTS time.Time `json:"last_heartbeat_ts"`
+	blocked bool
+
+	Stats           *pdpb.StoreStats `json:"stats"`
+	LeaderCount     uint32           `json:"leaderCount"`
+	LastHeartbeatTS time.Time        `json:"lastHeartbeatTS"`
 }
 
-type storeRuntimeInfo struct {
-	store  metapb.Store
-	status *StoreStatus
+// StoreInfo store info
+type StoreInfo struct {
+	Meta   metapb.Store `json:"meta"`
+	Status *StoreStatus `json:"status"`
 }
 
-func (s *storeRuntimeInfo) getID() uint64 {
-	return s.store.ID
+func (s *StoreInfo) getID() uint64 {
+	return s.Meta.ID
 }
 
-func (s *storeRuntimeInfo) isUp() bool {
-	return s.store.State == metapb.UP
+func (s *StoreInfo) isUp() bool {
+	return s.Meta.State == metapb.UP
 }
 
-func (s *storeRuntimeInfo) isTombstone() bool {
-	return s.store.State == metapb.Tombstone
+func (s *StoreInfo) isTombstone() bool {
+	return s.Meta.State == metapb.Tombstone
 }
 
-func (s *storeRuntimeInfo) isBlocked() bool {
-	return s.status == nil || s.status.blocked
+func (s *StoreInfo) isOffline() bool {
+	return s.Meta.State == metapb.Down
 }
 
-func (s *storeRuntimeInfo) downTime() time.Duration {
-	return time.Since(s.status.LastHeartbeatTS)
+func (s *StoreInfo) isBlocked() bool {
+	return s.Status == nil || s.Status.blocked
 }
 
-func (s *storeRuntimeInfo) resourceCount(kind ResourceKind) uint64 {
+func (s *StoreInfo) downTime() time.Duration {
+	return time.Since(s.Status.LastHeartbeatTS)
+}
+
+func (s *StoreInfo) resourceCount(kind ResourceKind) uint64 {
 	switch kind {
 	case leaderKind:
 		return s.leaderCount()
@@ -85,7 +232,7 @@ func (s *storeRuntimeInfo) resourceCount(kind ResourceKind) uint64 {
 	}
 }
 
-func (s *storeRuntimeInfo) resourceScore(kind ResourceKind) float64 {
+func (s *StoreInfo) resourceScore(kind ResourceKind) float64 {
 	switch kind {
 	case leaderKind:
 		return s.leaderScore()
@@ -96,27 +243,27 @@ func (s *storeRuntimeInfo) resourceScore(kind ResourceKind) float64 {
 	}
 }
 
-func (s *storeRuntimeInfo) leaderCount() uint64 {
-	return uint64(s.status.LeaderCount)
+func (s *StoreInfo) leaderCount() uint64 {
+	return uint64(s.Status.LeaderCount)
 }
 
-func (s *storeRuntimeInfo) leaderScore() float64 {
-	return float64(s.status.LeaderCount)
+func (s *StoreInfo) leaderScore() float64 {
+	return float64(s.Status.LeaderCount)
 }
 
-func (s *storeRuntimeInfo) cellCount() uint64 {
-	return uint64(s.status.stats.CellCount)
+func (s *StoreInfo) cellCount() uint64 {
+	return uint64(s.Status.Stats.CellCount)
 }
 
-func (s *storeRuntimeInfo) cellScore() float64 {
-	if s.status.stats.Capacity == 0 {
+func (s *StoreInfo) cellScore() float64 {
+	if s.Status.Stats.Capacity == 0 {
 		return 0
 	}
-	return float64(s.status.stats.CellCount) / float64(s.status.stats.Capacity)
+	return float64(s.Status.Stats.CellCount) / float64(s.Status.Stats.Capacity)
 }
 
-func (s *storeRuntimeInfo) storageRatio() int {
-	cap := s.status.stats.Capacity
+func (s *StoreInfo) storageRatio() int {
+	cap := s.Status.Stats.Capacity
 
 	if cap == 0 {
 		return 0
@@ -125,11 +272,11 @@ func (s *storeRuntimeInfo) storageRatio() int {
 	return int(float64(s.storageSize()) * 100 / float64(cap))
 }
 
-func (s *storeRuntimeInfo) storageSize() uint64 {
-	return s.status.stats.Capacity - s.status.stats.Available
+func (s *StoreInfo) storageSize() uint64 {
+	return s.Status.Stats.Capacity - s.Status.Stats.Available
 }
 
-func (s *storeRuntimeInfo) getLocationID(keys []string) string {
+func (s *StoreInfo) getLocationID(keys []string) string {
 	id := ""
 	for _, k := range keys {
 		v := s.getLabelValue(k)
@@ -141,8 +288,8 @@ func (s *storeRuntimeInfo) getLocationID(keys []string) string {
 	return id
 }
 
-func (s *storeRuntimeInfo) getLabelValue(key string) string {
-	for _, label := range s.store.Lables {
+func (s *StoreInfo) getLabelValue(key string) string {
+	for _, label := range s.Meta.Lables {
 		if label.Key == key {
 			return label.Value
 		}

@@ -42,7 +42,7 @@ func (c *Cfg) getLocationLabels() []string {
 
 // getDistinctScore returns the score that the other is distinct from the stores.
 // A higher score means the other store is more different from the existed stores.
-func (c *Cfg) getDistinctScore(stores []*storeRuntimeInfo, other *storeRuntimeInfo) float64 {
+func (c *Cfg) getDistinctScore(stores []*StoreInfo, other *StoreInfo) float64 {
 	score := float64(0)
 	locationLabels := c.getLocationLabels()
 

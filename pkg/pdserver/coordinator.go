@@ -64,9 +64,9 @@ func (c *coordinator) stop() {
 
 // dispatch is used for coordinator cell,
 // it will coordinator when the heartbeat arrives
-func (c *coordinator) dispatch(target *cellRuntimeInfo) *pdpb.CellHeartbeatRsp {
+func (c *coordinator) dispatch(target *CellInfo) *pdpb.CellHeartbeatRsp {
 	// Check existed operator.
-	if op := c.getOperator(target.cell.ID); op != nil {
+	if op := c.getOperator(target.Meta.ID); op != nil {
 		res, finished := op.Do(target)
 		if !finished {
 			return res

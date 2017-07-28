@@ -68,6 +68,11 @@ func NewServer(cfg *Cfg) *Server {
 	return s
 }
 
+// Name returns name of current pd server
+func (s *Server) Name() string {
+	return s.cfg.Name
+}
+
 // Start start the pd server
 func (s *Server) Start() {
 	go s.listenToStop()

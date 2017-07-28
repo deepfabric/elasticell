@@ -110,18 +110,18 @@ func (l *scheduleLimiter) operatorCount(kind ResourceKind) uint64 {
 	return l.counts[kind]
 }
 
-// scheduleRemovePeer schedules a region to remove the peer.
-func scheduleRemovePeer(cache *cache, s Selector, filters ...Filter) (*cellRuntimeInfo, *metapb.Peer) {
-	stores := cache.getStores()
+// scheduleRemovePeer schedules a cell to remove the peer.
+func scheduleRemovePeer(cache *cache, s Selector, filters ...Filter) (*CellInfo, *metapb.Peer) {
+	stores := cache.getStoreCache().getStores()
 
 	source := s.SelectSource(stores, filters...)
 	if source == nil {
 		return nil, nil
 	}
 
-	cell := cache.randFollowerCell(source.getID())
+	cell := cache.getCellCache().randFollowerCell(source.getID())
 	if cell == nil {
-		cell = cache.randLeaderCell(source.getID())
+		cell = cache.getCellCache().randLeaderCell(source.getID())
 	}
 	if cell == nil {
 		return nil, nil

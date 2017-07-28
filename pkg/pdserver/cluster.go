@@ -79,13 +79,13 @@ func (s *Server) getStore(req *pdpb.GetStoreReq) (*pdpb.GetStoreRsp, error) {
 		return nil, errNotBootstrapped
 	}
 
-	store := c.cache.getStore(req.StoreID)
+	store := c.cache.getStoreCache().getStore(req.StoreID)
 	if store == nil {
 		return nil, errStoreNotFound
 	}
 
 	return &pdpb.GetStoreRsp{
-		Store: store.store,
+		Store: store.Meta,
 	}, nil
 }
 
@@ -103,9 +103,9 @@ func (s *Server) cellHeartbeat(req *pdpb.CellHeartbeatReq) (*pdpb.CellHeartbeatR
 		return nil, errRPCReq
 	}
 
-	cr := newCellRuntimeInfo(req.Cell, req.Leader)
-	cr.downPeers = req.DownPeers
-	cr.pendingPeers = req.PendingPeers
+	cr := newCellInfo(req.Cell, req.Leader)
+	cr.DownPeers = req.DownPeers
+	cr.PendingPeers = req.PendingPeers
 
 	return cluster.doCellHeartbeat(cr)
 }
@@ -192,9 +192,9 @@ func (s *Server) checkForBootstrap(req *pdpb.BootstrapClusterReq) (metapb.Store,
 func (s *Server) checkStore(storeID uint64) error {
 	c := s.GetCellCluster()
 
-	store := c.cache.getStore(storeID)
+	store := c.cache.getStoreCache().getStore(storeID)
 
-	if store != nil && store.store.State == metapb.Tombstone {
+	if store != nil && store.Meta.State == metapb.Tombstone {
 		return errTombstoneStore
 	}
 
@@ -237,17 +237,17 @@ func (c *CellCluster) doBootstrap(store metapb.Store, cell metapb.Cell) (*pdpb.B
 	}, nil
 }
 
-func (c *CellCluster) doCellHeartbeat(cr *cellRuntimeInfo) (*pdpb.CellHeartbeatRsp, error) {
-	err := c.cache.doCellHeartbeat(cr)
+func (c *CellCluster) doCellHeartbeat(cr *CellInfo) (*pdpb.CellHeartbeatRsp, error) {
+	err := c.cache.handleCellHeartbeat(cr)
 	if err != nil {
 		return nil, err
 	}
 
-	if len(cr.cell.Peers) == 0 {
+	if len(cr.Meta.Peers) == 0 {
 		return nil, errRPCReq
 	}
 
-	rsp := c.coordinator.dispatch(c.cache.getCell(cr.cell.ID))
+	rsp := c.coordinator.dispatch(c.cache.getCellCache().getCell(cr.Meta.ID))
 	if rsp == nil {
 		return emptyRsp, nil
 	}
@@ -260,16 +260,16 @@ func (c *CellCluster) doStoreHeartbeat(req *pdpb.StoreHeartbeatReq) (*pdpb.Store
 	defer c.mux.Unlock()
 
 	storeID := req.Stats.StoreID
-	store := c.cache.getStore(storeID)
+	store := c.cache.getStoreCache().getStore(storeID)
 	if nil == store {
 		return nil, fmt.Errorf("store<%d> not found", storeID)
 	}
 
-	store.status.stats = req.Stats
-	store.status.LeaderCount = uint32(c.cache.cc.getStoreLeaderCount(storeID))
-	store.status.LastHeartbeatTS = time.Now()
+	store.Status.Stats = req.Stats
+	store.Status.LeaderCount = uint32(c.cache.cc.getStoreLeaderCount(storeID))
+	store.Status.LastHeartbeatTS = time.Now()
 
-	c.cache.setStore(store)
+	c.cache.getStoreCache().updateStoreInfo(store)
 	return &pdpb.StoreHeartbeatRsp{}, nil
 }
 
@@ -281,15 +281,15 @@ func (c *CellCluster) doPutStore(store metapb.Store) error {
 		return fmt.Errorf("invalid for put store: <%+v>", store)
 	}
 
-	err := c.cache.foreachStore(func(s *storeRuntimeInfo) (bool, error) {
+	err := c.cache.getStoreCache().foreach(func(s *StoreInfo) (bool, error) {
 		if s.isTombstone() {
 			return true, nil
 		}
 
-		if s.store.ID != store.ID && s.store.Address == store.Address {
+		if s.Meta.ID != store.ID && s.Meta.Address == store.Address {
 			return false, fmt.Errorf("duplicated store address: %+v, already registered by %+v",
 				store,
-				s.store)
+				s.Meta)
 		}
 
 		return true, nil
@@ -299,12 +299,12 @@ func (c *CellCluster) doPutStore(store metapb.Store) error {
 		return err
 	}
 
-	old := c.cache.getStore(store.ID)
+	old := c.cache.getStoreCache().getStore(store.ID)
 	if old == nil {
-		old = newStoreRuntime(store)
+		old = newStoreInfo(store)
 	} else {
-		old.store.Address = store.Address
-		old.store.Lables = store.Lables
+		old.Meta.Address = store.Address
+		old.Meta.Lables = store.Lables
 	}
 
 	for _, k := range c.s.cfg.Schedule.LocationLabels {
@@ -313,12 +313,12 @@ func (c *CellCluster) doPutStore(store metapb.Store) error {
 		}
 	}
 
-	err = c.s.store.SetStoreMeta(c.s.GetClusterID(), old.store)
+	err = c.s.store.SetStoreMeta(c.s.GetClusterID(), old.Meta)
 	if err != nil {
 		return err
 	}
 
-	c.cache.setStore(old)
+	c.cache.getStoreCache().updateStoreInfo(old)
 	return nil
 }
 
@@ -326,17 +326,17 @@ func (c *CellCluster) doAskSplit(req *pdpb.AskSplitReq) (*pdpb.AskSplitRsp, erro
 	c.mux.Lock()
 	defer c.mux.Unlock()
 
-	cr := c.cache.searchCell(req.Cell.Start)
+	cr := c.cache.getCellCache().searchCell(req.Cell.Start)
 	if cr == nil {
 		return nil, errors.New("cell not found")
 	}
 
 	// If the request epoch is less than current cell epoch, then returns an error.
-	if req.Cell.Epoch.CellVer < cr.cell.Epoch.CellVer ||
-		req.Cell.Epoch.ConfVer < cr.cell.Epoch.ConfVer {
+	if req.Cell.Epoch.CellVer < cr.Meta.Epoch.CellVer ||
+		req.Cell.Epoch.ConfVer < cr.Meta.Epoch.ConfVer {
 		return nil, errors.Errorf("invalid cell epoch, request: %v, currenrt: %v",
 			req.Cell.Epoch,
-			cr.cell.Epoch)
+			cr.Meta.Epoch)
 	}
 
 	newCellID, err := c.s.idAlloc.newID()
@@ -362,7 +362,7 @@ func (c *CellCluster) doReportSplit(req *pdpb.ReportSplitReq) (*pdpb.ReportSplit
 	left := req.Left
 	right := req.Right
 
-	err := c.checkSplitRegion(&left, &right)
+	err := c.checkSplitCell(&left, &right)
 	if err != nil {
 		log.Warnf("cell-cluster:report split cell is invalid, req=<%+v> errors:\n %+v",
 			req,
@@ -379,10 +379,10 @@ func (c *CellCluster) doGetLastRanges(req *pdpb.GetLastRangesReq) (*pdpb.GetLast
 
 	var ranges []*pdpb.Range
 	for _, cr := range c.cache.cc.cells {
-		if cr.leader != nil {
+		if cr.LeaderPeer != nil {
 			ranges = append(ranges, &pdpb.Range{
-				Cell:        cr.cell,
-				LeaderStore: c.cache.getStore(cr.leader.StoreID).store,
+				Cell:        cr.Meta,
+				LeaderStore: c.cache.getStoreCache().getStore(cr.LeaderPeer.StoreID).Meta,
 			})
 		}
 	}
@@ -392,7 +392,7 @@ func (c *CellCluster) doGetLastRanges(req *pdpb.GetLastRangesReq) (*pdpb.GetLast
 	}, nil
 }
 
-func (c *CellCluster) checkSplitRegion(left *metapb.Cell, right *metapb.Cell) error {
+func (c *CellCluster) checkSplitCell(left *metapb.Cell, right *metapb.Cell) error {
 	if !bytes.Equal(left.End, right.Start) {
 		return errors.New("invalid split cell")
 	}
@@ -435,12 +435,12 @@ func (c *CellCluster) start() error {
 	}
 	c.cache.cluster = newClusterRuntime(*cluster)
 
-	err = c.s.store.LoadStoreMeta(clusterID, batchLimit, c.cache.addStore)
+	err = c.s.store.LoadStoreMeta(clusterID, batchLimit, c.cache.getStoreCache().createStoreInfo)
 	if err != nil {
 		return err
 	}
 
-	err = c.s.store.LoadCellMeta(clusterID, batchLimit, c.cache.addCellFromMeta)
+	err = c.s.store.LoadCellMeta(clusterID, batchLimit, c.cache.getCellCache().createAndAdd)
 	if err != nil {
 		return err
 	}

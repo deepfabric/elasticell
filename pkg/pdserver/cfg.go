@@ -79,7 +79,9 @@ func (c *Cfg) string() string {
 	return ""
 }
 
-func parseUrls(s string) ([]url.URL, error) {
+// ParseUrls parse a string into multiple urls.
+// Export for api.
+func ParseUrls(s string) ([]url.URL, error) {
 	items := strings.Split(s, ",")
 	urls := make([]url.URL, 0, len(items))
 	for _, item := range items {

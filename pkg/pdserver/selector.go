@@ -15,8 +15,8 @@ package pdserver
 
 // Selector is an interface to select source and target store to schedule.
 type Selector interface {
-	SelectSource(stores []*storeRuntimeInfo, filters ...Filter) *storeRuntimeInfo
-	SelectTarget(stores []*storeRuntimeInfo, filters ...Filter) *storeRuntimeInfo
+	SelectSource(stores []*StoreInfo, filters ...Filter) *StoreInfo
+	SelectTarget(stores []*StoreInfo, filters ...Filter) *StoreInfo
 }
 
 func newBalanceSelector(kind ResourceKind, filters []Filter) *balanceSelector {
@@ -31,10 +31,10 @@ type balanceSelector struct {
 	filters []Filter
 }
 
-func (s *balanceSelector) SelectSource(stores []*storeRuntimeInfo, filters ...Filter) *storeRuntimeInfo {
+func (s *balanceSelector) SelectSource(stores []*StoreInfo, filters ...Filter) *StoreInfo {
 	filters = append(filters, s.filters...)
 
-	var result *storeRuntimeInfo
+	var result *StoreInfo
 	for _, store := range stores {
 		if filterSource(store, filters) {
 			continue
@@ -46,10 +46,10 @@ func (s *balanceSelector) SelectSource(stores []*storeRuntimeInfo, filters ...Fi
 	return result
 }
 
-func (s *balanceSelector) SelectTarget(stores []*storeRuntimeInfo, filters ...Filter) *storeRuntimeInfo {
+func (s *balanceSelector) SelectTarget(stores []*StoreInfo, filters ...Filter) *StoreInfo {
 	filters = append(filters, s.filters...)
 
-	var result *storeRuntimeInfo
+	var result *StoreInfo
 	for _, store := range stores {
 		if filterTarget(store, filters) {
 			continue

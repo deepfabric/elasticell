@@ -22,9 +22,9 @@ import (
 func (t *testCacheSuite) TestAddStore(c *C) {
 	cache := t.newTestCache()
 	s := t.newTestStore(1, ":12345")
-	cache.addStore(s)
+	cache.getStoreCache().createStoreInfo(s)
 
-	info := cache.getStore(1)
+	info := cache.getStoreCache().getStore(1)
 	c.Assert(info, NotNil)
 }
 
@@ -34,14 +34,14 @@ func (t *testCacheSuite) TestForeachStore(c *C) {
 
 	cache := t.newTestCache()
 	s := t.newTestStore(storeID, ":11111")
-	cache.addStore(s)
+	cache.getStoreCache().createStoreInfo(s)
 
 	storeID++
 	s = t.newTestStore(storeID, ":11111")
-	cache.addStore(s)
+	cache.getStoreCache().createStoreInfo(s)
 
 	cnt := 0
-	err := cache.foreachStore(func(s *storeRuntimeInfo) (bool, error) {
+	err := cache.getStoreCache().foreach(func(s *StoreInfo) (bool, error) {
 		cnt++
 		return true, nil
 	})
@@ -49,7 +49,7 @@ func (t *testCacheSuite) TestForeachStore(c *C) {
 	c.Assert(err, IsNil)
 
 	cnt = 0
-	err = cache.foreachStore(func(s *storeRuntimeInfo) (bool, error) {
+	err = cache.getStoreCache().foreach(func(s *StoreInfo) (bool, error) {
 		cnt++
 		if cnt == 1 {
 			return false, nil
@@ -61,7 +61,7 @@ func (t *testCacheSuite) TestForeachStore(c *C) {
 	c.Assert(err, IsNil)
 
 	cnt = 0
-	err = cache.foreachStore(func(s *storeRuntimeInfo) (bool, error) {
+	err = cache.getStoreCache().foreach(func(s *StoreInfo) (bool, error) {
 		cnt++
 		return true, errors.New("")
 	})
@@ -75,15 +75,15 @@ func (t *testCacheSuite) TestGetStores(c *C) {
 	var storeID uint64 = 100
 
 	s := t.newTestStore(storeID, ":11111")
-	cache.addStore(s)
+	cache.getStoreCache().createStoreInfo(s)
 
 	storeID++
 	s = t.newTestStore(storeID, ":11111")
-	cache.addStore(s)
-	cache.addStore(s)
-	cache.addStore(s)
+	cache.getStoreCache().createStoreInfo(s)
+	cache.getStoreCache().createStoreInfo(s)
+	cache.getStoreCache().createStoreInfo(s)
 
-	stores := cache.getStores()
+	stores := cache.getStoreCache().getStores()
 	c.Assert(stores, NotNil)
 	c.Assert(len(stores), Equals, 2)
 }

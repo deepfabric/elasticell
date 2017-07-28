@@ -48,9 +48,9 @@ func (op *transferLeaderOperator) GetResourceKind() ResourceKind {
 	return leaderKind
 }
 
-func (op *transferLeaderOperator) Do(cell *cellRuntimeInfo) (*pdpb.CellHeartbeatRsp, bool) {
+func (op *transferLeaderOperator) Do(cell *CellInfo) (*pdpb.CellHeartbeatRsp, bool) {
 	// Check if operator is finished.
-	if cell.leader.ID == op.NewLeader.ID {
+	if cell.LeaderPeer.ID == op.NewLeader.ID {
 		return nil, true
 	}
 

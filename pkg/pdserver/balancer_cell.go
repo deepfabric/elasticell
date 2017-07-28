@@ -61,10 +61,10 @@ func (s *balanceCellScheduler) Schedule(cache *cache) Operator {
 	return op
 }
 
-func (s *balanceCellScheduler) transferPeer(cache *cache, cell *cellRuntimeInfo, oldPeer *metapb.Peer) Operator {
+func (s *balanceCellScheduler) transferPeer(cache *cache, cell *CellInfo, oldPeer *metapb.Peer) Operator {
 	// scoreGuard guarantees that the distinct score will not decrease.
-	stores := cache.getCellStores(cell)
-	source := cache.getStore(oldPeer.StoreID)
+	stores := cache.getStoreCache().getCellStores(cell)
+	source := cache.getStoreCache().getStore(oldPeer.StoreID)
 	scoreGuard := newDistinctScoreFilter(s.cfg, stores, source)
 
 	checker := newReplicaChecker(s.cfg, cache)
@@ -73,7 +73,7 @@ func (s *balanceCellScheduler) transferPeer(cache *cache, cell *cellRuntimeInfo,
 		return nil
 	}
 
-	target := cache.getStore(newPeer.StoreID)
+	target := cache.getStoreCache().getStore(newPeer.StoreID)
 	if !shouldBalance(source, target, s.GetResourceKind()) {
 		return nil
 	}

@@ -37,7 +37,7 @@ func newReplicaChecker(cfg *Cfg, cache *cache, filters ...Filter) *replicaChecke
 }
 
 // Check return the Operator
-func (r *replicaChecker) Check(target *cellRuntimeInfo) Operator {
+func (r *replicaChecker) Check(target *CellInfo) Operator {
 	if op := r.checkDownPeer(target); op != nil {
 		return op
 	}
@@ -69,10 +69,10 @@ func (r *replicaChecker) Check(target *cellRuntimeInfo) Operator {
 	return r.checkBestReplacement(target)
 }
 
-func (r *replicaChecker) checkDownPeer(cell *cellRuntimeInfo) Operator {
-	for _, stats := range cell.downPeers {
+func (r *replicaChecker) checkDownPeer(cell *CellInfo) Operator {
+	for _, stats := range cell.DownPeers {
 		peer := stats.Peer
-		store := r.cache.getStore(peer.StoreID)
+		store := r.cache.getStoreCache().getStore(peer.StoreID)
 
 		if nil != store && store.downTime() < r.cfg.Schedule.getMaxStoreDownTimeDuration() {
 			continue
@@ -88,9 +88,9 @@ func (r *replicaChecker) checkDownPeer(cell *cellRuntimeInfo) Operator {
 	return nil
 }
 
-func (r *replicaChecker) checkOfflinePeer(cell *cellRuntimeInfo) Operator {
-	for _, peer := range cell.cell.Peers {
-		store := r.cache.getStore(peer.StoreID)
+func (r *replicaChecker) checkOfflinePeer(cell *CellInfo) Operator {
+	for _, peer := range cell.Meta.Peers {
+		store := r.cache.getStoreCache().getStore(peer.StoreID)
 
 		if store != nil && store.isUp() {
 			continue
@@ -108,15 +108,15 @@ func (r *replicaChecker) checkOfflinePeer(cell *cellRuntimeInfo) Operator {
 }
 
 // selectWorstPeer returns the worst peer in the cell.
-func (r *replicaChecker) selectWorstPeer(cell *cellRuntimeInfo, filters ...Filter) (*meta.Peer, float64) {
+func (r *replicaChecker) selectWorstPeer(cell *CellInfo, filters ...Filter) (*meta.Peer, float64) {
 	var (
-		worstStore *storeRuntimeInfo
+		worstStore *StoreInfo
 		worstScore float64
 	)
 
 	// Select the store with lowest distinct score.
 	// If the scores are the same, select the store with maximal cell score.
-	stores := r.cache.getCellStores(cell)
+	stores := r.cache.getStoreCache().getCellStores(cell)
 	for _, store := range stores {
 		if filterSource(store, filters) {
 			continue
@@ -136,21 +136,21 @@ func (r *replicaChecker) selectWorstPeer(cell *cellRuntimeInfo, filters ...Filte
 }
 
 // selectBestPeer returns the best peer in other stores.
-func (r *replicaChecker) selectBestPeer(target *cellRuntimeInfo, filters ...Filter) (*meta.Peer, float64) {
+func (r *replicaChecker) selectBestPeer(target *CellInfo, filters ...Filter) (*meta.Peer, float64) {
 	// Add some must have filters.
 	filters = append(filters, newStateFilter(r.cfg))
 	filters = append(filters, newStorageThresholdFilter(r.cfg))
 	filters = append(filters, newExcludedFilter(nil, target.getStoreIDs()))
 
 	var (
-		bestStore *storeRuntimeInfo
+		bestStore *StoreInfo
 		bestScore float64
 	)
 
 	// Select the store with best distinct score.
 	// If the scores are the same, select the store with minimal cells score.
-	stores := r.cache.getCellStores(target)
-	for _, store := range r.cache.getStores() {
+	stores := r.cache.getStoreCache().getCellStores(target)
+	for _, store := range r.cache.getStoreCache().getStores() {
 		if filterTarget(store, filters) {
 			continue
 		}
@@ -174,7 +174,7 @@ func (r *replicaChecker) selectBestPeer(target *cellRuntimeInfo, filters ...Filt
 	return &newPeer, bestScore
 }
 
-func (r *replicaChecker) checkBestReplacement(cell *cellRuntimeInfo) Operator {
+func (r *replicaChecker) checkBestReplacement(cell *CellInfo) Operator {
 	oldPeer, oldScore := r.selectWorstPeer(cell)
 	if oldPeer == nil {
 		return nil
@@ -191,7 +191,7 @@ func (r *replicaChecker) checkBestReplacement(cell *cellRuntimeInfo) Operator {
 }
 
 // selectBestReplacement returns the best peer to replace the cell peer.
-func (r *replicaChecker) selectBestReplacement(cell *cellRuntimeInfo, peer *meta.Peer) (*meta.Peer, float64) {
+func (r *replicaChecker) selectBestReplacement(cell *CellInfo, peer *meta.Peer) (*meta.Peer, float64) {
 	// selectBestReplacement returns the best peer to replace the cell peer.
 	// Get a new cell without the peer we are going to replace.
 	newCell := cell.clone()
@@ -202,7 +202,7 @@ func (r *replicaChecker) selectBestReplacement(cell *cellRuntimeInfo, peer *meta
 
 // getDistinctScore returns the score that the other is distinct from the stores.
 // A higher score means the other store is more different from the existed stores.
-func getDistinctScore(cfg *Cfg, stores []*storeRuntimeInfo, other *storeRuntimeInfo) float64 {
+func getDistinctScore(cfg *Cfg, stores []*StoreInfo, other *StoreInfo) float64 {
 	score := float64(0)
 	locationLabels := cfg.getLocationLabels()
 
@@ -236,7 +236,7 @@ func getDistinctScore(cfg *Cfg, stores []*storeRuntimeInfo, other *storeRuntimeI
 // Returns 0 if store A is as good as store B.
 // Returns 1 if store A is better than store B.
 // Returns -1 if store B is better than store A.
-func compareStoreScore(cfg *Cfg, storeA *storeRuntimeInfo, scoreA float64, storeB *storeRuntimeInfo, scoreB float64) int {
+func compareStoreScore(cfg *Cfg, storeA *StoreInfo, scoreA float64, storeB *StoreInfo, scoreB float64) int {
 	// The store with higher score is better.
 	if scoreA > scoreB {
 		return 1

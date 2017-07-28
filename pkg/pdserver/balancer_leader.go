@@ -45,8 +45,8 @@ func (l *balanceLeaderScheduler) Schedule(cache *cache) Operator {
 		return nil
 	}
 
-	source := cache.getStore(cell.leader.StoreID)
-	target := cache.getStore(newLeader.StoreID)
+	source := cache.getStoreCache().getStore(cell.LeaderPeer.StoreID)
+	target := cache.getStoreCache().getStore(newLeader.StoreID)
 	if !shouldBalance(source, target, l.GetResourceKind()) {
 		return nil
 	}
@@ -56,20 +56,20 @@ func (l *balanceLeaderScheduler) Schedule(cache *cache) Operator {
 }
 
 // scheduleTransferLeader schedules a cell to transfer leader to the peer.
-func scheduleTransferLeader(cache *cache, s Selector, filters ...Filter) (*cellRuntimeInfo, *metapb.Peer) {
-	sourceStores := cache.getStores()
+func scheduleTransferLeader(cache *cache, s Selector, filters ...Filter) (*CellInfo, *metapb.Peer) {
+	sourceStores := cache.getStoreCache().getStores()
 
 	source := s.SelectSource(sourceStores, filters...)
 	if source == nil {
 		return nil, nil
 	}
 
-	cell := cache.randLeaderCell(source.getID())
+	cell := cache.getCellCache().randLeaderCell(source.getID())
 	if cell == nil {
 		return nil, nil
 	}
 
-	targetStores := cache.getFollowerStores(cell)
+	targetStores := cache.getStoreCache().getFollowerStores(cell)
 
 	target := s.SelectTarget(targetStores)
 	if target == nil {

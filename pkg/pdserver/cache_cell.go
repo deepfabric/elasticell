@@ -20,79 +20,151 @@ import (
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
+	"github.com/deepfabric/elasticell/pkg/pd"
 	"github.com/deepfabric/elasticell/pkg/util"
-	"github.com/gogo/protobuf/proto"
 )
 
-func newCellRuntimeInfo(cell metapb.Cell, leader *metapb.Peer) *cellRuntimeInfo {
-	return &cellRuntimeInfo{
-		cell:   cell,
-		leader: leader,
+// CellInfo The cell info
+type CellInfo struct {
+	Meta         metapb.Cell      `json:"meta"`
+	LeaderPeer   *metapb.Peer     `json:"leaderPeer"`
+	DownPeers    []pdpb.PeerStats `json:"downPeers"`
+	PendingPeers []metapb.Peer    `json:"pendingPeers"`
+}
+
+func newCellInfo(cell metapb.Cell, leader *metapb.Peer) *CellInfo {
+	return &CellInfo{
+		Meta:       cell,
+		LeaderPeer: leader,
 	}
+}
+
+type cellCache struct {
+	sync.RWMutex
+
+	tree      *util.CellTree
+	cells     map[uint64]*CellInfo            // cellID -> cellRuntimeInfo
+	leaders   map[uint64]map[uint64]*CellInfo // storeID -> cellID -> cellRuntimeInfo
+	followers map[uint64]map[uint64]*CellInfo // storeID -> cellID -> cellRuntimeInfo
 }
 
 func newCellCache() *cellCache {
 	cc := new(cellCache)
 	cc.tree = util.NewCellTree()
-	cc.cells = make(map[uint64]*cellRuntimeInfo)
-	cc.leaders = make(map[uint64]map[uint64]*cellRuntimeInfo)
-	cc.followers = make(map[uint64]map[uint64]*cellRuntimeInfo)
+	cc.cells = make(map[uint64]*CellInfo)
+	cc.leaders = make(map[uint64]map[uint64]*CellInfo)
+	cc.followers = make(map[uint64]map[uint64]*CellInfo)
 
 	return cc
 }
 
-type cellRuntimeInfo struct {
-	cell         metapb.Cell
-	leader       *metapb.Peer
-	downPeers    []pdpb.PeerStats
-	pendingPeers []metapb.Peer
+func (cc *cellCache) createAndAdd(cell metapb.Cell) {
+	cc.Lock()
+	defer cc.Unlock()
+
+	cc.addOrUpdateWithoutLock(newCellInfo(cell, nil))
 }
 
-type cellCache struct {
-	tree      *util.CellTree
-	cells     map[uint64]*cellRuntimeInfo            // cellID -> cellRuntimeInfo
-	leaders   map[uint64]map[uint64]*cellRuntimeInfo // storeID -> cellID -> cellRuntimeInfo
-	followers map[uint64]map[uint64]*cellRuntimeInfo // storeID -> cellID -> cellRuntimeInfo
+func (cc *cellCache) addOrUpdate(cellInfo *CellInfo) {
+	cc.Lock()
+	defer cc.Unlock()
+
+	cc.addOrUpdateWithoutLock(cellInfo)
+}
+
+func (cc *cellCache) addOrUpdateWithoutLock(origin *CellInfo) {
+	if cell, ok := cc.cells[origin.getID()]; ok {
+		cc.removeCell(cell)
+	}
+
+	// Add to tree and regions.
+	cc.tree.Update(origin.Meta)
+	cc.cells[origin.getID()] = origin
+
+	if origin.LeaderPeer == nil || origin.LeaderPeer.ID == pd.ZeroID {
+		return
+	}
+
+	// Add to leaders and followers.
+	for _, peer := range origin.getPeers() {
+		storeID := peer.StoreID
+		if peer.ID == origin.LeaderPeer.ID {
+			// Add leader peer to leaders.
+			store, ok := cc.leaders[storeID]
+			if !ok {
+				store = make(map[uint64]*CellInfo)
+				cc.leaders[storeID] = store
+			}
+			store[origin.getID()] = origin
+		} else {
+			// Add follower peer to followers.
+			store, ok := cc.followers[storeID]
+			if !ok {
+				store = make(map[uint64]*CellInfo)
+				cc.followers[storeID] = store
+			}
+			store[origin.getID()] = origin
+		}
+	}
+}
+
+func (cc *cellCache) removeCell(origin *CellInfo) {
+	cc.Lock()
+	defer cc.Unlock()
+
+	// Remove from tree and cells.
+	cc.tree.Remove(origin.Meta)
+	delete(cc.cells, origin.getID())
+
+	// Remove from leaders and followers.
+	for _, peer := range origin.getPeers() {
+		delete(cc.leaders[peer.StoreID], origin.getID())
+		delete(cc.followers[peer.StoreID], origin.getID())
+	}
+}
+
+func (cc *cellCache) searchCell(startKey []byte) *CellInfo {
+	cc.RLock()
+	defer cc.RUnlock()
+
+	cell := cc.tree.Search(startKey)
+	if cell.ID == pd.ZeroID {
+		return nil
+	}
+
+	return cc.cells[cell.ID]
+}
+
+func (cc *cellCache) getCell(id uint64) *CellInfo {
+	cc.RLock()
+	defer cc.RUnlock()
+
+	return cc.cells[id]
+}
+
+func (cc *cellCache) randFollowerCell(storeID uint64) *CellInfo {
+	cc.RLock()
+	defer cc.RUnlock()
+
+	return randCell(cc.followers[storeID])
+}
+
+func (cc *cellCache) randLeaderCell(storeID uint64) *CellInfo {
+	cc.RLock()
+	defer cc.RUnlock()
+
+	return randCell(cc.leaders[storeID])
 }
 
 func (cc *cellCache) getStoreLeaderCount(storeID uint64) int {
 	return len(cc.leaders[storeID])
 }
 
-func (cc *cellCache) randFollowerCell(storeID uint64) *cellRuntimeInfo {
-	return randCell(cc.followers[storeID])
-}
-
-func (cc *cellCache) randLeaderCell(storeID uint64) *cellRuntimeInfo {
-	return randCell(cc.leaders[storeID])
-}
-
-func (cc *cellRuntimeInfo) clone() *cellRuntimeInfo {
-	downPeers := make([]pdpb.PeerStats, 0, len(cc.downPeers))
-	for _, peer := range cc.downPeers {
-		p := proto.Clone(&peer).(*pdpb.PeerStats)
-		downPeers = append(downPeers, *p)
-	}
-
-	pendingPeers := make([]metapb.Peer, 0, len(cc.pendingPeers))
-	for _, peer := range cc.pendingPeers {
-		p := proto.Clone(&peer).(*metapb.Peer)
-		pendingPeers = append(pendingPeers, *p)
-	}
-
-	return &cellRuntimeInfo{
-		cell:         *(proto.Clone(&cc.cell).(*metapb.Cell)),
-		leader:       proto.Clone(cc.leader).(*metapb.Peer),
-		downPeers:    downPeers,
-		pendingPeers: pendingPeers,
-	}
-}
-
-func (cc *cellRuntimeInfo) getFollowers() map[uint64]*metapb.Peer {
-	peers := cc.cell.Peers
+func (cc *CellInfo) getFollowers() map[uint64]*metapb.Peer {
+	peers := cc.Meta.Peers
 	followers := make(map[uint64]*metapb.Peer, len(peers))
 	for _, peer := range peers {
-		if cc.leader == nil || cc.leader.ID != peer.ID {
+		if cc.LeaderPeer == nil || cc.LeaderPeer.ID != peer.ID {
 			followers[peer.StoreID] = peer
 		}
 	}
@@ -100,8 +172,8 @@ func (cc *cellRuntimeInfo) getFollowers() map[uint64]*metapb.Peer {
 	return followers
 }
 
-func (cc *cellRuntimeInfo) getStorePeer(storeID uint64) *metapb.Peer {
-	for _, peer := range cc.cell.Peers {
+func (cc *CellInfo) getStorePeer(storeID uint64) *metapb.Peer {
+	for _, peer := range cc.Meta.Peers {
 		if peer.StoreID == storeID {
 			return peer
 		}
@@ -109,7 +181,7 @@ func (cc *cellRuntimeInfo) getStorePeer(storeID uint64) *metapb.Peer {
 	return nil
 }
 
-func (cc *cellRuntimeInfo) removeStorePeer(storeID uint64) {
+func (cc *CellInfo) removeStorePeer(storeID uint64) {
 	var peers []*metapb.Peer
 	for _, peer := range cc.getPeers() {
 		if peer.StoreID != storeID {
@@ -117,11 +189,11 @@ func (cc *cellRuntimeInfo) removeStorePeer(storeID uint64) {
 		}
 	}
 
-	cc.cell.Peers = peers
+	cc.Meta.Peers = peers
 }
 
-func (cc *cellRuntimeInfo) getPendingPeer(peerID uint64) *metapb.Peer {
-	for _, peer := range cc.pendingPeers {
+func (cc *CellInfo) getPendingPeer(peerID uint64) *metapb.Peer {
+	for _, peer := range cc.PendingPeers {
 		if peer.ID == peerID {
 			return &peer
 		}
@@ -129,8 +201,8 @@ func (cc *cellRuntimeInfo) getPendingPeer(peerID uint64) *metapb.Peer {
 	return nil
 }
 
-func (cc *cellRuntimeInfo) getPeer(peerID uint64) *metapb.Peer {
-	for _, peer := range cc.cell.Peers {
+func (cc *CellInfo) getPeer(peerID uint64) *metapb.Peer {
+	for _, peer := range cc.Meta.Peers {
 		if peer.ID == peerID {
 			return peer
 		}
@@ -139,15 +211,15 @@ func (cc *cellRuntimeInfo) getPeer(peerID uint64) *metapb.Peer {
 	return nil
 }
 
-func (cc *cellRuntimeInfo) getID() uint64 {
-	return cc.cell.ID
+func (cc *CellInfo) getID() uint64 {
+	return cc.Meta.ID
 }
 
-func (cc *cellRuntimeInfo) getPeers() []*metapb.Peer {
-	return cc.cell.Peers
+func (cc *CellInfo) getPeers() []*metapb.Peer {
+	return cc.Meta.Peers
 }
 
-func (cc *cellRuntimeInfo) getStoreIDs() map[uint64]struct{} {
+func (cc *CellInfo) getStoreIDs() map[uint64]struct{} {
 	peers := cc.getPeers()
 	stores := make(map[uint64]struct{}, len(peers))
 	for _, peer := range peers {

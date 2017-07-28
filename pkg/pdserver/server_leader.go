@@ -111,6 +111,11 @@ func (s *Server) IsLeader() bool {
 	return atomic.LoadInt64(&s.isLeaderValue) == 1
 }
 
+// GetLeader returns current leader pd for API
+func (s *Server) GetLeader() (*pdpb.Leader, error) {
+	return s.store.GetCurrentLeader()
+}
+
 func (s *Server) marshalLeader() string {
 	leader := &pdpb.Leader{
 		Addr: s.cfg.RPCAddr,
