@@ -18,8 +18,6 @@ import (
 	"flag"
 	"io/ioutil"
 	"log"
-	"net/url"
-	"strings"
 
 	"github.com/pkg/errors"
 )
@@ -77,21 +75,4 @@ func unmarshal(data []byte) (*Cfg, error) {
 
 func (c *Cfg) string() string {
 	return ""
-}
-
-// ParseUrls parse a string into multiple urls.
-// Export for api.
-func ParseUrls(s string) ([]url.URL, error) {
-	items := strings.Split(s, ",")
-	urls := make([]url.URL, 0, len(items))
-	for _, item := range items {
-		u, err := url.Parse(item)
-		if err != nil {
-			return nil, errors.Wrap(err, "parse url error")
-		}
-
-		urls = append(urls, *u)
-	}
-
-	return urls, nil
 }

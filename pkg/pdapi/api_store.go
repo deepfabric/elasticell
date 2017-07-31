@@ -22,18 +22,19 @@ import (
 )
 
 type storeHandler struct {
-	service StoreService
+	service Service
 	rd      *render.Render
 }
 
-func initAPIForStore(router *mux.Router, service StoreService, rd *render.Render) {
+func initAPIForStore(router *mux.Router, service Service, rd *render.Render) {
 	handler := newStoreHandler(service, rd)
+
 	router.HandleFunc("/api/v1/stores/{id}", handler.get).Methods("GET")
 	router.HandleFunc("/api/v1/stores/{id}", handler.delete).Methods("DELETE")
 	router.HandleFunc("/api/v1/stores", handler.list).Methods("GET")
 }
 
-func newStoreHandler(service StoreService, rd *render.Render) *storeHandler {
+func newStoreHandler(service Service, rd *render.Render) *storeHandler {
 	return &storeHandler{
 		service: service,
 		rd:      rd,

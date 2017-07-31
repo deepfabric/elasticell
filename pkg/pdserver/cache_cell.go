@@ -109,9 +109,6 @@ func (cc *cellCache) addOrUpdateWithoutLock(origin *CellInfo) {
 }
 
 func (cc *cellCache) removeCell(origin *CellInfo) {
-	cc.Lock()
-	defer cc.Unlock()
-
 	// Remove from tree and cells.
 	cc.tree.Remove(origin.Meta)
 	delete(cc.cells, origin.getID())

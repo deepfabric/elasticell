@@ -19,7 +19,7 @@ import (
 	"net/url"
 
 	"github.com/deepfabric/elasticell/pkg/log"
-	"github.com/deepfabric/elasticell/pkg/pdserver"
+	"github.com/deepfabric/elasticell/pkg/util"
 )
 
 const (
@@ -32,35 +32,35 @@ const (
 )
 
 type redirector struct {
-	s *pdserver.Server
+	service Service
 }
 
-func newRedirector(s *pdserver.Server) *redirector {
-	return &redirector{s: s}
+func newRedirector(service Service) *redirector {
+	return &redirector{service: service}
 }
 
 func (h *redirector) ServeHTTP(w http.ResponseWriter, r *http.Request, next http.HandlerFunc) {
-	if h.s.IsLeader() {
+	if h.service.IsLeader() {
 		next(w, r)
 		return
 	}
 
 	// Prevent more than one redirection.
 	if name := r.Header.Get(redirectorHeader); len(name) != 0 {
-		log.Errorf("api: redirect from %v, but %v is not leader", name, h.s.Name())
+		log.Errorf("api: redirect from %v, but %v is not leader", name, h.service.Name())
 		http.Error(w, errRedirectToNotLeader, http.StatusInternalServerError)
 		return
 	}
 
-	r.Header.Set(redirectorHeader, h.s.Name())
+	r.Header.Set(redirectorHeader, h.service.Name())
 
-	leader, err := h.s.GetLeader()
+	leader, err := h.service.GetLeader()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	urls, err := pdserver.ParseUrls(leader.Addr)
+	urls, err := util.ParseUrls(leader.EctdClientAddr)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

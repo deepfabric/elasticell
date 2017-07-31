@@ -16,7 +16,6 @@ package pdapi
 import (
 	"net/http"
 
-	"github.com/deepfabric/elasticell/pkg/pdserver"
 	"github.com/gorilla/mux"
 	"github.com/unrolled/render"
 	"github.com/urfave/negroni"
@@ -28,29 +27,27 @@ const (
 )
 
 // NewAPIHandler returns a HTTP handler for API.
-func NewAPIHandler(svr *pdserver.Server) http.Handler {
+func NewAPIHandler(service Service) http.Handler {
 	engine := negroni.New()
 
 	engine.Use(negroni.NewRecovery())
 
 	router := mux.NewRouter()
 	router.PathPrefix(APIPrefix).Handler(negroni.New(
-		newRedirector(svr),
-		negroni.Wrap(createRouter(APIPrefix, svr)),
+		newRedirector(service),
+		negroni.Wrap(createRouter(APIPrefix, service)),
 	))
 
 	engine.UseHandler(router)
-
 	return engine
 }
 
-func createRouter(prefix string, svr *pdserver.Server) *mux.Router {
+func createRouter(prefix string, service Service) *mux.Router {
 	rd := render.New(render.Options{
 		IndentJSON: true,
 	})
 
 	router := mux.NewRouter().PathPrefix(prefix).Subrouter()
-	initAPIForStore(router, svr, rd)
-
+	initAPIForStore(router, service, rd)
 	return router
 }

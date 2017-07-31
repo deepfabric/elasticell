@@ -84,6 +84,8 @@ func (pr *PeerReplicate) readyToServeRaft(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
+			pr.setStop()
+
 			close(pr.tickC)
 			close(pr.loopC)
 			close(pr.applyResultC)

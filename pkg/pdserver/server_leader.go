@@ -118,9 +118,10 @@ func (s *Server) GetLeader() (*pdpb.Leader, error) {
 
 func (s *Server) marshalLeader() string {
 	leader := &pdpb.Leader{
-		Addr: s.cfg.RPCAddr,
-		ID:   s.id,
-		Name: s.cfg.Name,
+		Addr:           s.cfg.RPCAddr,
+		EctdClientAddr: s.cfg.EmbedEtcd.ClientUrls,
+		ID:             s.id,
+		Name:           s.cfg.Name,
 	}
 
 	return marshal(leader)

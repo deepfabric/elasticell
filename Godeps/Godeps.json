@@ -401,6 +401,11 @@
 			"Rev": "316fb6d3f031ae8f4d457c6c5186b9e3ded70435"
 		},
 		{
+			"ImportPath": "github.com/gorilla/mux",
+			"Comment": "v1.4.0",
+			"Rev": "bcd8bc72b08df0f70df986b97f95590779502d31"
+		},
+		{
 			"ImportPath": "github.com/grpc-ecosystem/go-grpc-prometheus",
 			"Comment": "v1.1",
 			"Rev": "6b7015e65d366bf3f19b2b2a000a831940f0f7e0"
@@ -492,6 +497,15 @@
 		{
 			"ImportPath": "github.com/ugorji/go/codec",
 			"Rev": "c88ee250d0221a57af388746f5cf03768c21d6e2"
+		},
+		{
+			"ImportPath": "github.com/unrolled/render",
+			"Rev": "a0ec58421ddf111bd7efd3b7087399ca7d5da2f1"
+		},
+		{
+			"ImportPath": "github.com/urfave/negroni",
+			"Comment": "v0.2.0",
+			"Rev": "fde5e16d32adc7ad637e9cd9ad21d4ebc6192535"
 		},
 		{
 			"ImportPath": "github.com/xiang90/probing",

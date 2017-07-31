@@ -24,6 +24,7 @@ import (
 // so we need redirect ectd log to spec.
 func RedirectEmbedEctdLog(w io.Writer) {
 	capnslog.SetFormatter(capnslog.NewPrettyFormatter(w, false))
+	capnslog.SetGlobalLogLevel(capnslog.DEBUG)
 }
 
 func minUint64(a, b uint64) uint64 {

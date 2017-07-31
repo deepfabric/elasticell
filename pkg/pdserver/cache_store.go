@@ -183,18 +183,18 @@ func newStoreStatus() *StoreStatus {
 
 // StoreStatus contains information about a store's status.
 type StoreStatus struct {
+	Stats           *pdpb.StoreStats
+	LeaderCount     uint32
+	LastHeartbeatTS time.Time
+
 	// Blocked means that the store is blocked from balance.
 	blocked bool
-
-	Stats           *pdpb.StoreStats `json:"stats"`
-	LeaderCount     uint32           `json:"leaderCount"`
-	LastHeartbeatTS time.Time        `json:"lastHeartbeatTS"`
 }
 
 // StoreInfo store info
 type StoreInfo struct {
-	Meta   metapb.Store `json:"meta"`
-	Status *StoreStatus `json:"status"`
+	Meta   metapb.Store
+	Status *StoreStatus
 }
 
 func (s *StoreInfo) getID() uint64 {

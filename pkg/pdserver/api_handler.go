@@ -15,27 +15,28 @@ package pdserver
 
 import (
 	"github.com/deepfabric/elasticell/pkg/log"
+	"github.com/deepfabric/elasticell/pkg/pdapi"
 )
 
 // ListStore returns all store info
-func (s *Server) ListStore() ([]*StoreInfo, error) {
+func (s *Server) ListStore() ([]*pdapi.StoreInfo, error) {
 	cluster := s.GetCellCluster()
 	if nil == cluster {
 		return nil, errNotBootstrapped
 	}
 
-	return cluster.cache.getStoreCache().getStores(), nil
+	return toAPIStoreSlice(cluster.cache.getStoreCache().getStores()), nil
 }
 
 // GetStore return the store with the id
-func (s *Server) GetStore(id uint64) (*StoreInfo, error) {
+func (s *Server) GetStore(id uint64) (*pdapi.StoreInfo, error) {
 	cluster := s.GetCellCluster()
 	if nil == cluster {
 		return nil, errNotBootstrapped
 	}
 
 	c := cluster.cache.getStoreCache()
-	return c.getStore(id), nil
+	return toAPIStore(c.getStore(id)), nil
 }
 
 // DeleteStore remove the store from cluster
@@ -72,4 +73,25 @@ func (s *Server) DeleteStore(id uint64, force bool) error {
 	}
 
 	return nil
+}
+
+func toAPIStore(store *StoreInfo) *pdapi.StoreInfo {
+	return &pdapi.StoreInfo{
+		Meta: store.Meta,
+		Status: &pdapi.StoreStatus{
+			Stats:           store.Status.Stats,
+			LeaderCount:     store.Status.LeaderCount,
+			LastHeartbeatTS: store.Status.LastHeartbeatTS,
+		},
+	}
+}
+
+func toAPIStoreSlice(stores []*StoreInfo) []*pdapi.StoreInfo {
+	values := make([]*pdapi.StoreInfo, len(stores))
+
+	for idx, store := range stores {
+		values[idx] = toAPIStore(store)
+	}
+
+	return values
 }

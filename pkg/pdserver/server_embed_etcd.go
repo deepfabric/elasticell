@@ -14,6 +14,7 @@
 package pdserver
 
 import (
+	"fmt"
 	"net"
 	"net/http"
 	"net/url"
@@ -25,6 +26,7 @@ import (
 	"github.com/coreos/etcd/etcdserver"
 	"github.com/coreos/etcd/pkg/types"
 	"github.com/deepfabric/elasticell/pkg/log"
+	"github.com/deepfabric/elasticell/pkg/pdapi"
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 )
@@ -45,6 +47,10 @@ func (s *Server) startEmbedEtcd() {
 		log.Fatalf("bootstrap: start embed ectd server failure, errors:\n %+v",
 			err)
 		return
+	}
+
+	cfg.UserHandlers = map[string]http.Handler{
+		fmt.Sprintf("%s/", pdapi.APIPrefix): pdapi.NewAPIHandler(s),
 	}
 
 	s.etcd, err = embed.StartEtcd(cfg)

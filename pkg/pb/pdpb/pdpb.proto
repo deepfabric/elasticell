@@ -82,9 +82,10 @@ message ResponseHeader {
 }
 
 message Leader {
-    optional uint64 id   = 1 [(gogoproto.nullable) = false, (gogoproto.customname) = "ID"];
-    optional string name = 2 [(gogoproto.nullable) = false];
-    optional string addr = 3 [(gogoproto.nullable) = false];
+    optional uint64 id             = 1 [(gogoproto.nullable) = false, (gogoproto.customname) = "ID"];
+    optional string name           = 2 [(gogoproto.nullable) = false];
+    optional string addr           = 3 [(gogoproto.nullable) = false];
+    optional string ectdClientAddr = 4 [(gogoproto.nullable) = false];
 }
 
 message LeaderReq {
