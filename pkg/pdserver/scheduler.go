@@ -46,6 +46,8 @@ type Scheduler interface {
 }
 
 type scheduleController struct {
+	sync.Mutex
+
 	Scheduler
 	cfg      *Cfg
 	limiter  *scheduleLimiter

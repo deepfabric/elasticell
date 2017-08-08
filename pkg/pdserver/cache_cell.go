@@ -26,10 +26,10 @@ import (
 
 // CellInfo The cell info
 type CellInfo struct {
-	Meta         metapb.Cell      `json:"meta"`
-	LeaderPeer   *metapb.Peer     `json:"leaderPeer"`
-	DownPeers    []pdpb.PeerStats `json:"downPeers"`
-	PendingPeers []metapb.Peer    `json:"pendingPeers"`
+	Meta         metapb.Cell
+	LeaderPeer   *metapb.Peer
+	DownPeers    []pdpb.PeerStats
+	PendingPeers []metapb.Peer
 }
 
 func newCellInfo(cell metapb.Cell, leader *metapb.Peer) *CellInfo {
@@ -132,11 +132,27 @@ func (cc *cellCache) searchCell(startKey []byte) *CellInfo {
 	return cc.cells[cell.ID]
 }
 
+func (cc *cellCache) getCells() []*CellInfo {
+	cc.RLock()
+	defer cc.RUnlock()
+
+	cells := make([]*CellInfo, 0, len(cc.cells))
+	for _, cell := range cc.cells {
+		cells = append(cells, cell.clone())
+	}
+	return cells
+}
+
 func (cc *cellCache) getCell(id uint64) *CellInfo {
 	cc.RLock()
 	defer cc.RUnlock()
 
-	return cc.cells[id]
+	c := cc.cells[id]
+	if c != nil {
+		return c.clone()
+	}
+
+	return c
 }
 
 func (cc *cellCache) randFollowerCell(storeID uint64) *CellInfo {

@@ -30,7 +30,7 @@ type aggregationOperator struct {
 	CellID    uint64     `json:"cellID"`
 	StartAt   time.Time  `json:"startAt"`
 	EndAt     time.Time  `json:"endAt"`
-	LastIndex int        `json:"index"`
+	LastIndex int        `json:"lastIndex"`
 	Ops       []Operator `json:"ops"`
 }
 

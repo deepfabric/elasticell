@@ -121,7 +121,13 @@ func (p *customReverseProxies) ServeHTTP(w http.ResponseWriter, r *http.Request)
 func copyHeader(dst, src http.Header) {
 	for k, vv := range src {
 		for _, v := range vv {
-			dst.Add(k, v)
+			if k == headerAccess ||
+				k == headerAccessMethods ||
+				k == headerAccessHeaders {
+				dst.Set(k, v)
+			} else {
+				dst.Add(k, v)
+			}
 		}
 	}
 }

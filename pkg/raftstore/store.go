@@ -358,12 +358,12 @@ func (s *Store) GetMeta() metapb.Store {
 func (s *Store) getTargetCell(key []byte) (*PeerReplicate, error) {
 	cell := s.keyRanges.Search(key)
 	if cell.ID == pd.ZeroID {
-		return nil, errKeyNotInStore
+		return nil, errStoreNotMatch
 	}
 
 	pr := s.replicatesMap.get(cell.ID)
 	if pr == nil {
-		return nil, errKeyNotInStore
+		return nil, errStoreNotMatch
 	}
 
 	return pr, nil
@@ -374,6 +374,11 @@ func (s *Store) OnProxyReq(req *raftcmdpb.Request, cb func(*raftcmdpb.RaftCMDRes
 	key := req.Cmd[1]
 	pr, err := s.getTargetCell(key)
 	if err != nil {
+		if err == errStoreNotMatch {
+			s.respStoreNotMatch(err, req, cb)
+			return nil
+		}
+
 		return err
 	}
 

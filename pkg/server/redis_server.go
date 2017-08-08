@@ -203,12 +203,13 @@ func (s *RedisServer) onProxyReq(req *raftcmdpb.Request, session *session) error
 		return nil
 	}
 
+	s.routing.put(req.UUID, session)
 	err := s.store.OnProxyReq(req, s.onResp)
 	if err != nil {
+		s.routing.delete(req.UUID)
 		return err
 	}
 
-	s.routing.put(req.UUID, session)
 	return nil
 }
 

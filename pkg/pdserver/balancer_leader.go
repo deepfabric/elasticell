@@ -14,7 +14,13 @@
 package pdserver
 
 import (
+	"math"
+
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
+)
+
+const (
+	balanceLeaderSchedulerName = "balance-leader-scheduler"
 )
 
 type balanceLeaderScheduler struct {
@@ -24,7 +30,7 @@ type balanceLeaderScheduler struct {
 }
 
 func (l *balanceLeaderScheduler) GetName() string {
-	return "balance-leader-scheduler"
+	return balanceLeaderSchedulerName
 }
 
 func (l *balanceLeaderScheduler) GetResourceKind() ResourceKind {
@@ -57,24 +63,49 @@ func (l *balanceLeaderScheduler) Schedule(cache *cache) Operator {
 
 // scheduleTransferLeader schedules a cell to transfer leader to the peer.
 func scheduleTransferLeader(cache *cache, s Selector, filters ...Filter) (*CellInfo, *metapb.Peer) {
-	sourceStores := cache.getStoreCache().getStores()
-
-	source := s.SelectSource(sourceStores, filters...)
-	if source == nil {
+	stores := cache.getStoreCache().getStores()
+	if len(stores) == 0 {
 		return nil, nil
 	}
 
-	cell := cache.getCellCache().randLeaderCell(source.getID())
+	var averageLeader float64
+	for _, s := range stores {
+		averageLeader += float64(s.leaderScore()) / float64(len(stores))
+	}
+
+	mostLeaderStore := s.SelectSource(stores, filters...)
+	leastLeaderStore := s.SelectTarget(stores, filters...)
+
+	var mostLeaderDistance, leastLeaderDistance float64
+	if mostLeaderStore != nil {
+		mostLeaderDistance = math.Abs(mostLeaderStore.leaderScore() - averageLeader)
+	}
+	if leastLeaderStore != nil {
+		leastLeaderDistance = math.Abs(leastLeaderStore.leaderScore() - averageLeader)
+	}
+	if mostLeaderDistance == 0 && leastLeaderDistance == 0 {
+		return nil, nil
+	}
+
+	if mostLeaderDistance > leastLeaderDistance {
+		// Transfer a leader out of mostLeaderStore.
+		cell := cache.getCellCache().randLeaderCell(mostLeaderStore.getID())
+		if cell == nil {
+			return nil, nil
+		}
+		targetStores := cache.getStoreCache().getFollowerStores(cell)
+		target := s.SelectTarget(targetStores)
+		if target == nil {
+			return nil, nil
+		}
+
+		return cell, cell.getStorePeer(target.getID())
+	}
+
+	// Transfer a leader into leastLeaderStore.
+	cell := cache.getCellCache().randFollowerCell(leastLeaderStore.getID())
 	if cell == nil {
 		return nil, nil
 	}
-
-	targetStores := cache.getStoreCache().getFollowerStores(cell)
-
-	target := s.SelectTarget(targetStores)
-	if target == nil {
-		return nil, nil
-	}
-
-	return cell, cell.getStorePeer(target.getID())
+	return cell, cell.getStorePeer(leastLeaderStore.getID())
 }

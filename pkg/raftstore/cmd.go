@@ -20,6 +20,7 @@ import (
 	"github.com/deepfabric/elasticell/pkg/pb/errorpb"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
+	"github.com/deepfabric/elasticell/pkg/util/uuid"
 )
 
 var (
@@ -30,9 +31,10 @@ var (
 	errMissingUUIDCMD     = errors.New("missing request uuid")
 	errLargeRaftEntrySize = errors.New("entry is too large")
 	errKeyNotInCell       = errors.New("key not in cell")
-	errKeyNotInStore      = errors.New("key not in store")
+	errStoreNotMatch      = errors.New("key not in store")
 
-	infoStaleCMD = new(errorpb.StaleCommand)
+	infoStaleCMD  = new(errorpb.StaleCommand)
+	storeNotMatch = new(errorpb.StoreNotMatch)
 )
 
 type splitCheckResult struct {
@@ -110,6 +112,18 @@ func newCMD(req *raftcmdpb.RaftCMDRequest, cb func(*raftcmdpb.RaftCMDResponse)) 
 		req: req,
 		cb:  cb,
 	}
+}
+
+func (s *Store) respStoreNotMatch(err error, req *raftcmdpb.Request, cb func(*raftcmdpb.RaftCMDResponse)) {
+	rsp := errorPbResp(&errorpb.Error{
+		Message:       err.Error(),
+		StoreNotMatch: storeNotMatch,
+	}, uuid.NewV4().Bytes(), 0)
+	rsp.Responses = append(rsp.Responses, &raftcmdpb.Response{
+		UUID:          req.UUID,
+		OriginRequest: req,
+	})
+	cb(rsp)
 }
 
 func (c *cmd) resp(resp *raftcmdpb.RaftCMDResponse) {
