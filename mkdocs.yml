@@ -11,4 +11,6 @@ pages:
   - Overview: architecture/index.md
   - Concept: architecture/concept.md
   - Multi-Raft: architecture/multi-raft.md 
+- Indexer: 
+  - Overview: indexer/indexer.md
 - Unsupport Redis Command: unsupport-command.md
