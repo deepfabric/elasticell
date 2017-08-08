@@ -13,8 +13,10 @@ Elasticell提供了Redis兼容接口。indexer模块在此基础上提供次级�
 
 以下命令仅限于管理界面调用：
 
-- IDX_CREATE <index_name> <key_pattern> <filed1_name> <field1_type> {<field2_name> <field2_type> ...}
-- IDX_DELETE <index_name>
+```bash
+IDX_CREATE <index_name> <key_pattern> <filed1_name> <field1_type> {<field2_name> <field2_type> ...}
+IDX_DELETE <index_name>
+```
 
 允许创建多个索引。各个索引具有不同的name和key_pattern。
 
@@ -37,7 +39,9 @@ HSET products-100 price 20 date 2015
 
 以下命令需要添加到Redis client SDK:
 
-- IDX_QUERY <index_name> <field1_name> <compare> <number1> <field2_name> CONTAINS <word2> [LIMIT <number>]
+```bash
+IDX_QUERY <index_name> <field1_name> <compare> <number1> <field2_name> CONTAINS <word2> [LIMIT <number>]
+```
 
 ```bash
 redis> IDX_QUERY products price > 10
