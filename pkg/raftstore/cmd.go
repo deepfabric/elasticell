@@ -123,7 +123,6 @@ func (s *Store) respStoreNotMatch(err error, req *raftcmdpb.Request, cb func(*ra
 		UUID:          req.UUID,
 		OriginRequest: req,
 	})
-
 	cb(rsp)
 }
 
