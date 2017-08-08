@@ -34,6 +34,7 @@ func NewAPIHandler(service Service) http.Handler {
 
 	router := mux.NewRouter()
 	router.PathPrefix(APIPrefix).Handler(negroni.New(
+		newCross(),
 		newRedirector(service),
 		negroni.Wrap(createRouter(APIPrefix, service)),
 	))
@@ -49,5 +50,6 @@ func createRouter(prefix string, service Service) *mux.Router {
 
 	router := mux.NewRouter().PathPrefix(prefix).Subrouter()
 	initAPIForStore(router, service, rd)
+	initAPIForCell(router,service,rd)
 	return router
 }

@@ -31,6 +31,7 @@ func initAPIForStore(router *mux.Router, service Service, rd *render.Render) {
 
 	router.HandleFunc("/api/v1/stores/{id}", handler.get).Methods("GET")
 	router.HandleFunc("/api/v1/stores/{id}", handler.delete).Methods("DELETE")
+	router.HandleFunc("/api/v1/stores/{id}", options).Methods("OPTIONS")
 	router.HandleFunc("/api/v1/stores", handler.list).Methods("GET")
 }
 

@@ -120,6 +120,13 @@ func (c *coordinator) removeOperator(op Operator) {
 	delete(c.opts, cellID)
 }
 
+func (c *coordinator) getScheduler(name string) *scheduleController {
+	c.RLock()
+	defer c.RUnlock()
+
+	return c.schedulers[name]
+}
+
 func (c *coordinator) addScheduler(scheduler Scheduler) error {
 	c.Lock()
 	defer c.Unlock()
@@ -168,7 +175,9 @@ func (c *coordinator) runScheduler(ctx context.Context, s *scheduleController) {
 		case <-timer.C:
 			timer.Reset(s.GetInterval())
 
+			s.Lock()
 			if !s.AllowSchedule() {
+				s.Unlock()
 				continue
 			}
 
@@ -181,6 +190,7 @@ func (c *coordinator) runScheduler(ctx context.Context, s *scheduleController) {
 					break
 				}
 			}
+			s.Unlock()
 		}
 	}
 }

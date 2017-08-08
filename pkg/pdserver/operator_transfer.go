@@ -22,9 +22,9 @@ import (
 
 type transferLeaderOperator struct {
 	Name      string       `json:"name"`
-	CellID    uint64       `json:"cell_id"`
-	OldLeader *metapb.Peer `json:"old_leader"`
-	NewLeader *metapb.Peer `json:"new_leader"`
+	CellID    uint64       `json:"cellId"`
+	OldLeader *metapb.Peer `json:"oldLeader"`
+	NewLeader *metapb.Peer `json:"newLeader"`
 }
 
 func newTransferLeaderOperator(cellID uint64, oldLeader, newLeader *metapb.Peer) *transferLeaderOperator {

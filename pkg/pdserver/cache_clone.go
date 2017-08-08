@@ -36,22 +36,29 @@ func (s *StoreInfo) clone() *StoreInfo {
 }
 
 func (cc *CellInfo) clone() *CellInfo {
-	downPeers := make([]pdpb.PeerStats, 0, len(cc.DownPeers))
-	for _, peer := range cc.DownPeers {
-		p := proto.Clone(&peer).(*pdpb.PeerStats)
-		downPeers = append(downPeers, *p)
+	c := &CellInfo{
+		Meta: *(proto.Clone(&cc.Meta).(*metapb.Cell)),
 	}
 
-	pendingPeers := make([]metapb.Peer, 0, len(cc.PendingPeers))
-	for _, peer := range cc.PendingPeers {
-		p := proto.Clone(&peer).(*metapb.Peer)
-		pendingPeers = append(pendingPeers, *p)
+	if len(cc.DownPeers) > 0 {
+		c.DownPeers = make([]pdpb.PeerStats, 0, len(cc.DownPeers))
+		for _, peer := range cc.DownPeers {
+			p := proto.Clone(&peer).(*pdpb.PeerStats)
+			c.DownPeers = append(c.DownPeers, *p)
+		}
 	}
 
-	return &CellInfo{
-		Meta:         *(proto.Clone(&cc.Meta).(*metapb.Cell)),
-		LeaderPeer:   proto.Clone(cc.LeaderPeer).(*metapb.Peer),
-		DownPeers:    downPeers,
-		PendingPeers: pendingPeers,
+	if len(cc.PendingPeers) > 0 {
+		c.PendingPeers = make([]metapb.Peer, 0, len(cc.PendingPeers))
+		for _, peer := range cc.PendingPeers {
+			p := proto.Clone(&peer).(*metapb.Peer)
+			c.PendingPeers = append(c.PendingPeers, *p)
+		}
 	}
+
+	if cc.LeaderPeer != nil {
+		c.LeaderPeer = proto.Clone(cc.LeaderPeer).(*metapb.Peer)
+	}
+
+	return c
 }

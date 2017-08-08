@@ -14,7 +14,7 @@
 package pdserver
 
 const (
-	storageRatioThreshold = 80
+	storageRatioThreshold = 99
 )
 
 // Filter is used for filter store
