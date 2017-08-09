@@ -53,8 +53,8 @@ redis> IDX_QUERY products price > 20
 
 假设：
 
-- 用户创建hashtable时使用HSET命令一次传递所有的fields
-- 用户不更新hashtable
+- 用户创建hashtable时使用HMSET或者HSET命令设置全部或者部分fields
+- 用户更新hashtable时使用HMSET或者HSET命令更新部分或者全部fields
 - 用户不使用HDEL删除部分fields，而是使用DEL删除整个hashtable
 
 每个cell负责该region内所有KV的索引。索引记录的增删由KV的增删改以及region分裂迁移触发。document_id为内部ID，由每个cell在插入时决定。更新文档将导致其ID发生变化。
@@ -62,8 +62,10 @@ docID -> key映射：
  
 每个cell针对每个index维护一个（非持久化的）计数器用于下一个需要索引文档的ID。
 
-### HSET创建和更新document
-HSET userKey field1 val1 field2 val2
+### HMSET/HSET创建和更新document
+HMSET userKey field1 val1 field2 val2 field3 val3
+HMSET userKey field1 val1 field2 val2
+HSET userKey field1 val1
 
 ![hset](../imgs/hset.png)
 
