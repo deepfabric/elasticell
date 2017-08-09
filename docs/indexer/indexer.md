@@ -13,12 +13,11 @@ Elasticell提供了Redis兼容接口。indexer模块在此基础上提供次级�
 
 以下命令仅限于管理界面调用：
 
-```bash
-IDX_CREATE <index_name> <key_pattern> <filed1_name> <field1_type> {<field2_name> <field2_type> ...}
-IDX_DELETE <index_name>
-```
+- `IDX_CREATE <index_name> <key_pattern> <filed1_name> <field1_type> {<field2_name> <field2_type> ...}`
+- `IDX_DELETE <index_name>`
 
-允许创建多个索引。各个索引具有不同的name和key_pattern。
+
+允许创建多个索引。各个索引具有不同的name和key_pattern。下面的命令：
 
 ```bash
 IDX_CREATE orders orders_\d+ price UINT64 date UINT64
@@ -31,17 +30,17 @@ HSET products-100 price 20 date 2015
 
 注： 用户使用Redis作为缓存时的习惯做法，大多数时候key包括适合作为document_id的数字，例如上面的products-100中的“100”就是相应RDBMS table中对应行的主键。但有时候则不然，例如
 
-- "person-<id>"中的id(身份证号)为长达18个数字或者字符'X'，所以id并不适合表达为uint64_t。
-- "account-<id>"中的id(银行帐号)为长达21个数字，将来可能加长。
-- "car-<id>"中的id(汽车牌照)是数字和字符的混合体。
+- `person-<id>`中的id(身份证号)为长达18个数字或者字符'X'，所以id并不适合表达为uint64_t。
+- `account-<id>`中的id(银行帐号)为长达21个数字，将来可能加长。
+- `car-<id>`中的id(汽车牌照)是数字和字符的混合体。
 
 为了顺应用户习惯，本模块的key_pattern并不要求某个sub-pattern为纯数字。
 
 以下命令需要添加到Redis client SDK:
 
-```bash
-IDX_QUERY <index_name> <field1_name> <compare> <number1> <field2_name> CONTAINS <word2> [LIMIT <number>]
-```
+- `IDX_QUERY <index_name> <field1_name> <compare> <number1> <field2_name> CONTAINS <word2> [LIMIT <number>]`
+
+举例如下：
 
 ```bash
 redis> IDX_QUERY products price > 10
@@ -64,7 +63,7 @@ docID -> key映射：
 每个cell针对每个index维护一个（非持久化的）计数器用于下一个需要索引文档的ID。
 
 ### HSET创建和更新document
-HSET userKey userData
+HSET userKey field1 val1 field2 val2
 
 ![hset](../imgs/hset.png)
 
@@ -84,8 +83,13 @@ RangeDelete(start, end []byte, func cb(metaInfo []byte))
 
 对于迁移走的cell，执行上文提到的RangeDelete。
 对于新cell，在apply snapshot时，执行上文提到的HSET。
+snapshot的内容是：
 
-### document_id管理
-全局vs局部？
+- `{<cellID>-<indexName>: nextDocID}`
+- `{<cellID>-<indexName>-<docID>: userKey}`
+- `{userKey：userData, metaInfo: docID}`
 
-### document更新
+### 搜索
+
+![search](../imgs/search.png)
+
