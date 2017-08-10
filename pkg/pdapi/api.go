@@ -1,4 +1,4 @@
-// Copyright 2016 PingCAP, Inc.
+// Copyright 2016 DeepFabric, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -44,20 +44,42 @@ type CellInfo struct {
 	PendingPeers []metapb.Peer    `json:"pendingPeers"`
 }
 
+// System The system info of the elasticell cluster
+type System struct {
+	MaxReplicas uint32 `json:"maxReplicas"`
+
+	StoreCount          int `json:"storeCount"`
+	OfflineStoreCount   int `json:"offlineStoreCount"`
+	TombStoneStoreCount int `json:"tombStoneStoreCount"`
+
+	CellCount                int `json:"cellCount"`
+	ReplicasNotFullCellCount int `json:"replicasNotFullCellCount"`
+
+	StorageCapacity  uint64 `json:"storageCapacity"`
+	StorageAvailable uint64 `json:"storageAvailable"`
+
+	OperatorCount int `json:"operatorCount"`
+}
+
 // Service service interface
 type Service interface {
 	Name() string
 	IsLeader() bool
 	GetLeader() (*pdpb.Leader, error)
 
+	GetSystem() (*System, error)
+
 	ListStore() ([]*StoreInfo, error)
 	GetStore(id uint64) (*StoreInfo, error)
 	DeleteStore(id uint64, force bool) error
 
+	ListCellInStore(storeID uint64) ([]*CellInfo, error)
 	ListCell() ([]*CellInfo, error)
 	GetCell(id uint64) (*CellInfo, error)
 	TransferLeader(transfer *TransferLeader) error
 	GetOperator(id uint64) (interface{}, error)
+
+	GetOperators() ([]interface{}, error)
 }
 
 // TransferLeader transfer leader to spec peer

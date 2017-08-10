@@ -13,10 +13,6 @@
 
 package pdserver
 
-const (
-	storageRatioThreshold = 80
-)
-
 // Filter is used for filter store
 type Filter interface {
 	FilterSource(store *StoreInfo) bool
@@ -89,7 +85,7 @@ func (f *storageThresholdFilter) FilterSource(store *StoreInfo) bool {
 }
 
 func (f *storageThresholdFilter) FilterTarget(store *StoreInfo) bool {
-	return store.storageRatio() > storageRatioThreshold
+	return store.storageRatio() > f.cfg.Schedule.StorageRatioThreshold
 }
 
 func (f *excludedFilter) FilterSource(store *StoreInfo) bool {

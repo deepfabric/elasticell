@@ -16,6 +16,7 @@
         "maxStoreDownTimeMs": 3600000,
         "leaderScheduleLimit": 16,
         "cellScheduleLimit": 12,
-        "replicaScheduleLimit": 16
+        "replicaScheduleLimit": 16,
+        "storageRatioThreshold": 99
     }
 }

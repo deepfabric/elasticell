@@ -21,6 +21,67 @@ import (
 	"github.com/deepfabric/elasticell/pkg/pdapi"
 )
 
+// GetSystem returns the summary of elasticell cluster
+func (s *Server) GetSystem() (*pdapi.System, error) {
+	cluster := s.GetCellCluster()
+	if nil == cluster {
+		return nil, errNotBootstrapped
+	}
+
+	system := &pdapi.System{
+		MaxReplicas:   s.cfg.Schedule.MaxReplicas,
+		OperatorCount: cluster.coordinator.getOperatorCount(),
+	}
+
+	cluster.cache.getStoreCache().foreach(func(store *StoreInfo) (bool, error) {
+		system.StoreCount++
+
+		if store.isOffline() {
+			system.OfflineStoreCount++
+		} else if store.isTombstone() {
+			system.TombStoneStoreCount++
+		} else {
+			system.StorageCapacity += store.Status.Stats.Capacity
+			system.StorageAvailable += store.Status.Stats.Available
+		}
+
+		return true, nil
+	})
+
+	cluster.cache.getCellCache().foreach(func(cell *CellInfo) (bool, error) {
+		system.CellCount++
+
+		if len(cell.Meta.Peers) < int(system.MaxReplicas) {
+			system.ReplicasNotFullCellCount++
+		}
+
+		return true, nil
+	})
+
+	return system, nil
+}
+
+// ListCellInStore returns all cells info in the store
+func (s *Server) ListCellInStore(storeID uint64) ([]*pdapi.CellInfo, error) {
+	cluster := s.GetCellCluster()
+	if nil == cluster {
+		return nil, errNotBootstrapped
+	}
+
+	var cells []*CellInfo
+	cluster.cache.getCellCache().foreach(func(cell *CellInfo) (bool, error) {
+		for _, p := range cell.Meta.Peers {
+			if p.StoreID == storeID {
+				cells = append(cells, cell.clone())
+			}
+		}
+
+		return true, nil
+	})
+
+	return toAPICellSlice(cells), nil
+}
+
 // ListCell returns all cells info
 func (s *Server) ListCell() ([]*pdapi.CellInfo, error) {
 	cluster := s.GetCellCluster()
@@ -84,7 +145,7 @@ func (s *Server) DeleteStore(id uint64, force bool) error {
 	}
 
 	if nil != store {
-		err = s.store.SetStoreMeta(id, store.Meta)
+		err = s.store.SetStoreMeta(s.GetClusterID(), store.Meta)
 		if err != nil {
 			return err
 		}
@@ -144,6 +205,16 @@ func (s *Server) GetOperator(id uint64) (interface{}, error) {
 	}
 
 	return cluster.coordinator.getOperator(id), nil
+}
+
+// GetOperators returns the current schedule operators
+func (s *Server) GetOperators() ([]interface{}, error) {
+	cluster := s.GetCellCluster()
+	if nil == cluster {
+		return nil, errNotBootstrapped
+	}
+
+	return cluster.coordinator.getOperators(), nil
 }
 
 func toAPIStore(store *StoreInfo) *pdapi.StoreInfo {

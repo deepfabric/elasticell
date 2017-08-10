@@ -24,7 +24,7 @@ const (
 )
 
 type idAllocator struct {
-	mu                sync.Mutex
+	sync.Mutex
 	store             Store
 	leaderSignatureFn func() string
 	base              uint64
@@ -33,15 +33,14 @@ type idAllocator struct {
 
 func newIDAllocator(store Store, leaderSignatureFn func() string) *idAllocator {
 	return &idAllocator{
-		mu:                sync.Mutex{},
 		store:             store,
 		leaderSignatureFn: leaderSignatureFn,
 	}
 }
 
 func (alloc *idAllocator) newID() (uint64, error) {
-	alloc.mu.Lock()
-	alloc.mu.Unlock()
+	alloc.Lock()
+	defer alloc.Unlock()
 
 	if alloc.base == alloc.end {
 		end, err := alloc.generate()
@@ -54,7 +53,6 @@ func (alloc *idAllocator) newID() (uint64, error) {
 	}
 
 	alloc.base++
-
 	return alloc.base, nil
 }
 

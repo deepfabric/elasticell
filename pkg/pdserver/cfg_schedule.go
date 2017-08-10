@@ -38,6 +38,8 @@ type ScheduleCfg struct {
 	CellScheduleLimit uint64 `json:"cellScheduleLimit"`
 	// ReplicaScheduleLimit is the max coexist replica schedules.
 	ReplicaScheduleLimit uint64 `json:"replicaScheduleLimit"`
+	// StorageRatioThreshold is the max storage rate of used for schduler
+	StorageRatioThreshold int `json:"storageRatioThreshold"`
 }
 
 func (c *ScheduleCfg) getMaxStoreDownTimeDuration() time.Duration {

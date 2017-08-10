@@ -1,4 +1,4 @@
-// Copyright 2016 PingCAP, Inc.
+// Copyright 2016 DeepFabric, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,107 +21,110 @@ import (
 	"github.com/unrolled/render"
 )
 
-type cellHandler struct {
+type storeHandler struct {
 	service Service
 	rd      *render.Render
 }
 
-func initAPIForCell(router *mux.Router, service Service, rd *render.Render) {
-	handler := newCellHandler(service, rd)
+func initAPIForStore(router *mux.Router, service Service, rd *render.Render) {
+	handler := newStoreHandler(service, rd)
 
-	router.HandleFunc("/api/v1/cells/{id}", handler.get).Methods("GET")
-	router.HandleFunc("/api/v1/cells/{id}/operator", handler.operator).Methods("GET")
-	router.HandleFunc("/api/v1/cells/{id}/leader", handler.leader).Methods("PUT")
-	router.HandleFunc("/api/v1/cells/{id}/leader", options).Methods("OPTIONS")
-	router.HandleFunc("/api/v1/cells", handler.list).Methods("GET")
+	router.HandleFunc("/api/v1/stores/{id}/cells", handler.cells).Methods("GET")
+	router.HandleFunc("/api/v1/stores/{id}", handler.get).Methods("GET")
+	router.HandleFunc("/api/v1/stores/{id}", handler.delete).Methods("DELETE")
+	router.HandleFunc("/api/v1/stores", handler.list).Methods("GET")
 }
 
-func newCellHandler(service Service, rd *render.Render) *cellHandler {
-	return &cellHandler{
+func newStoreHandler(service Service, rd *render.Render) *storeHandler {
+	return &storeHandler{
 		service: service,
 		rd:      rd,
 	}
 }
 
-func (h *cellHandler) operator(w http.ResponseWriter, r *http.Request) {
+func (h *storeHandler) get(w http.ResponseWriter, r *http.Request) {
 	result := &Result{
 		Code: CodeSuccess,
 	}
 
 	vars := mux.Vars(r)
-	cellIDStr := vars["id"]
-	cellID, err := strconv.ParseUint(cellIDStr, 10, 64)
+	storeIDStr := vars["id"]
+	storeID, err := strconv.ParseUint(storeIDStr, 10, 64)
 	if err != nil {
 		result.Code = CodeError
 		result.Error = err.Error()
 	} else {
-		operator, err := h.service.GetOperator(cellID)
+		store, err := h.service.GetStore(storeID)
 		if err != nil {
 			result.Code = CodeError
 			result.Error = err.Error()
 		}
 
-		result.Value = operator
+		result.Value = store
 	}
 
 	h.rd.JSON(w, http.StatusOK, result)
 }
 
-func (h *cellHandler) leader(w http.ResponseWriter, r *http.Request) {
-	result := &Result{
-		Code: CodeSuccess,
-	}
-
-	transfer, err := readTransferLeader(r.Body)
-	if err != nil {
-		result.Code = CodeError
-		result.Error = err.Error()
-	} else {
-		err := h.service.TransferLeader(transfer)
-		if err != nil {
-			result.Code = CodeError
-			result.Error = err.Error()
-		}
-	}
-
-	h.rd.JSON(w, http.StatusOK, result)
-}
-
-func (h *cellHandler) get(w http.ResponseWriter, r *http.Request) {
+func (h *storeHandler) cells(w http.ResponseWriter, r *http.Request) {
 	result := &Result{
 		Code: CodeSuccess,
 	}
 
 	vars := mux.Vars(r)
-	cellIDStr := vars["id"]
-	cellID, err := strconv.ParseUint(cellIDStr, 10, 64)
+	storeIDStr := vars["id"]
+	storeID, err := strconv.ParseUint(storeIDStr, 10, 64)
 	if err != nil {
 		result.Code = CodeError
 		result.Error = err.Error()
 	} else {
-		cell, err := h.service.GetCell(cellID)
+		cells, err := h.service.ListCellInStore(storeID)
 		if err != nil {
 			result.Code = CodeError
 			result.Error = err.Error()
 		}
 
-		result.Value = cell
+		result.Value = cells
 	}
 
 	h.rd.JSON(w, http.StatusOK, result)
 }
 
-func (h *cellHandler) list(w http.ResponseWriter, r *http.Request) {
+func (h *storeHandler) delete(w http.ResponseWriter, r *http.Request) {
 	result := &Result{
 		Code: CodeSuccess,
 	}
 
-	cells, err := h.service.ListCell()
+	vars := mux.Vars(r)
+	storeIDStr := vars["id"]
+	storeID, err := strconv.ParseUint(storeIDStr, 10, 64)
+	if err != nil {
+		result.Code = CodeError
+		result.Error = err.Error()
+	} else {
+		_, force := r.URL.Query()["force"]
+		err = h.service.DeleteStore(storeID, force)
+		if err != nil {
+			result.Code = CodeError
+			result.Error = err.Error()
+		}
+	}
+
+	h.rd.JSON(w, http.StatusOK, result)
+}
+
+func (h *storeHandler) list(w http.ResponseWriter, r *http.Request) {
+	result := &Result{
+		Code: CodeSuccess,
+	}
+
+	stores, err := h.service.ListStore()
 	if err != nil {
 		result.Code = CodeError
 		result.Error = err.Error()
 	}
 
-	result.Value = cells
+	result.Value = stores
+
 	h.rd.JSON(w, http.StatusOK, result)
 }

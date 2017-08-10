@@ -49,7 +49,7 @@ func (r *replicaChecker) Check(target *CellInfo) Operator {
 	currReplicasCount := uint32(len(target.getPeers()))
 
 	if currReplicasCount < r.cfg.Schedule.MaxReplicas {
-		newPeer, _ := r.selectBestPeer(target, r.filters...)
+		newPeer, _ := r.selectBestPeer(target, true, r.filters...)
 		if newPeer == nil {
 			return nil
 		}
@@ -96,7 +96,7 @@ func (r *replicaChecker) checkOfflinePeer(cell *CellInfo) Operator {
 			continue
 		}
 
-		newPeer, _ := r.selectBestPeer(cell)
+		newPeer, _ := r.selectBestPeer(cell, true)
 		if newPeer == nil {
 			return nil
 		}
@@ -136,7 +136,7 @@ func (r *replicaChecker) selectWorstPeer(cell *CellInfo, filters ...Filter) (*me
 }
 
 // selectBestPeer returns the best peer in other stores.
-func (r *replicaChecker) selectBestPeer(target *CellInfo, filters ...Filter) (*meta.Peer, float64) {
+func (r *replicaChecker) selectBestPeer(target *CellInfo, allocPeerID bool, filters ...Filter) (*meta.Peer, float64) {
 	// Add some must have filters.
 	filters = append(filters, newStateFilter(r.cfg))
 	filters = append(filters, newStorageThresholdFilter(r.cfg))
@@ -166,7 +166,7 @@ func (r *replicaChecker) selectBestPeer(target *CellInfo, filters ...Filter) (*m
 		return nil, 0
 	}
 
-	newPeer, err := r.cache.allocPeer(bestStore.getID())
+	newPeer, err := r.cache.allocPeer(bestStore.getID(), allocPeerID)
 	if err != nil {
 		log.Errorf("scheduler: allocate peer failure, errors:\n %+v", err)
 		return nil, 0
@@ -183,10 +183,19 @@ func (r *replicaChecker) checkBestReplacement(cell *CellInfo) Operator {
 	if newPeer == nil {
 		return nil
 	}
+
 	// Make sure the new peer is better than the old peer.
 	if newScore <= oldScore {
 		return nil
 	}
+
+	id, err := r.cache.allocator.newID()
+	if err != nil {
+		log.Errorf("scheduler: allocate peer failure, errors:\n %+v", err)
+		return nil
+	}
+
+	newPeer.ID = id
 	return newTransferPeerAggregationOp(cell, oldPeer, newPeer)
 }
 
@@ -197,7 +206,7 @@ func (r *replicaChecker) selectBestReplacement(cell *CellInfo, peer *meta.Peer) 
 	newCell := cell.clone()
 	newCell.removeStorePeer(peer.StoreID)
 
-	return r.selectBestPeer(newCell, newExcludedFilter(nil, cell.getStoreIDs()))
+	return r.selectBestPeer(newCell, false, newExcludedFilter(nil, cell.getStoreIDs()))
 }
 
 // getDistinctScore returns the score that the other is distinct from the stores.

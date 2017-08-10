@@ -26,36 +26,6 @@ const (
 	bootstrapBalanceDiff  = 2
 )
 
-func newBalanceLeaderScheduler(cfg *Cfg) *balanceLeaderScheduler {
-	var filters []Filter
-	filters = append(filters, newBlockFilter())
-	filters = append(filters, newStateFilter(cfg))
-	filters = append(filters, newHealthFilter(cfg))
-
-	return &balanceLeaderScheduler{
-		cfg:      cfg,
-		limit:    1,
-		selector: newBalanceSelector(leaderKind, filters),
-	}
-}
-
-func newBalanceCellScheduler(cfg *Cfg) *balanceCellScheduler {
-	cache := newIDCache(storeCacheInterval, 4*storeCacheInterval)
-
-	var filters []Filter
-	filters = append(filters, newCacheFilter(cache))
-	filters = append(filters, newStateFilter(cfg))
-	filters = append(filters, newHealthFilter(cfg))
-	filters = append(filters, newSnapshotCountFilter(cfg))
-
-	return &balanceCellScheduler{
-		cfg:      cfg,
-		cache:    cache,
-		limit:    1,
-		selector: newBalanceSelector(cellKind, filters),
-	}
-}
-
 // shouldBalance returns true if we should balance the source and target store.
 // The min balance diff provides a buffer to make the cluster stable, so that we
 // don't need to schedule very frequently.

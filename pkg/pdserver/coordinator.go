@@ -89,11 +89,30 @@ func (c *coordinator) dispatch(target *CellInfo) *pdpb.CellHeartbeatRsp {
 	return nil
 }
 
+func (c *coordinator) getOperators() []interface{} {
+	c.RLock()
+	defer c.RUnlock()
+
+	var opts []interface{}
+	for _, op := range c.opts {
+		opts = append(opts, op)
+	}
+
+	return opts
+}
+
 func (c *coordinator) getOperator(cellID uint64) Operator {
 	c.RLock()
 	defer c.RUnlock()
 
 	return c.opts[cellID]
+}
+
+func (c *coordinator) getOperatorCount() int {
+	c.RLock()
+	defer c.RUnlock()
+
+	return len(c.opts)
 }
 
 func (c *coordinator) addOperator(op Operator) bool {

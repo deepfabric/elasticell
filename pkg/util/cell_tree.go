@@ -15,6 +15,7 @@ package util
 
 import (
 	"bytes"
+	"sync"
 
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/google/btree"
@@ -31,6 +32,7 @@ type CellItem struct {
 
 // CellTree is the btree for cell
 type CellTree struct {
+	sync.RWMutex
 	tree *btree.BTree
 }
 
@@ -73,6 +75,7 @@ func (t *CellTree) Update(cell metapb.Cell) {
 
 	var overlaps []*CellItem
 
+	t.Lock()
 	// between [cell, first], so is iterator all.min >= cell.min' cell
 	// until all.min > cell.max
 	t.tree.DescendLessOrEqual(result, func(i btree.Item) bool {
@@ -91,26 +94,33 @@ func (t *CellTree) Update(cell metapb.Cell) {
 	}
 
 	t.tree.ReplaceOrInsert(item)
+	t.Unlock()
 }
 
 // Remove removes a cell if the cell is in the tree.
 // It will do nothing if it cannot find the cell or the found cell
 // is not the same with the cell.
 func (t *CellTree) Remove(cell metapb.Cell) bool {
+	t.Lock()
+
 	result := t.find(cell)
 	if result == nil || result.cell.ID != cell.ID {
+		t.Unlock()
 		return false
 	}
 
 	t.tree.Delete(result)
+	t.Unlock()
 	return true
 }
 
 // Ascend asc iterator the tree until fn returns false
 func (t *CellTree) Ascend(fn func(cell *metapb.Cell) bool) {
+	t.RLock()
 	t.tree.Descend(func(item btree.Item) bool {
 		return fn(&item.(*CellItem).cell)
 	})
+	t.RUnlock()
 }
 
 // NextCell return the next bigger key range cell
@@ -121,6 +131,7 @@ func (t *CellTree) NextCell(start []byte) *metapb.Cell {
 		cell: metapb.Cell{Start: start},
 	}
 
+	t.RLock()
 	t.tree.DescendLessOrEqual(p, func(item btree.Item) bool {
 		if bytes.Compare(item.(*CellItem).cell.Start, start) > 0 {
 			value = item.(*CellItem)
@@ -129,6 +140,7 @@ func (t *CellTree) NextCell(start []byte) *metapb.Cell {
 
 		return true
 	})
+	t.RUnlock()
 
 	if nil == value {
 		return nil
@@ -147,15 +159,21 @@ func (t *CellTree) AscendRange(start, end []byte, fn func(cell *metapb.Cell) boo
 		cell: metapb.Cell{Start: end},
 	}
 
+	t.RLock()
 	t.tree.DescendRange(startItem, endItem, func(item btree.Item) bool {
 		return fn(&item.(*CellItem).cell)
 	})
+	t.RUnlock()
 }
 
 // Search returns a cell that contains the key.
 func (t *CellTree) Search(key []byte) metapb.Cell {
 	cell := metapb.Cell{Start: key}
+
+	t.RLock()
 	result := t.find(cell)
+	t.RUnlock()
+
 	if result == nil {
 		return metapb.Cell{}
 	}

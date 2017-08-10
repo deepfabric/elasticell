@@ -24,6 +24,23 @@ type balanceCellScheduler struct {
 	selector Selector
 }
 
+func newBalanceCellScheduler(cfg *Cfg) *balanceCellScheduler {
+	cache := newIDCache(storeCacheInterval, 4*storeCacheInterval)
+
+	var filters []Filter
+	filters = append(filters, newCacheFilter(cache))
+	filters = append(filters, newStateFilter(cfg))
+	filters = append(filters, newHealthFilter(cfg))
+	filters = append(filters, newSnapshotCountFilter(cfg))
+
+	return &balanceCellScheduler{
+		cfg:      cfg,
+		cache:    cache,
+		limit:    1,
+		selector: newBalanceSelector(cellKind, filters),
+	}
+}
+
 func (s *balanceCellScheduler) GetName() string {
 	return "balance-cell-scheduler"
 }
@@ -68,7 +85,7 @@ func (s *balanceCellScheduler) transferPeer(cache *cache, cell *CellInfo, oldPee
 	scoreGuard := newDistinctScoreFilter(s.cfg, stores, source)
 
 	checker := newReplicaChecker(s.cfg, cache)
-	newPeer, _ := checker.selectBestPeer(cell, scoreGuard)
+	newPeer, _ := checker.selectBestPeer(cell, true, scoreGuard)
 	if newPeer == nil {
 		return nil
 	}

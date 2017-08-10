@@ -29,6 +29,19 @@ type balanceLeaderScheduler struct {
 	selector Selector
 }
 
+func newBalanceLeaderScheduler(cfg *Cfg) *balanceLeaderScheduler {
+	var filters []Filter
+	filters = append(filters, newBlockFilter())
+	filters = append(filters, newStateFilter(cfg))
+	filters = append(filters, newHealthFilter(cfg))
+
+	return &balanceLeaderScheduler{
+		cfg:      cfg,
+		limit:    1,
+		selector: newBalanceSelector(leaderKind, filters),
+	}
+}
+
 func (l *balanceLeaderScheduler) GetName() string {
 	return balanceLeaderSchedulerName
 }

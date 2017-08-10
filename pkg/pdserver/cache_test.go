@@ -59,6 +59,6 @@ func (t *testCacheSuite) newTestStore(id uint64, addr string) metapb.Store {
 
 func (t *testCacheSuite) TestAllowPeer(c *C) {
 	cache := t.newTestCache()
-	_, err := cache.allocPeer(100)
+	_, err := cache.allocPeer(100, true)
 	c.Assert(err, IsNil)
 }

@@ -132,6 +132,24 @@ func (cc *cellCache) searchCell(startKey []byte) *CellInfo {
 	return cc.cells[cell.ID]
 }
 
+func (cc *cellCache) foreach(fn func(*CellInfo) (bool, error)) error {
+	cc.RLock()
+	defer cc.RUnlock()
+
+	for _, c := range cc.cells {
+		next, err := fn(c)
+		if err != nil {
+			return err
+		}
+
+		if !next {
+			break
+		}
+	}
+
+	return nil
+}
+
 func (cc *cellCache) getCells() []*CellInfo {
 	cc.RLock()
 	defer cc.RUnlock()

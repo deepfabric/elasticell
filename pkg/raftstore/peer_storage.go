@@ -331,6 +331,7 @@ func (ps *peerStorage) loadLogEntry(index uint64) (*raftpb.Entry, error) {
 		return nil, fmt.Errorf("log entry at <%d> not found", index)
 	}
 
+	log.Infof("******todo-delete: loadLogEntry")
 	return ps.unmarshal(v, index)
 }
 

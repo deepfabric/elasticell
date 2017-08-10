@@ -66,17 +66,22 @@ func (c *cache) getCellCache() *cellCache {
 	return c.cc
 }
 
-func (c *cache) allocPeer(storeID uint64) (metapb.Peer, error) {
-	peerID, err := c.allocator.newID()
-	if err != nil {
-		return metapb.Peer{}, errors.Wrap(err, "")
+func (c *cache) allocPeer(storeID uint64, allocPeerID bool) (metapb.Peer, error) {
+	if allocPeerID {
+		peerID, err := c.allocator.newID()
+		if err != nil {
+			return metapb.Peer{}, errors.Wrap(err, "")
+		}
+
+		return metapb.Peer{
+			ID:      peerID,
+			StoreID: storeID,
+		}, nil
 	}
 
-	peer := metapb.Peer{
-		ID:      peerID,
+	return metapb.Peer{
 		StoreID: storeID,
-	}
-	return peer, nil
+	}, nil
 }
 
 func (c *cache) handleCellHeartbeat(source *CellInfo) error {
