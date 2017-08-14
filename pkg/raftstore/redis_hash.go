@@ -98,7 +98,7 @@ func (s *Store) execHMSet(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.R
 	fields := make([][]byte, l)
 	values := make([][]byte, l)
 
-	for i := 0; i < len(kvs); i++ {
+	for i := 0; i < l; i++ {
 		fields[i] = kvs[2*i]
 		values[i] = kvs[2*i+1]
 
@@ -341,10 +341,9 @@ func (s *Store) execHMGet(req *raftcmdpb.Request) *raftcmdpb.Response {
 	}
 
 	value, errs := s.getHashEngine().HMGet(args[0], args[1:]...)
-	if errs != nil {
+	if len(errs) > 0 {
 		errors := make([][]byte, len(errs))
 		for idx, err := range errs {
-			// TODO: bug invalid memory address or nil pointer dereference
 			errors[idx] = util.StringToSlice(err.Error())
 		}
 

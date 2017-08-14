@@ -81,7 +81,17 @@ func (e *nemoHashEngine) HLen(key []byte) (int64, error) {
 }
 
 func (e *nemoHashEngine) HMGet(key []byte, fields ...[]byte) ([][]byte, []error) {
-	return e.db.HMGet(key, fields)
+	values, errors := e.db.HMGet(key, fields)
+	var errs []error
+	if len(errors) > 0 {
+		for _, err := range errors {
+			if err != nil {
+				errs = append(errs, err)
+			}
+		}
+	}
+
+	return values, errs
 }
 
 func (e *nemoHashEngine) HMSet(key []byte, fields, values [][]byte) error {
