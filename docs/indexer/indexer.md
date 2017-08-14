@@ -84,7 +84,8 @@ DEL userKey
 
 ### split
 
-cell的split成两个cells后，文档仍然存储在同一个RocksDB实例中。与DEL类似，不同之处在于批量删除。
+cell的split成两个cells后，文档仍然存储在同一个RocksDB实例中。
+
 ![split](../imgs/split.png)
 
 ### 迁移
