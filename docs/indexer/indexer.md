@@ -57,12 +57,19 @@ redis> IDX_QUERY products price > 20
 - 用户更新hashtable时使用HMSET或者HSET命令更新部分或者全部fields
 - 用户不使用HDEL删除部分fields，而是使用DEL删除整个hashtable
 
-每个cell负责该region内所有KV的索引。索引记录的增删由KV的增删改以及region分裂迁移触发。document_id为内部ID，由每个cell在插入时决定。更新文档将导致其ID发生变化。
-docID -> key映射：
- 
-每个cell针对每个index维护一个（非持久化的）计数器用于下一个需要索引文档的ID。
+每个cell负责该region内所有KV的索引。索引记录的增删由KV的增删改以及region分裂迁移触发。
+
+### docID管理
+docID为uint64整数，在文档被插入时刻决定。更新文档将导致其ID发生变化。
+
+docID为elasticell集群范围内唯一的。目的是在cell split时无需改动映射docID->userKey。
+
+每个cell维护一个计数器用于下一个需要索引文档的ID。该计数器持久化在RocksDB中，并且附带在生成的snapshot中。目的是确保cell到其他store迁移后，其产生的docID序列不会与follower peers已有docID交叠。
+
+为了确保分配全局docID的性能，以及同一cell分配的docID尽量连续，cell每次从PD申请定长（2^16以适应Roaring需求）范围的docID。
 
 ### HMSET/HSET创建和更新document
+
 HMSET userKey field1 val1 field2 val2 field3 val3
 HMSET userKey field1 val1 field2 val2
 HSET userKey field1 val1
@@ -70,28 +77,36 @@ HSET userKey field1 val1
 ![hset](../imgs/hset.png)
 
 ### DEL删除document
+
 DEL userKey
 
 ![del](../imgs/del.png)
 
 ### split
 
-与DEL类似，不同之处在于批量删除。go-nemo提供了如下接口：
-RangeDelete(start, end []byte, func cb(metaInfo []byte))
-
+cell的split成两个cells后，文档仍然存储在同一个RocksDB实例中。与DEL类似，不同之处在于批量删除。
 ![split](../imgs/split.png)
 
 ### 迁移
 
-对于迁移走的cell，执行上文提到的RangeDelete。
-对于新cell，在apply snapshot时，执行上文提到的HSET。
+对于迁移走的cell，执行go-nemo提供的RangeDelete：
+
+RangeDelete(start, end []byte, func cb(metaInfo []byte))
+
+回调函数cb执行如下动作：从RocksDB删除`<docID>`、从索引文件标记删除`<docID>`。
+
+对于新位置的cell，在apply snapshot时，执行上文提到的HSET。
 snapshot的内容是：
 
-- `{<cellID>-<indexName>: nextDocID}`
-- `{<cellID>-<indexName>-<docID>: userKey}`
+- `{<cellID>: nextDocID}`
 - `{userKey：userData, metaInfo: docID}`
+
+在apply snpashot时，扫描整个snapshot以重建如下映射：
+
+- `{<docID>: userKey}`
 
 ### 搜索
 
-![search](../imgs/search.png)
+引入新角色QueryProxy负责生成查询计划、聚合查询结果。
 
+![search](../imgs/search.png)
