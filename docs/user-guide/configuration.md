@@ -34,10 +34,11 @@
 |node:raftStore:cellHeartbeatIntervalMs|Cell heartbeat interval|
 |node:raftStore:maxPeerDownSec|The max time of peer down time. PD will schedule cell remove this peer from raft group|
 |node:raftStore:splitCellCheckIntervalMs|Check interval of if cell should split|
-|node:raftStore:reportCellIntervalMs|Interval of report cell last written bytes and keys|
+|node:raftStore:reportCellIntervalMs|Interval of report cell metrics|
 |node:raftStore:raftGCLogIntervalMs|Check interval of if cell raft log should compact|
 |node:raftStore:raftLogGCCountLimit|Max count of raft log that should be compact|
 |node:raftStore:raftLogGCSizeLimit|Max size of raft log that should be compact|
+|node:raftStore:raftProposeBatchLimit|Max number of requests in a raft proposal|
 |node:raftStore:raftLogGCThreshold|Max index of raft log offset that should be compact|
 |node:raftStore:cellCheckSizeDiff|Max data size that should be check real size to split|
 |node:raftStore:cellMaxSize|Max data size of a cell|
@@ -48,6 +49,9 @@
 |node:raftStore:raft:maxSizePerEntry|Max size count per raft entry|
 |node:raftStore:raft:baseTick|Time of a raft tick|
 |node:raftStore:applyWorkerCount|Worker count of apply raft log|
+|metric:job|The job name of prometheus|
+|metric:address|The address of prometheus pushgateway, not push if empty|
+|metric:intervalSec|The interval of push metrics in seconds, not push if empty|
 
 ### Redis-Proxy
 |field|comments|

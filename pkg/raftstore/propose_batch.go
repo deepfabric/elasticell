@@ -61,6 +61,10 @@ func (b *proposeBatch) isEmpty() bool {
 	return 0 == b.size()
 }
 
+func (b *proposeBatch) isFull() bool {
+	return globalCfg.RaftProposeBatchLimit == b.size()
+}
+
 func (b *proposeBatch) pop() *cmd {
 	if b.isEmpty() {
 		return nil
@@ -70,6 +74,7 @@ func (b *proposeBatch) pop() *cmd {
 	b.cmds[0] = nil
 	b.cmds = b.cmds[1:]
 
+	requestBatchSizeGauge.Set(float64(len(value.req.Requests)))
 	return value
 }
 
@@ -82,13 +87,13 @@ func (b *proposeBatch) push(c *reqCtx) {
 	req.Cmd[1] = getDataKey(key)
 
 	last := b.lastCmd()
-	if last == nil || b.lastType != tp {
+	if last == nil || b.lastType != tp || b.isFull() {
 		cell := b.pr.getCell()
 		raftCMD := new(raftcmdpb.RaftCMDRequest)
 		raftCMD.Header = &raftcmdpb.RaftRequestHeader{
 			CellId:     cell.ID,
 			Peer:       b.pr.getPeer(),
-			ReadQuorum: true, // TODO: configuration
+			ReadQuorum: true,
 			UUID:       uuid.NewV4().Bytes(),
 			CellEpoch:  cell.Epoch,
 		}

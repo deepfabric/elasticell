@@ -47,6 +47,10 @@ func (d *applyDelegate) doApplyRaftCMD(req *raftcmdpb.RaftCMDRequest, term uint6
 
 	cmd := d.findCB(req.Header.UUID, term, req)
 
+	if cmd != nil && globalCfg.EnableRequestMetrics {
+		observeRequestRaft(cmd)
+	}
+
 	if d.isPendingRemove() {
 		log.Fatalf("raftstore-apply[cell-%d]: apply raft comand can not pending remove",
 			d.cell.ID)
@@ -103,6 +107,10 @@ func (d *applyDelegate) doApplyRaftCMD(req *raftcmdpb.RaftCMDRequest, term uint6
 		d.applyState)
 
 	if cmd != nil {
+		if globalCfg.EnableRequestMetrics {
+			observeRequestStored(cmd)
+		}
+
 		buildTerm(d.term, resp)
 		buildUUID(req.Header.UUID, resp)
 

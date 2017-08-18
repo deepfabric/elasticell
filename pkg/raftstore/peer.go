@@ -181,6 +181,12 @@ func (pr *PeerReplicate) onReq(req *raftcmdpb.Request, cb func(*raftcmdpb.RaftCM
 		cb:  cb,
 	}
 
+	if globalCfg.EnableRequestMetrics {
+		now := time.Now().UnixNano()
+		req.StartAt = now
+		req.LastStageAt = now
+	}
+
 	commandCounterVec.WithLabelValues(raftcmdpb.CMDType_name[int32(req.Type)]).Inc()
 }
 

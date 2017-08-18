@@ -241,7 +241,7 @@
                     "steppedLine": false,
                     "targets": [
                         {
-                            "expr": "histogram_quantile(0.99, sum(rate(elasticell_cell_command_waitting_duration_seconds_bucket[1m])) by (le, exported_job))",
+                            "expr": "histogram_quantile(0.99, sum(rate(elasticell_cell_request_duration_seconds_bucket{stage=\"waitting\"}[1m])) by (le, exported_job))",
                             "intervalFactor": 2,
                             "legendFormat": "{{exported_job}}",
                             "refId": "A",
@@ -318,7 +318,7 @@
                     "steppedLine": false,
                     "targets": [
                         {
-                            "expr": "histogram_quantile(0.9999, sum(rate(elasticell_cell_command_waitting_duration_seconds_bucket[1m])) by (le, exported_job))",
+                            "expr": "histogram_quantile(0.9999, sum(rate(elasticell_cell_request_duration_seconds_bucket{stage=\"waitting\"}[1m])) by (le, exported_job))",
                             "intervalFactor": 2,
                             "legendFormat": "{{exported_job}}",
                             "refId": "A",
@@ -1920,6 +1920,557 @@
                     "timeFrom": null,
                     "timeShift": null,
                     "title": "Raft report failure",
+                    "tooltip": {
+                        "msResolution": false,
+                        "shared": true,
+                        "sort": 0,
+                        "value_type": "cumulative"
+                    },
+                    "type": "graph",
+                    "xaxis": {
+                        "mode": "time",
+                        "name": null,
+                        "show": true,
+                        "values": []
+                    },
+                    "yaxes": [
+                        {
+                            "format": "short",
+                            "label": null,
+                            "logBase": 1,
+                            "max": null,
+                            "min": 1,
+                            "show": true
+                        },
+                        {
+                            "format": "short",
+                            "label": null,
+                            "logBase": 1,
+                            "max": null,
+                            "min": null,
+                            "show": true
+                        }
+                    ]
+                }
+            ],
+            "showTitle": false,
+            "titleSize": "h6",
+            "height": "250px",
+            "repeat": null,
+            "repeatRowId": null,
+            "repeatIteration": null,
+            "collapse": false
+        },
+        {
+            "title": "metrics for requests",
+            "panels": [
+                {
+                    "aliasColors": {},
+                    "bars": false,
+                    "datasource": "${DS_PROMETHEUS}",
+                    "editable": true,
+                    "error": false,
+                    "fill": 1,
+                    "grid": {},
+                    "id": 25,
+                    "legend": {
+                        "alignAsTable": true,
+                        "avg": true,
+                        "current": true,
+                        "max": true,
+                        "min": false,
+                        "rightSide": true,
+                        "show": true,
+                        "total": false,
+                        "values": true
+                    },
+                    "lines": true,
+                    "linewidth": 2,
+                    "links": [],
+                    "nullPointMode": "connected",
+                    "percentage": false,
+                    "pointradius": 5,
+                    "points": false,
+                    "renderer": "flot",
+                    "seriesOverrides": [],
+                    "span": 6,
+                    "stack": false,
+                    "steppedLine": false,
+                    "targets": [
+                        {
+                            "expr": "histogram_quantile(0.99, sum(rate(elasticell_cell_request_duration_seconds_bucket{stage=\"proposal\"}[1m])) by (le, exported_job))",
+                            "intervalFactor": 2,
+                            "legendFormat": "{{exported_job}}",
+                            "refId": "A",
+                            "step": 2
+                        }
+                    ],
+                    "thresholds": [],
+                    "timeFrom": null,
+                    "timeShift": null,
+                    "title": "99% Request proposal duration",
+                    "tooltip": {
+                        "msResolution": false,
+                        "shared": true,
+                        "sort": 0,
+                        "value_type": "cumulative"
+                    },
+                    "type": "graph",
+                    "xaxis": {
+                        "mode": "time",
+                        "name": null,
+                        "show": true,
+                        "values": []
+                    },
+                    "yaxes": [
+                        {
+                            "format": "s",
+                            "label": null,
+                            "logBase": 1,
+                            "max": null,
+                            "min": 0.01,
+                            "show": true
+                        },
+                        {
+                            "format": "s",
+                            "label": null,
+                            "logBase": 1,
+                            "max": null,
+                            "min": null,
+                            "show": true
+                        }
+                    ]
+                },
+                {
+                    "aliasColors": {},
+                    "bars": false,
+                    "datasource": "${DS_PROMETHEUS}",
+                    "editable": true,
+                    "error": false,
+                    "fill": 1,
+                    "grid": {},
+                    "id": 26,
+                    "legend": {
+                        "alignAsTable": true,
+                        "avg": true,
+                        "current": true,
+                        "max": true,
+                        "min": false,
+                        "rightSide": true,
+                        "show": true,
+                        "total": false,
+                        "values": true
+                    },
+                    "lines": true,
+                    "linewidth": 2,
+                    "links": [],
+                    "nullPointMode": "connected",
+                    "percentage": false,
+                    "pointradius": 5,
+                    "points": false,
+                    "renderer": "flot",
+                    "seriesOverrides": [],
+                    "span": 6,
+                    "stack": false,
+                    "steppedLine": false,
+                    "targets": [
+                        {
+                            "expr": "histogram_quantile(0.9999, sum(rate(elasticell_cell_request_duration_seconds_bucket{stage=\"proposal\"}[1m])) by (le, exported_job))",
+                            "intervalFactor": 2,
+                            "legendFormat": "{{exported_job}}",
+                            "refId": "A",
+                            "step": 2
+                        }
+                    ],
+                    "thresholds": [],
+                    "timeFrom": null,
+                    "timeShift": null,
+                    "title": "99.99% Request proposal duration",
+                    "tooltip": {
+                        "msResolution": false,
+                        "shared": true,
+                        "sort": 0,
+                        "value_type": "cumulative"
+                    },
+                    "type": "graph",
+                    "xaxis": {
+                        "mode": "time",
+                        "name": null,
+                        "show": true,
+                        "values": []
+                    },
+                    "yaxes": [
+                        {
+                            "format": "s",
+                            "label": null,
+                            "logBase": 1,
+                            "max": null,
+                            "min": 0.01,
+                            "show": true
+                        },
+                        {
+                            "format": "s",
+                            "label": null,
+                            "logBase": 1,
+                            "max": null,
+                            "min": null,
+                            "show": true
+                        }
+                    ]
+                },
+                {
+                    "aliasColors": {},
+                    "bars": false,
+                    "datasource": "${DS_PROMETHEUS}",
+                    "editable": true,
+                    "error": false,
+                    "fill": 1,
+                    "grid": {},
+                    "id": 27,
+                    "legend": {
+                        "alignAsTable": true,
+                        "avg": true,
+                        "current": true,
+                        "max": true,
+                        "min": false,
+                        "rightSide": true,
+                        "show": true,
+                        "total": false,
+                        "values": true
+                    },
+                    "lines": true,
+                    "linewidth": 2,
+                    "links": [],
+                    "nullPointMode": "connected",
+                    "percentage": false,
+                    "pointradius": 5,
+                    "points": false,
+                    "renderer": "flot",
+                    "seriesOverrides": [],
+                    "span": 6,
+                    "stack": false,
+                    "steppedLine": false,
+                    "targets": [
+                        {
+                            "expr": "histogram_quantile(0.99, sum(rate(elasticell_cell_request_duration_seconds_bucket{stage=\"raft\"}[1m])) by (le, exported_job))",
+                            "intervalFactor": 2,
+                            "legendFormat": "{{exported_job}}",
+                            "refId": "A",
+                            "step": 2
+                        }
+                    ],
+                    "thresholds": [],
+                    "timeFrom": null,
+                    "timeShift": null,
+                    "title": "99% Request Raft duration",
+                    "tooltip": {
+                        "msResolution": false,
+                        "shared": true,
+                        "sort": 0,
+                        "value_type": "cumulative"
+                    },
+                    "type": "graph",
+                    "xaxis": {
+                        "mode": "time",
+                        "name": null,
+                        "show": true,
+                        "values": []
+                    },
+                    "yaxes": [
+                        {
+                            "format": "s",
+                            "label": null,
+                            "logBase": 1,
+                            "max": null,
+                            "min": 0.01,
+                            "show": true
+                        },
+                        {
+                            "format": "s",
+                            "label": null,
+                            "logBase": 1,
+                            "max": null,
+                            "min": null,
+                            "show": true
+                        }
+                    ]
+                },
+                {
+                    "aliasColors": {},
+                    "bars": false,
+                    "datasource": "${DS_PROMETHEUS}",
+                    "editable": true,
+                    "error": false,
+                    "fill": 1,
+                    "grid": {},
+                    "id": 28,
+                    "legend": {
+                        "alignAsTable": true,
+                        "avg": true,
+                        "current": true,
+                        "max": true,
+                        "min": false,
+                        "rightSide": true,
+                        "show": true,
+                        "total": false,
+                        "values": true
+                    },
+                    "lines": true,
+                    "linewidth": 2,
+                    "links": [],
+                    "nullPointMode": "connected",
+                    "percentage": false,
+                    "pointradius": 5,
+                    "points": false,
+                    "renderer": "flot",
+                    "seriesOverrides": [],
+                    "span": 6,
+                    "stack": false,
+                    "steppedLine": false,
+                    "targets": [
+                        {
+                            "expr": "histogram_quantile(0.9999, sum(rate(elasticell_cell_request_duration_seconds_bucket{stage=\"raft\"}[1m])) by (le, exported_job))",
+                            "intervalFactor": 2,
+                            "legendFormat": "{{exported_job}}",
+                            "refId": "A",
+                            "step": 2
+                        }
+                    ],
+                    "thresholds": [],
+                    "timeFrom": null,
+                    "timeShift": null,
+                    "title": "99.99% Request Raft duration",
+                    "tooltip": {
+                        "msResolution": false,
+                        "shared": true,
+                        "sort": 0,
+                        "value_type": "cumulative"
+                    },
+                    "type": "graph",
+                    "xaxis": {
+                        "mode": "time",
+                        "name": null,
+                        "show": true,
+                        "values": []
+                    },
+                    "yaxes": [
+                        {
+                            "format": "s",
+                            "label": null,
+                            "logBase": 1,
+                            "max": null,
+                            "min": 0.01,
+                            "show": true
+                        },
+                        {
+                            "format": "s",
+                            "label": null,
+                            "logBase": 1,
+                            "max": null,
+                            "min": null,
+                            "show": true
+                        }
+                    ]
+                },
+                {
+                    "aliasColors": {},
+                    "bars": false,
+                    "datasource": "${DS_PROMETHEUS}",
+                    "editable": true,
+                    "error": false,
+                    "fill": 1,
+                    "grid": {},
+                    "id": 29,
+                    "legend": {
+                        "alignAsTable": true,
+                        "avg": true,
+                        "current": true,
+                        "max": true,
+                        "min": false,
+                        "rightSide": true,
+                        "show": true,
+                        "total": false,
+                        "values": true
+                    },
+                    "lines": true,
+                    "linewidth": 2,
+                    "links": [],
+                    "nullPointMode": "connected",
+                    "percentage": false,
+                    "pointradius": 5,
+                    "points": false,
+                    "renderer": "flot",
+                    "seriesOverrides": [],
+                    "span": 6,
+                    "stack": false,
+                    "steppedLine": false,
+                    "targets": [
+                        {
+                            "expr": "histogram_quantile(0.99, sum(rate(elasticell_cell_request_duration_seconds_bucket{stage=\"response\"}[1m])) by (le, exported_job))",
+                            "intervalFactor": 2,
+                            "legendFormat": "{{exported_job}}",
+                            "refId": "A",
+                            "step": 2
+                        }
+                    ],
+                    "thresholds": [],
+                    "timeFrom": null,
+                    "timeShift": null,
+                    "title": "99% Request to Response duration",
+                    "tooltip": {
+                        "msResolution": false,
+                        "shared": true,
+                        "sort": 0,
+                        "value_type": "cumulative"
+                    },
+                    "type": "graph",
+                    "xaxis": {
+                        "mode": "time",
+                        "name": null,
+                        "show": true,
+                        "values": []
+                    },
+                    "yaxes": [
+                        {
+                            "format": "s",
+                            "label": null,
+                            "logBase": 1,
+                            "max": null,
+                            "min": 0.01,
+                            "show": true
+                        },
+                        {
+                            "format": "s",
+                            "label": null,
+                            "logBase": 1,
+                            "max": null,
+                            "min": null,
+                            "show": true
+                        }
+                    ]
+                },
+                {
+                    "aliasColors": {},
+                    "bars": false,
+                    "datasource": "${DS_PROMETHEUS}",
+                    "editable": true,
+                    "error": false,
+                    "fill": 1,
+                    "grid": {},
+                    "id": 30,
+                    "legend": {
+                        "alignAsTable": true,
+                        "avg": true,
+                        "current": true,
+                        "max": true,
+                        "min": false,
+                        "rightSide": true,
+                        "show": true,
+                        "total": false,
+                        "values": true
+                    },
+                    "lines": true,
+                    "linewidth": 2,
+                    "links": [],
+                    "nullPointMode": "connected",
+                    "percentage": false,
+                    "pointradius": 5,
+                    "points": false,
+                    "renderer": "flot",
+                    "seriesOverrides": [],
+                    "span": 6,
+                    "stack": false,
+                    "steppedLine": false,
+                    "targets": [
+                        {
+                            "expr": "histogram_quantile(0.9999, sum(rate(elasticell_cell_request_duration_seconds_bucket{stage=\"response\"}[1m])) by (le, exported_job))",
+                            "intervalFactor": 2,
+                            "legendFormat": "{{exported_job}}",
+                            "refId": "A",
+                            "step": 2
+                        }
+                    ],
+                    "thresholds": [],
+                    "timeFrom": null,
+                    "timeShift": null,
+                    "title": "99.99% Request to Response duration",
+                    "tooltip": {
+                        "msResolution": false,
+                        "shared": true,
+                        "sort": 0,
+                        "value_type": "cumulative"
+                    },
+                    "type": "graph",
+                    "xaxis": {
+                        "mode": "time",
+                        "name": null,
+                        "show": true,
+                        "values": []
+                    },
+                    "yaxes": [
+                        {
+                            "format": "s",
+                            "label": null,
+                            "logBase": 1,
+                            "max": null,
+                            "min": 0.01,
+                            "show": true
+                        },
+                        {
+                            "format": "s",
+                            "label": null,
+                            "logBase": 1,
+                            "max": null,
+                            "min": null,
+                            "show": true
+                        }
+                    ]
+                },
+                {
+                    "aliasColors": {},
+                    "bars": false,
+                    "datasource": "${DS_PROMETHEUS}",
+                    "editable": true,
+                    "error": false,
+                    "fill": 1,
+                    "grid": {},
+                    "id": 31,
+                    "legend": {
+                        "alignAsTable": true,
+                        "avg": true,
+                        "current": true,
+                        "max": true,
+                        "min": false,
+                        "rightSide": true,
+                        "show": true,
+                        "total": false,
+                        "values": true
+                    },
+                    "lines": true,
+                    "linewidth": 2,
+                    "links": [],
+                    "nullPointMode": "connected",
+                    "percentage": false,
+                    "pointradius": 5,
+                    "points": false,
+                    "renderer": "flot",
+                    "seriesOverrides": [],
+                    "span": 6,
+                    "stack": false,
+                    "steppedLine": false,
+                    "targets": [
+                        {
+                            "expr": "sum(rate(elasticell_cell_request_batch_size[1m])) by (exported_job)",
+                            "intervalFactor": 2,
+                            "legendFormat": "{{exported_job}}",
+                            "refId": "A",
+                            "step": 4
+                        }
+                    ],
+                    "thresholds": [],
+                    "timeFrom": null,
+                    "timeShift": null,
+                    "title": "Propose batch size",
                     "tooltip": {
                         "msResolution": false,
                         "shared": true,

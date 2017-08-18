@@ -45,6 +45,10 @@ const (
 	defaultNotifyChanSize  = 1024
 )
 
+var (
+	globalCfg *Cfg
+)
+
 // Store is the store for raft
 type Store struct {
 	cfg *Cfg
@@ -111,6 +115,7 @@ func NewStore(clusterID uint64, pdClient *pd.Client, meta metapb.Store, engine s
 	s.initRedisHandle()
 	s.init()
 
+	globalCfg = cfg
 	return s
 }
 

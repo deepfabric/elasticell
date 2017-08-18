@@ -15,7 +15,6 @@ package raftstore
 
 import (
 	"errors"
-	"time"
 
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/errorpb"
@@ -104,16 +103,14 @@ func errorBaseResp(uuid []byte, currentTerm uint64) *raftcmdpb.RaftCMDResponse {
 }
 
 type cmd struct {
-	startAt time.Time
-	req     *raftcmdpb.RaftCMDRequest
-	cb      func(*raftcmdpb.RaftCMDResponse)
+	req *raftcmdpb.RaftCMDRequest
+	cb  func(*raftcmdpb.RaftCMDResponse)
 }
 
 func newCMD(req *raftcmdpb.RaftCMDRequest, cb func(*raftcmdpb.RaftCMDResponse)) *cmd {
 	return &cmd{
-		startAt: time.Now(),
-		req:     req,
-		cb:      cb,
+		req: req,
+		cb:  cb,
 	}
 }
 
@@ -166,6 +163,10 @@ func (c *cmd) resp(resp *raftcmdpb.RaftCMDResponse) {
 			c.req.Header.CellId,
 			resp)
 		c.cb(resp)
+
+		if globalCfg.EnableRequestMetrics {
+			observeRequestResponse(c)
+		}
 	}
 }
 

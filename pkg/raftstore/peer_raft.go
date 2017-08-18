@@ -357,7 +357,9 @@ func (pr *PeerReplicate) notifyPropose(meta *proposalMeta) {
 }
 
 func (pr *PeerReplicate) propose(meta *proposalMeta) {
-	observeCommandWaitting(meta.cmd.startAt)
+	if globalCfg.EnableRequestMetrics {
+		observeRequestWaitting(meta.cmd)
+	}
 
 	log.Debugf("raftstore[cell-%d]: handle propose, meta=<%+v>",
 		pr.cellID,
@@ -426,6 +428,10 @@ func (pr *PeerReplicate) proposeNormal(meta *proposalMeta) bool {
 	if idx == idx2 {
 		cmd.respNotLeader(pr.cellID, meta.term, nil)
 		return false
+	}
+
+	if globalCfg.EnableRequestMetrics {
+		observeRequestProposal(meta.cmd)
 	}
 
 	pr.metrics.propose.normal++

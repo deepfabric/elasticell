@@ -34,12 +34,16 @@ type Cfg struct {
 	RaftLogGCSizeLimit  int64  `json:"raftLogGCSizeLimit"`
 	RaftLogGCThreshold  uint64 `json:"raftLogGCThreshold"`
 
+	RaftProposeBatchLimit int `json:"raftProposeBatchLimit"`
+
 	CellCheckSizeDiff int64  `json:"cellCheckSizeDiff"`
 	CellMaxSize       uint64 `json:"cellMaxSize"`
 	CellSplitSize     uint64 `json:"cellSplitSize"`
 
 	Raft             *RaftCfg `json:"raft"`
 	ApplyWorkerCount uint64   `json:"applyWorkerCount"`
+
+	EnableRequestMetrics bool `json:"enableRequestMetrics"`
 }
 
 func (c *Cfg) getSnapDir() string {

@@ -127,6 +127,7 @@ On each node, use `/apps/deepfabric` as base folder, and create configuration fi
             "raftGCLogIntervalMs": 10000,
             "raftLogGCCountLimit": 49152,
             "raftLogGCSizeLimit": 50331648,
+            "raftProposeBatchLimit": 256,
             "raftLogGCThreshold": 50,
             "cellCheckSizeDiff": 8388608,
             "cellMaxSize": 83886080,
@@ -140,8 +141,15 @@ On each node, use `/apps/deepfabric` as base folder, and create configuration fi
                 "maxSizePerEntry": 8388608,
                 "baseTick": 1000
             },
-            "applyWorkerCount": 8
+            "applyWorkerCount": 8,
+            "enableRequestMetrics": true
         }
+    },
+
+    "metric": {
+        "job": "cluster-0",
+        "address": "xxx.xxx.xxx:9091",
+        "intervalSec": 1
     }
 }
 ```
@@ -184,6 +192,7 @@ On each node, use `/apps/deepfabric` as base folder, and create configuration fi
             "raftGCLogIntervalMs": 10000,
             "raftLogGCCountLimit": 49152,
             "raftLogGCSizeLimit": 50331648,
+            "raftProposeBatchLimit": 256,
             "raftLogGCThreshold": 50,
             "cellCheckSizeDiff": 8388608,
             "cellMaxSize": 83886080,
@@ -197,8 +206,15 @@ On each node, use `/apps/deepfabric` as base folder, and create configuration fi
                 "maxSizePerEntry": 8388608,
                 "baseTick": 1000
             },
-            "applyWorkerCount": 8
+            "applyWorkerCount": 8,
+            "enableRequestMetrics": true
         }
+    },
+
+    "metric": {
+        "job": "cluster-0",
+        "address": "xxx.xxx.xxx:9091",
+        "intervalSec": 1
     }
 }
 ```
@@ -241,6 +257,7 @@ On each node, use `/apps/deepfabric` as base folder, and create configuration fi
             "raftGCLogIntervalMs": 10000,
             "raftLogGCCountLimit": 49152,
             "raftLogGCSizeLimit": 50331648,
+            "raftProposeBatchLimit": 256,
             "raftLogGCThreshold": 50,
             "cellCheckSizeDiff": 8388608,
             "cellMaxSize": 83886080,
@@ -254,8 +271,15 @@ On each node, use `/apps/deepfabric` as base folder, and create configuration fi
                 "maxSizePerEntry": 8388608,
                 "baseTick": 1000
             },
-            "applyWorkerCount": 8
+            "applyWorkerCount": 8,
+            "enableRequestMetrics": true
         }
+    },
+
+    "metric": {
+        "job": "cluster-0",
+        "address": "xxx.xxx.xxx:9091",
+        "intervalSec": 1
     }
 }
 ```

@@ -103,14 +103,14 @@ enum AdminCmdType {
 }
 
 message RaftRequestHeader {
-    optional uint64           cellId     = 1 [(gogoproto.nullable) = false];
-    optional metapb.Peer      peer       = 2 [(gogoproto.nullable) = false];
-    // true for read linearizati
-    optional bool             readQuorum = 3 [(gogoproto.nullable) = false];
-    // 16 bytes, to distinguish request.
-    optional bytes            uuid       = 4 [(gogoproto.customname) = "UUID"];
-    optional metapb.CellEpoch cellEpoch  = 5 [(gogoproto.nullable) = false];
-    optional uint64           term       = 6 [(gogoproto.nullable) = false];
+    optional uint64           cellId      = 1 [(gogoproto.nullable) = false];
+    optional metapb.Peer      peer        = 2 [(gogoproto.nullable) = false];
+    // true for read linearizati 
+    optional bool             readQuorum  = 3 [(gogoproto.nullable) = false];
+    // 16 bytes, to distinguish request. 
+    optional bytes            uuid        = 4 [(gogoproto.customname) = "UUID"];
+    optional metapb.CellEpoch cellEpoch   = 5 [(gogoproto.nullable) = false];
+    optional uint64           term        = 6 [(gogoproto.nullable) = false];
 }
 
 message RaftResponseHeader {
@@ -202,10 +202,12 @@ message ScorePair {
 }
 
 message Request {
-    optional bytes   uuid  = 1 [(gogoproto.customname) = "UUID"];
-    optional CMDType type  = 2 [(gogoproto.nullable) = false];
-    repeated bytes   cmd   = 3;
-    optional uint64  epoch = 4 [(gogoproto.nullable) = false];
+    optional bytes   uuid        = 1 [(gogoproto.customname) = "UUID"];
+    optional CMDType type        = 2 [(gogoproto.nullable) = false];
+    repeated bytes   cmd         = 3;
+    optional uint64  epoch       = 4 [(gogoproto.nullable) = false];
+    optional int64   startAt     = 5 [(gogoproto.nullable) = false];
+    optional int64   lastStageAt = 6 [(gogoproto.nullable) = false];
 }
 
 message Response {

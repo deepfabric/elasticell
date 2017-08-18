@@ -34,6 +34,7 @@
             "raftGCLogIntervalMs": 10000,
             "raftLogGCCountLimit": 49152,
             "raftLogGCSizeLimit": 50331648,
+            "raftProposeBatchLimit": 256,
             "raftLogGCThreshold": 50,
             "cellCheckSizeDiff": 8388608,
             "cellMaxSize": 83886080,
@@ -47,7 +48,9 @@
                 "maxSizePerEntry": 8388608,
                 "baseTick": 1000
             },
-            "applyWorkerCount": 8
+            "applyWorkerCount": 8,
+
+            "enableRequestMetrics": true
         }
     },
 

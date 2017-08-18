@@ -14,8 +14,6 @@
 package raftstore
 
 import (
-	"time"
-
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -48,23 +46,9 @@ var (
 			Name:      "command_admin_total",
 			Help:      "Total number of admin commands processed.",
 		}, []string{"type", "status"})
-
-	commandWaittingDurationHistogram = prometheus.NewHistogram(
-		prometheus.HistogramOpts{
-			Namespace: "elasticell",
-			Subsystem: "cell",
-			Name:      "command_waitting_duration_seconds",
-			Help:      "Bucketed histogram of command waitting time duration",
-			Buckets:   prometheus.ExponentialBuckets(0.0005, 2.0, 20),
-		})
 )
 
 func initMetricsForCommand() {
 	prometheus.MustRegister(commandCounterVec)
 	prometheus.MustRegister(commandAdminCounterVec)
-	prometheus.MustRegister(commandWaittingDurationHistogram)
-}
-
-func observeCommandWaitting(start time.Time) {
-	commandWaittingDurationHistogram.Observe(time.Now().Sub(start).Seconds())
 }

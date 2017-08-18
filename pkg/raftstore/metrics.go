@@ -18,6 +18,7 @@ func init() {
 	initMetricsForCommand()
 	initMetricsForStore()
 	initMetricsForSnapshot()
+	initMetricsForRequest()
 }
 
 type localMetrics struct {
