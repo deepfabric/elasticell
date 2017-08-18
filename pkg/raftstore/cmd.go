@@ -15,6 +15,7 @@ package raftstore
 
 import (
 	"errors"
+	"time"
 
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/errorpb"
@@ -103,14 +104,16 @@ func errorBaseResp(uuid []byte, currentTerm uint64) *raftcmdpb.RaftCMDResponse {
 }
 
 type cmd struct {
-	req *raftcmdpb.RaftCMDRequest
-	cb  func(*raftcmdpb.RaftCMDResponse)
+	startAt time.Time
+	req     *raftcmdpb.RaftCMDRequest
+	cb      func(*raftcmdpb.RaftCMDResponse)
 }
 
 func newCMD(req *raftcmdpb.RaftCMDRequest, cb func(*raftcmdpb.RaftCMDResponse)) *cmd {
 	return &cmd{
-		req: req,
-		cb:  cb,
+		startAt: time.Now(),
+		req:     req,
+		cb:      cb,
 	}
 }
 
@@ -220,6 +223,7 @@ func (c *cmd) getUUID() []byte {
 
 func (pr *PeerReplicate) execReadLocal(cmd *cmd) {
 	pr.doExecReadCmd(cmd)
+	pr.metrics.propose.readLocal++
 }
 
 func (pr *PeerReplicate) execReadIndex(meta *proposalMeta) {
@@ -248,4 +252,5 @@ func (pr *PeerReplicate) execReadIndex(meta *proposalMeta) {
 
 	pr.pendingReads.push(meta.cmd)
 	pr.raftReady()
+	pr.metrics.propose.readIndex++
 }

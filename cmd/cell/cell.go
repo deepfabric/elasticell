@@ -31,7 +31,6 @@ func main() {
 	raft.SetLogger(log.DefaultLogger())
 
 	cfg := server.GetCfg()
-
 	s := server.NewServer(cfg)
 
 	sc := make(chan os.Signal, 1)

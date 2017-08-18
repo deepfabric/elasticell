@@ -165,7 +165,7 @@ func (ps *peerStorage) doAppendEntries(ctx *tempRaftContext, entries []raftpb.En
 		d := util.MustMarshal(&e)
 		err := ctx.wb.Set(getRaftLogKey(ps.getCell().ID, e.Index), d)
 		if err != nil {
-			log.Errorf("raftstore[cell-%d]: append entry failure, entry=<%s> errors:\n %+v",
+			log.Fatalf("raftstore[cell-%d]: append entry failure, entry=<%s> errors:\n %+v",
 				ps.getCell().ID,
 				e.String(),
 				err)
@@ -177,7 +177,7 @@ func (ps *peerStorage) doAppendEntries(ctx *tempRaftContext, entries []raftpb.En
 	for index := lastIndex + 1; index < prevLastIndex+1; index++ {
 		err := ctx.wb.Delete(getRaftLogKey(ps.getCell().ID, index))
 		if err != nil {
-			log.Errorf("raftstore[cell-%d]: delete any previously appended log entries failure, index=<%d> errors:\n %+v",
+			log.Fatalf("raftstore[cell-%d]: delete any previously appended log entries failure, index=<%d> errors:\n %+v",
 				ps.getCell().ID,
 				index,
 				err)
@@ -385,6 +385,8 @@ func (pr *PeerReplicate) doPostApply(result *asyncApplyResult) {
 	log.Debugf("raftstore[cell-%d]: async apply committied entries finished, applied=<%d>",
 		pr.cellID,
 		result.applyState.AppliedIndex)
+
+	pr.metrics.admin.incBy(result.metrics.admin)
 
 	pr.writtenBytes += uint64(result.metrics.writtenBytes)
 	pr.writtenKeys += result.metrics.writtenKeys

@@ -34,6 +34,7 @@
 |node:raftStore:cellHeartbeatIntervalMs|Cell heartbeat interval|
 |node:raftStore:maxPeerDownSec|The max time of peer down time. PD will schedule cell remove this peer from raft group|
 |node:raftStore:splitCellCheckIntervalMs|Check interval of if cell should split|
+|node:raftStore:reportCellIntervalMs|Interval of report cell last written bytes and keys|
 |node:raftStore:raftGCLogIntervalMs|Check interval of if cell raft log should compact|
 |node:raftStore:raftLogGCCountLimit|Max count of raft log that should be compact|
 |node:raftStore:raftLogGCSizeLimit|Max size of raft log that should be compact|

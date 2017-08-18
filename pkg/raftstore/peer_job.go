@@ -16,6 +16,7 @@ package raftstore
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
@@ -217,6 +218,8 @@ func (pr *PeerReplicate) doApplyingSnapshotJob() error {
 }
 
 func (ps *peerStorage) doGenerateSnapshotJob() error {
+	start := time.Now()
+
 	if ps.genSnapJob == nil {
 		log.Fatalf("raftstore[cell-%d]: generating snapshot job chan is nil", ps.getCell().ID)
 	}
@@ -291,6 +294,8 @@ func (ps *peerStorage) doGenerateSnapshotJob() error {
 	log.Infof("raftstore[cell-%d]: snapshot complete", ps.getCell().ID)
 	ps.genSnapJob.SetResult(snapshot)
 
+	observeSnapshotBuild(start)
+	snapshotSizeHistogram.Observe(float64(snapData.FileSize))
 	return nil
 }
 

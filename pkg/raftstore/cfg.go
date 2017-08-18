@@ -28,6 +28,7 @@ type Cfg struct {
 	MaxPeerDownSec           int    `json:"maxPeerDownSec"`
 	SplitCellCheckIntervalMs int    `json:"splitCellCheckIntervalMs"`
 	RaftGCLogIntervalMs      int    `json:"raftGCLogIntervalMs"`
+	ReportCellIntervalMs     int    `json:"reportCellIntervalMs"`
 
 	RaftLogGCCountLimit uint64 `json:"raftLogGCCountLimit"`
 	RaftLogGCSizeLimit  int64  `json:"raftLogGCSizeLimit"`
@@ -55,6 +56,10 @@ func (c *Cfg) getStoreHeartbeatDuration() time.Duration {
 
 func (c *Cfg) getCellHeartbeatDuration() time.Duration {
 	return time.Duration(c.CellHeartbeatIntervalMs) * time.Millisecond
+}
+
+func (c *Cfg) getReportCellDuration() time.Duration {
+	return time.Duration(c.ReportCellIntervalMs) * time.Millisecond
 }
 
 func (c *Cfg) getMaxPeerDownSecDuration() time.Duration {

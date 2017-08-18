@@ -86,6 +86,8 @@ func (pr *PeerReplicate) readyToServeRaft(ctx context.Context) {
 		case <-ctx.Done():
 			pr.setStop()
 
+			pr.metrics.flush()
+
 			close(pr.tickC)
 			close(pr.loopC)
 			close(pr.applyResultC)
@@ -98,6 +100,7 @@ func (pr *PeerReplicate) readyToServeRaft(ctx context.Context) {
 			return
 		case <-pr.tickC:
 			pr.rn.Tick()
+			pr.metrics.flush()
 		case msg := <-pr.stepC:
 			if nil != msg {
 				if pr.isLeader() && msg.From != 0 {
@@ -160,8 +163,12 @@ func (pr *PeerReplicate) doRaftReady() {
 			lastTerm:   pr.ps.lastTerm,
 		}
 
+		start := time.Now()
+
 		pr.handleRaftReadyAppend(ctx, &rd)
 		pr.handleRaftReadyApply(ctx, &rd)
+
+		observeRaftFlowProcessReady(start)
 	}
 }
 
@@ -194,6 +201,8 @@ func (pr *PeerReplicate) doPollApply(result *asyncApplyResult) {
 }
 
 func (pr *PeerReplicate) handleRaftReadyAppend(ctx *tempRaftContext, rd *raft.Ready) {
+	start := time.Now()
+
 	// If we become leader, send heartbeat to pd
 	if rd.SoftState != nil {
 		if rd.SoftState.RaftState == raft.StateLeader {
@@ -228,6 +237,8 @@ func (pr *PeerReplicate) handleRaftReadyAppend(ctx *tempRaftContext, rd *raft.Re
 			pr.getCell().ID,
 			err)
 	}
+
+	observeRaftLogAppend(start)
 }
 
 func (pr *PeerReplicate) handleRaftReadyApply(ctx *tempRaftContext, rd *raft.Ready) {
@@ -271,6 +282,8 @@ func (pr *PeerReplicate) handleAppendSnapshot(ctx *tempRaftContext, rd *raft.Rea
 				pr.ps.getCell().ID,
 				err)
 		}
+
+		pr.metrics.ready.snapshort++
 	}
 }
 
@@ -282,6 +295,8 @@ func (pr *PeerReplicate) handleAppendEntries(ctx *tempRaftContext, rd *raft.Read
 				pr.ps.getCell().ID,
 				err)
 		}
+
+		pr.metrics.ready.append++
 	}
 }
 
@@ -342,6 +357,8 @@ func (pr *PeerReplicate) notifyPropose(meta *proposalMeta) {
 }
 
 func (pr *PeerReplicate) propose(meta *proposalMeta) {
+	observeCommandWaitting(meta.cmd.startAt)
+
 	log.Debugf("raftstore[cell-%d]: handle propose, meta=<%+v>",
 		pr.cellID,
 		meta)
@@ -391,6 +408,9 @@ func (pr *PeerReplicate) proposeNormal(meta *proposalMeta) bool {
 
 	data := util.MustMarshal(cmd.req)
 	size := uint64(len(data))
+
+	raftFlowProposalSizeHistogram.Observe(float64(size))
+
 	if size > pr.store.cfg.Raft.MaxSizePerEntry {
 		cmd.respLargeRaftEntrySize(pr.cellID, size, meta.term)
 		return false
@@ -407,6 +427,8 @@ func (pr *PeerReplicate) proposeNormal(meta *proposalMeta) bool {
 		cmd.respNotLeader(pr.cellID, meta.term, nil)
 		return false
 	}
+
+	pr.metrics.propose.normal++
 	pr.raftReady()
 	return true
 }
@@ -450,6 +472,7 @@ func (pr *PeerReplicate) proposeConfChange(meta *proposalMeta) bool {
 		changePeer.ChangeType.String(),
 		changePeer.Peer.ID)
 
+	pr.metrics.propose.confChange++
 	pr.raftReady()
 	return true
 }
@@ -478,6 +501,8 @@ func (pr *PeerReplicate) doTransferLeader(peer *metapb.Peer) {
 		pr.cellID,
 		peer.ID)
 	pr.rn.TransferLeader(peer.ID)
+
+	pr.metrics.propose.transferLeader++
 	pr.raftReady()
 }
 
@@ -549,6 +574,7 @@ func (pr *PeerReplicate) checkConfChange(cmd *cmd) error {
 		healthy,
 		quorumAfterChange)
 
+	pr.metrics.admin.confChangeReject++
 	return fmt.Errorf("unsafe to perform conf change, total=<%d> healthy=<%d> quorum after change=<%d>",
 		total,
 		healthy,
@@ -597,11 +623,13 @@ func (pr *PeerReplicate) send(msgs []raftpb.Message) {
 		err := pr.sendRaftMsg(msg)
 		if err != nil {
 			// We don't care that the message is sent failed, so here just log this error
-			log.Warnf("raftstore[cell-%d]: send msg failure, from_peer=<%d> to_peer=<%d>",
+			log.Warnf("raftstore[cell-%d]: send msg failure, from_peer=<%d> to_peer=<%d>, errors:\n%+v",
 				pr.ps.getCell().ID,
 				msg.From,
-				msg.To)
+				msg.To,
+				err)
 		}
+		pr.metrics.ready.message++
 	}
 }
 
@@ -635,8 +663,24 @@ func (pr *PeerReplicate) sendRaftMsg(msg raftpb.Message) error {
 	sendMsg.Message = msg
 	pr.store.trans.send(&sendMsg)
 
-	if msg.Type == raftpb.MsgSnap {
+	switch msg.Type {
+	case raftpb.MsgApp:
+		pr.metrics.message.append++
+	case raftpb.MsgAppResp:
+		pr.metrics.message.appendResp++
+	case raftpb.MsgVote:
+		pr.metrics.message.vote++
+	case raftpb.MsgVoteResp:
+		pr.metrics.message.voteResp++
+	case raftpb.MsgSnap:
+		pr.metrics.message.snapshot++
 		pr.rn.ReportSnapshot(sendMsg.ToPeer.ID, raft.SnapshotFinish)
+	case raftpb.MsgHeartbeat:
+		pr.metrics.message.heartbeat++
+	case raftpb.MsgHeartbeatResp:
+		pr.metrics.message.heartbeatResp++
+	case raftpb.MsgTransferLeader:
+		pr.metrics.message.transfeLeader++
 	}
 
 	return nil

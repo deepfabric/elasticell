@@ -130,11 +130,22 @@ func (t *transport) readyToSend(ctx context.Context) {
 			if msg != nil {
 				err := t.doSend(msg)
 				if err != nil {
+					log.Errorf("raftstore[cell-%d]: send msg failure, from_peer=<%d> to_peer=<%d>, errors:\n%+v",
+						msg.CellID,
+						msg.FromPeer.ID,
+						msg.ToPeer.ID,
+						err)
+
+					storeID := fmt.Sprintf("%d", msg.ToPeer.StoreID)
+
 					pr := t.store.getPeerReplicate(msg.CellID)
 					if pr != nil {
+						raftFlowFailureReportCounterVec.WithLabelValues(labelRaftFlowFailureReportUnreachable, storeID).Inc()
+
 						pr.rn.ReportUnreachable(msg.ToPeer.ID)
 						if msg.Message.Type == raftpb.MsgSnap {
 							pr.rn.ReportSnapshot(msg.ToPeer.ID, raft.SnapshotFailure)
+							raftFlowFailureReportCounterVec.WithLabelValues(labelRaftFlowFailureReportSnapshot, storeID).Inc()
 						}
 					}
 				}
@@ -158,6 +169,8 @@ func (t *transport) doSend(msg *mraft.RaftMessage) error {
 
 	// if we are send a snapshot raft msg, we can send sst files to the target store before.
 	if msg.Message.Type == raftpb.MsgSnap {
+		start := time.Now()
+
 		snapData := &mraft.RaftSnapshotData{}
 		util.MustUnmarshal(snapData, msg.Message.Snapshot.Data)
 
@@ -200,6 +213,7 @@ func (t *transport) doSend(msg *mraft.RaftMessage) error {
 			log.Debugf("transport: sent snapshot file complete, key=<%+v> size=<%d>",
 				snapData.Key,
 				size)
+			observeSnapshotSending(start)
 		}
 	}
 

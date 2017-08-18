@@ -68,6 +68,8 @@ type PeerReplicate struct {
 
 	cancelTaskIds []uint64
 	stopped       uint32
+
+	metrics localMetrics
 }
 
 func createPeerReplicate(store *Store, cell *metapb.Cell) (*PeerReplicate, error) {
@@ -178,6 +180,8 @@ func (pr *PeerReplicate) onReq(req *raftcmdpb.Request, cb func(*raftcmdpb.RaftCM
 		req: req,
 		cb:  cb,
 	}
+
+	commandCounterVec.WithLabelValues(raftcmdpb.CMDType_name[int32(req.Type)]).Inc()
 }
 
 func (pr *PeerReplicate) proposeNextBatch() {

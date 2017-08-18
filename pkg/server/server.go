@@ -21,6 +21,7 @@ import (
 	"github.com/deepfabric/elasticell/pkg/raftstore"
 	"github.com/deepfabric/elasticell/pkg/redis"
 	"github.com/deepfabric/elasticell/pkg/storage"
+	"github.com/deepfabric/elasticell/pkg/util"
 	"github.com/fagongzi/goetty"
 )
 
@@ -50,6 +51,8 @@ func NewServer(cfg *Cfg) *Server {
 
 // Start start the server
 func (s *Server) Start() {
+	util.InitMetric(s.cfg.Metric)
+
 	go s.listenToStop()
 
 	store := s.startNode()
@@ -142,7 +145,7 @@ func (s *Server) initNode() {
 		return
 	}
 
-	n, err := node.NewNode(s.cfg.Redis.Listen,s.cfg.Node, driver)
+	n, err := node.NewNode(s.cfg.Redis.Listen, s.cfg.Node, driver)
 	if err != nil {
 		log.Fatalf("bootstrap: create node failure, errors:\n %+v", err)
 		return

@@ -14,9 +14,9 @@
 package raftstore
 
 import (
-	"sync"
-
 	"bytes"
+	"sync"
+	"time"
 
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
@@ -33,6 +33,8 @@ type applyMetrics struct {
 	deleteKeysHint uint64
 	writtenBytes   int64
 	writtenKeys    uint64
+
+	admin raftAdminMetrics
 }
 
 type asyncApplyResult struct {
@@ -210,6 +212,7 @@ func (d *applyDelegate) applyCommittedEntries(commitedEntries []raftpb.Entry) {
 		return
 	}
 
+	start := time.Now()
 	for _, entry := range commitedEntries {
 		if d.isPendingRemove() {
 			// This peer is about to be destroyed, skip everything.
@@ -251,6 +254,8 @@ func (d *applyDelegate) applyCommittedEntries(commitedEntries []raftpb.Entry) {
 			pr.addApplyResult(asyncResult)
 		}
 	}
+
+	observeRaftLogApply(start)
 }
 
 func (d *applyDelegate) applyEntry(entry *raftpb.Entry) (*execContext, *execResult) {

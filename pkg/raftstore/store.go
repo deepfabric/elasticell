@@ -206,6 +206,9 @@ func (s *Store) Start() {
 
 	s.startCellSplitCheckTask()
 	log.Infof("bootstrap: ready to handle split check task")
+
+	s.startCellReportTask()
+	log.Infof("bootstrap: ready to handle report cell task")
 }
 
 func (s *Store) startTransfer() {
@@ -316,6 +319,23 @@ func (s *Store) startGCTask() {
 				return
 			case <-ticker.C:
 				s.handleRaftGCLog()
+			}
+		}
+	})
+}
+
+func (s *Store) startCellReportTask() {
+	s.runner.RunCancelableTask(func(ctx context.Context) {
+		ticker := time.NewTicker(s.cfg.getReportCellDuration())
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				log.Infof("stop: cell report job stopped")
+				return
+			case <-ticker.C:
+				s.handleCellReport()
 			}
 		}
 	})
@@ -839,6 +859,13 @@ func (s *Store) handleStoreHeartbeat() error {
 		BytesWritten:       0,
 	}
 
+	storeStorageGaugeVec.WithLabelValues(labelStoreStorageCapacity).Set(float64(stats.Total))
+	storeStorageGaugeVec.WithLabelValues(labelStoreStorageAvailable).Set(float64(stats.Free))
+
+	snapshortActionGaugeVec.WithLabelValues(labelSnapshotActionSent).Set(float64(s.sendingSnapCount))
+	snapshortActionGaugeVec.WithLabelValues(labelSnapshotActionReceived).Set(float64(s.reveivingSnapCount))
+	snapshortActionGaugeVec.WithLabelValues(labelSnapshotActionApplying).Set(float64(applySnapCount))
+
 	_, err = s.pdClient.StoreHeartbeat(context.TODO(), req)
 	if err != nil {
 		log.Errorf("heartbeat-store[%d]: handle store heartbeat failed, errors:\n %+v",
@@ -866,9 +893,16 @@ func (s *Store) handleCellHeartbeat() {
 		p.checkPeers()
 	}
 
+	leaders := 0
 	for _, p := range s.replicatesMap.values() {
-		p.handleHeartbeat()
+		if p.isLeader() {
+			p.handleHeartbeat()
+			leaders++
+		}
 	}
+
+	storeCellCountGaugeVec.WithLabelValues(labelCommandAdminPerAll).Set(float64(s.replicatesMap.size()))
+	storeCellCountGaugeVec.WithLabelValues(labelStoreCellLeader).Set(float64(leaders))
 }
 
 func (s *Store) handleCellSplitCheck() {
@@ -903,7 +937,26 @@ func (s *Store) handleCellSplitCheck() {
 	})
 }
 
+func (s *Store) handleCellReport() {
+	s.replicatesMap.foreach(func(pr *PeerReplicate) (bool, error) {
+		if !pr.isLeader() {
+			pr.writtenBytes = 0
+			pr.writtenKeys = 0
+			return true, nil
+		}
+
+		storeWrittenBytesHistogram.Observe(float64(pr.writtenBytes))
+		storeWrittenKeysHistogram.Observe(float64(pr.writtenKeys))
+
+		pr.writtenBytes = 0
+		pr.writtenKeys = 0
+		return true, nil
+	})
+}
+
 func (s *Store) handleRaftGCLog() {
+	var gcLogCount uint64
+
 	s.replicatesMap.foreach(func(pr *PeerReplicate) (bool, error) {
 		if !pr.isLeader() {
 			return true, nil
@@ -941,6 +994,8 @@ func (s *Store) handleRaftGCLog() {
 					lastIdx,
 					replicatedIdx)
 			}
+
+			raftLogLagHistogram.Observe(float64(lastIdx - replicatedIdx))
 		}
 
 		var compactIdx uint64
@@ -970,6 +1025,8 @@ func (s *Store) handleRaftGCLog() {
 			return true, nil
 		}
 
+		gcLogCount += compactIdx - firstIdx
+
 		term, _ := pr.rn.Term(compactIdx)
 
 		req := newCompactLogRequest(compactIdx, term)
@@ -977,6 +1034,10 @@ func (s *Store) handleRaftGCLog() {
 
 		return true, nil
 	})
+
+	if gcLogCount > 0 {
+		raftLogCompactCounter.Add(float64(gcLogCount))
+	}
 }
 
 func (s *Store) sendAdminRequest(cell metapb.Cell, peer metapb.Peer, adminReq *raftcmdpb.AdminRequest) {
@@ -991,6 +1052,8 @@ func (s *Store) sendAdminRequest(cell metapb.Cell, peer metapb.Peer, adminReq *r
 
 	cmd := newCMD(req, nil)
 	s.notify(cmd)
+
+	commandCounterVec.WithLabelValues(raftcmdpb.CMDType_name[int32(req.AdminRequest.Type)]).Inc()
 }
 
 func (s *Store) getMetaEngine() storage.Engine {

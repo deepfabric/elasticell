@@ -141,6 +141,8 @@ func (d *applyDelegate) doExecChangePeer(ctx *execContext) (*raftcmdpb.RaftCMDRe
 
 	switch req.ChangeType {
 	case pdpb.AddNode:
+		ctx.metrics.admin.addPeer++
+
 		if exists != nil {
 			return nil, nil, nil
 		}
@@ -149,7 +151,10 @@ func (d *applyDelegate) doExecChangePeer(ctx *execContext) (*raftcmdpb.RaftCMDRe
 		log.Infof("raftstore-apply[cell-%d]: peer added, peer=<%+v>",
 			d.cell.ID,
 			req.Peer)
+		ctx.metrics.admin.addPeerSucceed++
 	case pdpb.RemoveNode:
+		ctx.metrics.admin.removePeer++
+
 		if exists == nil {
 			return nil, nil, nil
 		}
@@ -161,6 +166,8 @@ func (d *applyDelegate) doExecChangePeer(ctx *execContext) (*raftcmdpb.RaftCMDRe
 		}
 
 		removePeer(&d.cell, req.Peer.StoreID)
+		ctx.metrics.admin.removePeerSucceed++
+
 		log.Infof("raftstore-apply[cell-%d]: peer removed, peer=<%+v>",
 			d.cell.ID,
 			req.Peer)
@@ -196,6 +203,8 @@ func (d *applyDelegate) doExecChangePeer(ctx *execContext) (*raftcmdpb.RaftCMDRe
 }
 
 func (d *applyDelegate) doExecSplit(ctx *execContext) (*raftcmdpb.RaftCMDResponse, *execResult, error) {
+	ctx.metrics.admin.split++
+
 	req := new(raftcmdpb.SplitRequest)
 	util.MustUnmarshal(req, ctx.req.AdminRequest.Body)
 
@@ -287,10 +296,14 @@ func (d *applyDelegate) doExecSplit(ctx *execContext) (*raftcmdpb.RaftCMDRespons
 		},
 	}
 
+	ctx.metrics.admin.splitSucceed++
+
 	return rsp, result, nil
 }
 
 func (d *applyDelegate) doExecRaftGC(ctx *execContext) (*raftcmdpb.RaftCMDResponse, *execResult, error) {
+	ctx.metrics.admin.compact++
+
 	req := new(raftcmdpb.RaftLogGCRequest)
 	util.MustUnmarshal(req, ctx.req.AdminRequest.Body)
 
@@ -327,6 +340,7 @@ func (d *applyDelegate) doExecRaftGC(ctx *execContext) (*raftcmdpb.RaftCMDRespon
 		},
 	}
 
+	ctx.metrics.admin.compactSucceed++
 	return rsp, result, nil
 }
 

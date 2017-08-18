@@ -30,6 +30,7 @@
             "cellHeartbeatIntervalMs": 1000,
             "maxPeerDownSec": 300,
             "splitCellCheckIntervalMs": 10000,
+            "reportCellIntervalMs": 1000,
             "raftGCLogIntervalMs": 10000,
             "raftLogGCCountLimit": 49152,
             "raftLogGCSizeLimit": 50331648,
@@ -48,5 +49,11 @@
             },
             "applyWorkerCount": 8
         }
+    },
+
+    "metric": {
+        "job": "prometheus",
+        "address": "127.0.0.1:9090",
+        "intervalSec": 0
     }
 }
