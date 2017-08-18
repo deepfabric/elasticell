@@ -50,13 +50,13 @@
             },
             "applyWorkerCount": 8,
 
-            "enableRequestMetrics": true
+            "enableRequestMetrics": false
         }
     },
 
     "metric": {
         "job": "prometheus",
-        "address": "127.0.0.1:9090",
+        "address": "",
         "intervalSec": 0
     }
 }
