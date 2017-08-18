@@ -455,6 +455,11 @@
 			"Rev": "a5060f1eaab721946b185b2de468ff83ea5b89cb"
 		},
 		{
+			"ImportPath": "github.com/prometheus/client_golang/prometheus/push",
+			"Comment": "v0.8.0-58-ga5060f1",
+			"Rev": "a5060f1eaab721946b185b2de468ff83ea5b89cb"
+		},
+		{
 			"ImportPath": "github.com/prometheus/client_model/go",
 			"Comment": "model-0.0.2-14-g6f38060",
 			"Rev": "6f3806018612930941127f2a7c6c453ba2c527d2"
