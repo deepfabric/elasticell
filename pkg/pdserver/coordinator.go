@@ -30,12 +30,14 @@ var (
 
 type coordinator struct {
 	sync.RWMutex
+	storeLock sync.RWMutex
 
 	cfg        *Cfg
 	cache      *cache
 	checker    *replicaChecker
 	limiter    *scheduleLimiter
 	opts       map[uint64]Operator
+	storeOpts  map[uint64]StoreOperator
 	schedulers map[string]*scheduleController
 	runner     *util.Runner
 }
@@ -47,6 +49,7 @@ func newCoordinator(cfg *Cfg, cache *cache) *coordinator {
 	c.checker = newReplicaChecker(cfg, cache)
 	c.limiter = newScheduleLimiter()
 	c.opts = make(map[uint64]Operator)
+	c.storeOpts = make(map[uint64]StoreOperator)
 	c.schedulers = make(map[string]*scheduleController)
 	c.runner = util.NewRunner()
 
@@ -60,6 +63,18 @@ func (c *coordinator) run() {
 
 func (c *coordinator) stop() {
 	c.runner.Stop()
+}
+
+func (c *coordinator) dispatchStore(target *StoreInfo) *pdpb.StoreHeartbeatRsp {
+	if op := c.getStoreOperator(target.Meta.ID); op != nil {
+		res, finished := op.Do(target)
+		if !finished {
+			return res
+		}
+		c.removeStoreOperator(op)
+	}
+
+	return &pdpb.StoreHeartbeatRsp{}
 }
 
 // dispatch is used for coordinator cell,
@@ -108,6 +123,13 @@ func (c *coordinator) getOperator(cellID uint64) Operator {
 	return c.opts[cellID]
 }
 
+func (c *coordinator) getStoreOperator(storeID uint64) StoreOperator {
+	c.storeLock.RLock()
+	defer c.storeLock.RUnlock()
+
+	return c.storeOpts[storeID]
+}
+
 func (c *coordinator) getOperatorCount() int {
 	c.RLock()
 	defer c.RUnlock()
@@ -130,13 +152,32 @@ func (c *coordinator) addOperator(op Operator) bool {
 	return true
 }
 
+func (c *coordinator) addStoreOperator(op StoreOperator) bool {
+	c.storeLock.Lock()
+	defer c.storeLock.Unlock()
+
+	storeID := op.GetStoreID()
+
+	if _, ok := c.storeOpts[storeID]; ok {
+		return false
+	}
+
+	c.storeOpts[storeID] = op
+	return true
+}
+
 func (c *coordinator) removeOperator(op Operator) {
 	c.Lock()
-	defer c.Unlock()
-
-	cellID := op.GetCellID()
+	id := op.GetCellID()
 	c.limiter.removeOperator(op)
-	delete(c.opts, cellID)
+	delete(c.opts, id)
+	c.Unlock()
+}
+
+func (c *coordinator) removeStoreOperator(op StoreOperator) {
+	c.storeLock.Lock()
+	delete(c.storeOpts, op.GetStoreID())
+	c.storeLock.Unlock()
 }
 
 func (c *coordinator) getScheduler(name string) *scheduleController {

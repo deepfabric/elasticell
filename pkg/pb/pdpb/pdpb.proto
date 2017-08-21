@@ -70,6 +70,7 @@ message StoreStats {
     optional uint64 usedSize           = 10 [(gogoproto.nullable) = false];
     // Bytes written for the store.
     optional uint64 bytesWritten       = 11 [(gogoproto.nullable) = false];
+    optional int32  logLevel           = 12 [(gogoproto.nullable) = false];
 }
 
 message RequestHeader {
@@ -189,7 +190,8 @@ message StoreHeartbeatReq {
 }
 
 message StoreHeartbeatRsp {
-    optional ResponseHeader header = 1 [(gogoproto.nullable) = false];
+    optional ResponseHeader header      = 1 [(gogoproto.nullable) = false];
+    optional SetLogLevel    setLogLevel = 2 [(gogoproto.nullable) = true];
 }
 
 message AskSplitReq {
@@ -224,4 +226,8 @@ message GetLastRangesReq {
 
 message GetLastRangesRsp {
     repeated Range ranges = 1;
+}
+
+message SetLogLevel {
+    optional int32 newLevel = 1 [(gogoproto.nullable) = false];
 }

@@ -862,6 +862,7 @@ func (s *Store) handleStoreHeartbeat() error {
 		ApplyingSnapCount:  applySnapCount,
 		IsBusy:             false,
 		BytesWritten:       0,
+		LogLevel:           int32(log.GetLogLevel()),
 	}
 
 	storeStorageGaugeVec.WithLabelValues(labelStoreStorageCapacity).Set(float64(stats.Total))
@@ -871,11 +872,18 @@ func (s *Store) handleStoreHeartbeat() error {
 	snapshortActionGaugeVec.WithLabelValues(labelSnapshotActionReceived).Set(float64(s.reveivingSnapCount))
 	snapshortActionGaugeVec.WithLabelValues(labelSnapshotActionApplying).Set(float64(applySnapCount))
 
-	_, err = s.pdClient.StoreHeartbeat(context.TODO(), req)
+	rsp, err := s.pdClient.StoreHeartbeat(context.TODO(), req)
 	if err != nil {
 		log.Errorf("heartbeat-store[%d]: handle store heartbeat failed, errors:\n %+v",
 			s.GetID(),
 			err)
+	}
+
+	if rsp.SetLogLevel != nil {
+		log.Infof("heartbeat-store[%d]: log level changed to: %d",
+			s.GetID(),
+			rsp.SetLogLevel.NewLevel)
+		log.SetLevel(log.Level(rsp.SetLogLevel.NewLevel))
 	}
 
 	return err

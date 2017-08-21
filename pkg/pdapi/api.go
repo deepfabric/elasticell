@@ -23,6 +23,12 @@ import (
 	"github.com/pkg/errors"
 )
 
+// SetLogLevel set log level for components
+type SetLogLevel struct {
+	Targets []uint64 `json:"targets"`
+	Level   int32    `json:"level"`
+}
+
 // StoreStatus store status
 type StoreStatus struct {
 	Stats           *pdpb.StoreStats `json:"stats"`
@@ -72,6 +78,7 @@ type Service interface {
 	ListStore() ([]*StoreInfo, error)
 	GetStore(id uint64) (*StoreInfo, error)
 	DeleteStore(id uint64, force bool) error
+	SetStoreLogLevel(set *SetLogLevel) error
 
 	ListCellInStore(storeID uint64) ([]*CellInfo, error)
 	ListCell() ([]*CellInfo, error)
@@ -90,6 +97,11 @@ type TransferLeader struct {
 
 func readTransferLeader(r io.ReadCloser) (*TransferLeader, error) {
 	value := &TransferLeader{}
+	return value, readJSON(r, value)
+}
+
+func readSetLogLevel(r io.ReadCloser) (*SetLogLevel, error) {
+	value := &SetLogLevel{}
 	return value, readJSON(r, value)
 }
 

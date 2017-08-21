@@ -33,6 +33,7 @@ func initAPIForStore(router *mux.Router, service Service, rd *render.Render) {
 	router.HandleFunc("/api/v1/stores/{id}", handler.get).Methods("GET")
 	router.HandleFunc("/api/v1/stores/{id}", handler.delete).Methods("DELETE")
 	router.HandleFunc("/api/v1/stores", handler.list).Methods("GET")
+	router.HandleFunc("/api/v1/stores/log", handler.setLogLevel).Methods("PUT")
 }
 
 func newStoreHandler(service Service, rd *render.Render) *storeHandler {
@@ -125,6 +126,26 @@ func (h *storeHandler) list(w http.ResponseWriter, r *http.Request) {
 	}
 
 	result.Value = stores
+
+	h.rd.JSON(w, http.StatusOK, result)
+}
+
+func (h *storeHandler) setLogLevel(w http.ResponseWriter, r *http.Request) {
+	result := &Result{
+		Code: CodeSuccess,
+	}
+
+	set, err := readSetLogLevel(r.Body)
+	if err != nil {
+		result.Code = CodeError
+		result.Error = err.Error()
+	} else {
+		err := h.service.SetStoreLogLevel(set)
+		if err != nil {
+			result.Code = CodeError
+			result.Error = err.Error()
+		}
+	}
 
 	h.rd.JSON(w, http.StatusOK, result)
 }

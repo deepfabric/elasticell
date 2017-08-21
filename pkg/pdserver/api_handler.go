@@ -160,6 +160,19 @@ func (s *Server) DeleteStore(id uint64, force bool) error {
 	return nil
 }
 
+func (s *Server) SetStoreLogLevel(set *pdapi.SetLogLevel) error {
+	cluster := s.GetCellCluster()
+	if nil == cluster {
+		return errNotBootstrapped
+	}
+
+	for _, id := range set.Targets {
+		cluster.coordinator.addStoreOperator(newSetLogLevelOperator(id, set.Level))
+	}
+
+	return nil
+}
+
 // TransferLeader transfer cell leader to the spec peer
 func (s *Server) TransferLeader(transfer *pdapi.TransferLeader) error {
 	cluster := s.GetCellCluster()

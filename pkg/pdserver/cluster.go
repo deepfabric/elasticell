@@ -270,7 +270,7 @@ func (c *CellCluster) doStoreHeartbeat(req *pdpb.StoreHeartbeatReq) (*pdpb.Store
 	store.Status.LastHeartbeatTS = time.Now()
 
 	c.cache.getStoreCache().updateStoreInfo(store)
-	return &pdpb.StoreHeartbeatRsp{}, nil
+	return c.coordinator.dispatchStore(c.cache.getStoreCache().getStore(storeID)), nil
 }
 
 func (c *CellCluster) doPutStore(store metapb.Store) error {
