@@ -426,7 +426,7 @@ func (ps *peerStorage) clearData() error {
 		}
 
 		return err
-	})
+	}, nil)
 
 	return err
 }
@@ -503,7 +503,7 @@ func (ps *peerStorage) deleteAllInRange(start, end []byte, job *util.Job) error 
 }
 
 func compactRaftLog(cellID uint64, state *mraft.RaftApplyState, compactIndex, compactTerm uint64) error {
-	log.Infof("raftstore-compact[cell-%d]: compact log entries to index, index=<%d>",
+	log.Debugf("raftstore-compact[cell-%d]: compact log entries to index, index=<%d>",
 		cellID,
 		compactIndex)
 	if compactIndex <= state.TruncatedState.Index {

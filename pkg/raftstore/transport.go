@@ -18,12 +18,12 @@ import (
 	"io"
 	"time"
 
+	"github.com/Workiva/go-datastructures/queue"
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
 	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
 	"github.com/deepfabric/elasticell/pkg/pd"
 	"github.com/deepfabric/elasticell/pkg/util"
-	"github.com/deepfabric/etcd/raft"
 	"github.com/deepfabric/etcd/raft/raftpb"
 	"github.com/fagongzi/goetty"
 	"github.com/pkg/errors"
@@ -37,7 +37,6 @@ var (
 const (
 	defaultConnectTimeout = time.Second * 5
 	defaultWriteIdle      = time.Second * 30
-	defaultChanSize       = 1024
 )
 
 type transport struct {
@@ -50,7 +49,7 @@ type transport struct {
 	getStoreAddrFun func(storeID uint64) (string, error)
 
 	conns map[string]goetty.IOSession
-	msgs  chan *mraft.RaftMessage
+	msgs  *queue.Queue
 
 	addrs   map[uint64]string
 	ipAddrs map[string][]uint64
@@ -59,20 +58,20 @@ type transport struct {
 }
 
 func newTransport(store *Store, client *pd.Client, handler func(interface{})) *transport {
-	addr := store.cfg.StoreAddr
-	if store.cfg.StoreAdvertiseAddr != "" {
-		addr = store.cfg.StoreAdvertiseAddr
+	addr := globalCfg.StoreAddr
+	if globalCfg.StoreAdvertiseAddr != "" {
+		addr = globalCfg.StoreAdvertiseAddr
 	}
 
 	t := &transport{
 		server:      goetty.NewServer(addr, decoder, encoder, goetty.NewUUIDV4IdGenerator()),
 		conns:       make(map[string]goetty.IOSession),
-		msgs:        make(chan *mraft.RaftMessage, defaultChanSize),
+		msgs:        &queue.Queue{},
 		addrs:       make(map[uint64]string),
 		handler:     handler,
 		client:      client,
 		store:       store,
-		readTimeout: time.Millisecond * time.Duration(store.cfg.Raft.BaseTick*store.cfg.Raft.ElectionTick),
+		readTimeout: time.Millisecond * time.Duration(globalCfg.Raft.BaseTick*globalCfg.Raft.ElectionTick),
 	}
 
 	t.getStoreAddrFun = t.getStoreAddr
@@ -86,7 +85,9 @@ func (t *transport) start() error {
 }
 
 func (t *transport) stop() {
+	t.msgs.Dispose()
 	t.server.Stop()
+	log.Infof("stopped: transfer stopped")
 }
 
 func (t *transport) doConnection(session goetty.IOSession) error {
@@ -94,7 +95,9 @@ func (t *transport) doConnection(session goetty.IOSession) error {
 
 	log.Infof("transport: %s connected", remoteIP)
 	for {
-		msg, err := session.ReadTimeout(t.readTimeout)
+		// TODO: resume ReadTimeout
+		// msg, err := session.ReadTimeout(t.readTimeout)
+		msg, err := session.Read()
 		if err != nil {
 			if err == io.EOF {
 				log.Infof("transport: closed by %s", remoteIP)
@@ -117,40 +120,43 @@ func (t *transport) send(msg *mraft.RaftMessage) {
 		return
 	}
 
-	t.msgs <- msg
+	t.msgs.Put(msg)
+	queueGauge.WithLabelValues(labelQueueMsgs).Set(float64(t.msgs.Len()))
 }
 
 func (t *transport) readyToSend(ctx context.Context) {
 	for {
-		select {
-		case <-ctx.Done():
-			close(t.msgs)
+		msgs, err := t.msgs.Get(globalCfg.RaftMessageSendBatchLimit)
+		if err != nil {
+			log.Infof("stop: raft transfer send worker stopped")
 			return
-		case msg := <-t.msgs:
-			if msg != nil {
-				err := t.doSend(msg)
-				if err != nil {
-					log.Errorf("raftstore[cell-%d]: send msg failure, from_peer=<%d> to_peer=<%d>, errors:\n%+v",
-						msg.CellID,
-						msg.FromPeer.ID,
-						msg.ToPeer.ID,
-						err)
+		}
 
-					storeID := fmt.Sprintf("%d", msg.ToPeer.StoreID)
+		for _, m := range msgs {
+			msg := m.(*mraft.RaftMessage)
+			err := t.doSend(msg)
+			if err != nil {
+				log.Errorf("raftstore[cell-%d]: send msg failure, from_peer=<%d> to_peer=<%d>, errors:\n%s",
+					msg.CellID,
+					msg.FromPeer.ID,
+					msg.ToPeer.ID,
+					err)
 
-					pr := t.store.getPeerReplicate(msg.CellID)
-					if pr != nil {
-						raftFlowFailureReportCounterVec.WithLabelValues(labelRaftFlowFailureReportUnreachable, storeID).Inc()
+				storeID := fmt.Sprintf("%d", msg.ToPeer.StoreID)
 
-						pr.rn.ReportUnreachable(msg.ToPeer.ID)
-						if msg.Message.Type == raftpb.MsgSnap {
-							pr.rn.ReportSnapshot(msg.ToPeer.ID, raft.SnapshotFailure)
-							raftFlowFailureReportCounterVec.WithLabelValues(labelRaftFlowFailureReportSnapshot, storeID).Inc()
-						}
+				pr := t.store.getPeerReplicate(msg.CellID)
+				if pr != nil {
+					raftFlowFailureReportCounterVec.WithLabelValues(labelRaftFlowFailureReportUnreachable, storeID).Inc()
+					if msg.Message.Type == raftpb.MsgSnap {
+						raftFlowFailureReportCounterVec.WithLabelValues(labelRaftFlowFailureReportSnapshot, storeID).Inc()
 					}
+
+					pr.reportUnreachable(msg.Message)
 				}
 			}
 		}
+
+		queueGauge.WithLabelValues(labelQueueMsgs).Set(float64(t.msgs.Len()))
 	}
 }
 
@@ -284,13 +290,9 @@ func (t *transport) checkConnect(addr string, conn goetty.IOSession) bool {
 		return true
 	}
 
-	if conn.IsConnected() {
-		return true
-	}
-
 	ok, err := conn.Connect()
 	if err != nil {
-		log.Debugf("transport: connect to store failure, target=<%s> errors:\n %+v",
+		log.Errorf("transport: connect to store failure, target=<%s> errors:\n %+v",
 			addr,
 			err)
 		return false

@@ -27,21 +27,23 @@ import (
 
 // Server a server provide kv cache based on redis protocol
 type Server struct {
-	cfg *Cfg
-
 	redisServer *RedisServer
 	nodeServer  *node.Node
 
 	stopOnce sync.Once
 	stopWG   sync.WaitGroup
 	stopC    chan interface{}
+
+	runner *util.Runner
 }
 
 // NewServer create a server use spec cfg
 func NewServer(cfg *Cfg) *Server {
+	globalCfg = cfg
+
 	s := new(Server)
-	s.cfg = cfg
 	s.stopC = make(chan interface{})
+	s.runner = util.NewRunner()
 
 	s.initNode()
 	s.initRedis()
@@ -51,7 +53,7 @@ func NewServer(cfg *Cfg) *Server {
 
 // Start start the server
 func (s *Server) Start() {
-	util.InitMetric(s.cfg.Metric)
+	util.InitMetric(s.runner, globalCfg.Metric)
 
 	go s.listenToStop()
 
@@ -74,6 +76,8 @@ func (s *Server) listenToStop() {
 func (s *Server) doStop() {
 	s.stopOnce.Do(func() {
 		defer s.stopWG.Done()
+
+		s.runner.Stop()
 		s.stopNode()
 		s.stopRedis()
 	})
@@ -85,7 +89,7 @@ func (s *Server) startRedis(store *raftstore.Store) {
 		err := s.redisServer.Start()
 		if err != nil {
 			log.Fatalf("bootstrap: failure to start redis server, cfg=<%v> errors:\n %+v",
-				s.cfg,
+				globalCfg,
 				err)
 			return
 		}
@@ -99,7 +103,7 @@ func (s *Server) stopRedis() {
 		err := s.redisServer.Stop()
 		if err != nil {
 			log.Errorf("stop: stop redis server failure, cfg=<%v> errors:\n %+v",
-				s.cfg,
+				globalCfg,
 				err)
 		}
 	}
@@ -127,11 +131,11 @@ func (s *Server) stopNode() {
 
 func (s *Server) initRedis() {
 	rs := new(RedisServer)
-	rs.s = goetty.NewServerSize(s.cfg.Redis.Listen,
+	rs.s = goetty.NewServerSize(globalCfg.Redis.Listen,
 		redis.Decoder,
 		redis.Encoder,
-		s.cfg.Redis.ReadBufferSize,
-		s.cfg.Redis.WriteBufferSize,
+		globalCfg.Redis.ReadBufferSize,
+		globalCfg.Redis.WriteBufferSize,
 		goetty.NewInt64IDGenerator())
 
 	s.redisServer = rs
@@ -145,7 +149,7 @@ func (s *Server) initNode() {
 		return
 	}
 
-	n, err := node.NewNode(s.cfg.Redis.Listen, s.cfg.Node, driver)
+	n, err := node.NewNode(globalCfg.Redis.Listen, globalCfg.Node, driver)
 	if err != nil {
 		log.Fatalf("bootstrap: create node failure, errors:\n %+v", err)
 		return
@@ -154,5 +158,5 @@ func (s *Server) initNode() {
 }
 
 func (s *Server) initDriver() (storage.Driver, error) {
-	return storage.NewNemoDriver(s.cfg.Node.RaftStore.StoreDataPath)
+	return storage.NewNemoDriver(globalCfg.Node.RaftStore.StoreDataPath)
 }

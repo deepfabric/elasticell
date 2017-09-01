@@ -113,7 +113,7 @@ func (ps *peerStorage) doAppendSnapshot(ctx *tempRaftContext, snap raftpb.Snapsh
 		}
 	}
 
-	err := ps.updatePeerState(ps.getCell(), mraft.Applying, ctx.wb)
+	err := ps.updatePeerState(snapData.Cell, mraft.Applying, ctx.wb)
 	if err != nil {
 		log.Errorf("raftstore[cell-%d]: write peer state failed, errors:\n %+v",
 			ps.getCell().ID,
@@ -149,13 +149,13 @@ func (ps *peerStorage) doAppendSnapshot(ctx *tempRaftContext, snap raftpb.Snapsh
 func (ps *peerStorage) doAppendEntries(ctx *tempRaftContext, entries []raftpb.Entry) error {
 	c := len(entries)
 
-	log.Debugf("raftstore[cell-%d]: append entries, count=<%d>",
-		ps.getCell().ID,
-		c)
-
 	if c == 0 {
 		return nil
 	}
+
+	log.Debugf("raftstore[cell-%d]: append entries, count=<%d>",
+		ps.getCell().ID,
+		c)
 
 	prevLastIndex := ctx.raftState.LastIndex
 	lastIndex := entries[c-1].Index
@@ -260,10 +260,10 @@ func (pr *PeerReplicate) applyCommittedEntries(rd *raft.Ready) {
 
 		if len(rd.CommittedEntries) > 0 {
 			pr.ps.lastReadyIndex = rd.CommittedEntries[len(rd.CommittedEntries)-1].Index
-			err := pr.startApplyCommittedEntriesJob(pr.ps.getCell().ID, pr.getCurrentTerm(), rd.CommittedEntries)
+			err := pr.startApplyCommittedEntriesJob(pr.cellID, pr.getCurrentTerm(), rd.CommittedEntries)
 			if err != nil {
 				log.Fatalf("raftstore[cell-%d]: add apply committed entries job failed, errors:\n %+v",
-					pr.ps.getCell().ID,
+					pr.cellID,
 					err)
 			}
 		}
@@ -303,11 +303,11 @@ func (pr *PeerReplicate) doSplitCheck(epoch metapb.CellEpoch, startKey, endKey [
 	err := pr.store.getDataEngine().ScanSize(startKey, endKey, func(key []byte, keySize uint64) (bool, error) {
 		size += keySize
 
-		if len(splitKey) == 0 && size >= pr.store.cfg.CellSplitSize {
+		if len(splitKey) == 0 && size >= globalCfg.CellSplitSize {
 			splitKey = key
 		}
 
-		if size > pr.store.cfg.CellMaxSize {
+		if size > globalCfg.CellMaxSize {
 			return false, nil
 		}
 
@@ -321,18 +321,18 @@ func (pr *PeerReplicate) doSplitCheck(epoch metapb.CellEpoch, startKey, endKey [
 		return err
 	}
 
-	if size < pr.store.cfg.CellSplitSize {
+	if size < globalCfg.CellSplitSize {
 		log.Debugf("raftstore-split[cell-%d]: no need to split, size=<%d> split=<%d> start=<%v> end=<%v>",
 			pr.cellID,
 			size,
-			pr.store.cfg.CellSplitSize,
+			globalCfg.CellSplitSize,
 			startKey,
 			endKey)
 		pr.sizeDiffHint = int64(size)
 		return nil
 	}
 
-	log.Infof("raftstore-split[cell-%d]: try to split, size=<%d> splitKey=<%+v>",
+	log.Debugf("raftstore-split[cell-%d]: try to split, size=<%d> splitKey=<%d>",
 		pr.cellID,
 		size,
 		splitKey)
@@ -368,7 +368,7 @@ func (pr *PeerReplicate) doAskSplit(cell metapb.Cell, peer metapb.Peer, splitKey
 	adminReq.Type = raftcmdpb.Split
 	adminReq.Body = util.MustMarshal(splitReq)
 
-	pr.store.sendAdminRequest(cell, peer, adminReq)
+	pr.onAdminRequest(adminReq)
 	return nil
 }
 
@@ -529,7 +529,7 @@ func (s *Store) doApplySplit(cellID uint64, result *splitResult) {
 		}
 
 		if succ {
-			newPR.raftReady()
+			newPR.onRaftTick(nil)
 		}
 	}
 
@@ -553,7 +553,7 @@ func (s *Store) doApplySplit(cellID uint64, result *splitResult) {
 	s.keyRanges.Update(left)
 	s.keyRanges.Update(right)
 
-	newPR.sizeDiffHint = s.cfg.CellCheckSizeDiff
+	newPR.sizeDiffHint = globalCfg.CellCheckSizeDiff
 	newPR.startRegistrationJob()
 	s.replicatesMap.put(newPR.cellID, newPR)
 
@@ -600,7 +600,8 @@ func (pr *PeerReplicate) doApplyReads(rd *raft.Ready) {
 		}
 
 		if len(rd.ReadStates) > 0 {
-			pr.proposeNextBatch()
+			// If the read index is ready, we can process next batch
+			pr.nextBatch()
 		}
 	} else {
 		for _ = range rd.ReadStates {
@@ -628,6 +629,7 @@ func (pr *PeerReplicate) doApplyReads(rd *raft.Ready) {
 
 			pr.pendingReads.resetReadyCnt()
 
+			// we are not leader now, so all writes in the batch is actually stale
 			for i := 0; i < pr.batch.size(); i++ {
 				cmd := pr.batch.pop()
 				resp := errorStaleCMDResp(cmd.getUUID(), pr.getCurrentTerm())
@@ -636,8 +638,7 @@ func (pr *PeerReplicate) doApplyReads(rd *raft.Ready) {
 					cmd)
 				cmd.resp(resp)
 			}
-
-			pr.proposeNextBatch()
+			pr.resetBatch()
 		}
 	}
 }
@@ -844,12 +845,20 @@ func (ps *peerStorage) Snapshot() (raftpb.Snapshot, error) {
 		ps.getCell().Epoch)
 	ps.snapTriedCnt++
 
-	job, err := ps.store.addSnapJob(ps.doGenerateSnapshotJob)
+	_, err := ps.store.addSnapJob(ps.doGenerateSnapshotJob, ps.setGenSnapJob)
 	if err != nil {
 		log.Fatalf("raftstore[cell-%d]: add generate job failed, errors:\n %+v",
 			ps.getCell().ID,
 			err)
 	}
-	ps.genSnapJob = job
+
 	return raftpb.Snapshot{}, raft.ErrSnapshotTemporarilyUnavailable
+}
+
+func (ps *peerStorage) setGenSnapJob(job *util.Job) {
+	ps.genSnapJob = job
+}
+
+func (ps *peerStorage) setApplySnapJob(job *util.Job) {
+	ps.applySnapJob = job
 }

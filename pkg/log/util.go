@@ -15,10 +15,11 @@ package log
 
 import (
 	"flag"
+	"fmt"
+	"strings"
 )
 
 var (
-	crashLog = flag.String("crash", "./crash.log", "The crash log file.")
 	logFile  = flag.String("log-file", "", "The external log file. Default log to console.")
 	logLevel = flag.String("log-level", "info", "The log level, default is info")
 )
@@ -35,12 +36,12 @@ func InitLog() {
 		flag.Parse()
 	}
 
-	//CrashLog(*crashLog)
 	SetHighlighting(false)
 	SetLevelByString(*logLevel)
 	if "" != *logFile {
 		SetRotateByHour()
 		SetOutputByName(*logFile)
+		CrashLog(fmt.Sprintf("%s_crash.log", strings.SplitN(*logFile, ".", 2)[0]))
 	}
 
 	if !DebugEnabled() {

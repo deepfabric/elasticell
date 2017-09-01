@@ -15,11 +15,11 @@ package util
 
 import (
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
-	"fmt"
-
+	"github.com/Workiva/go-datastructures/queue"
 	"golang.org/x/net/context"
 )
 
@@ -28,9 +28,9 @@ var (
 )
 
 var (
-	defaultWaitStoppedTimeout        = time.Minute
-	defaultQueueName                 = "__default__"
-	defaultQueueCap           uint64 = 64
+	defaultWaitStoppedTimeout       = time.Minute
+	defaultQueueName                = "__default__"
+	batch                     int64 = 64
 )
 
 type state int
@@ -67,16 +67,18 @@ const (
 // Job is do for something with state
 type Job struct {
 	sync.RWMutex
-	worker string
+
+	desc   string
 	fun    func() error
 	state  JobState
 	result interface{}
 }
 
-func newJob(fun func() error) *Job {
+func newJob(desc string, fun func() error) *Job {
 	return &Job{
 		fun:   fun,
 		state: Pending,
+		desc:  desc,
 	}
 }
 
@@ -158,7 +160,6 @@ func (job *Job) isSpecState(spec JobState) bool {
 
 func (job *Job) setState(state JobState) {
 	job.state = state
-	job.Unlock()
 }
 
 func (job *Job) getState() JobState {
@@ -178,33 +179,28 @@ type Runner struct {
 	lastID     uint64
 	cancels    map[uint64]context.CancelFunc
 	state      state
-	namedQueue map[string]chan *Job
-}
-
-// NewRunnerSize returns a task runner use default queue cap
-func NewRunnerSize(cap uint64) *Runner {
-	t := &Runner{
-		stopC:      make(chan struct{}),
-		state:      running,
-		namedQueue: make(map[string]chan *Job, 2),
-		cancels:    make(map[uint64]context.CancelFunc),
-	}
-
-	t.AddNamedWorker(defaultQueueName, cap)
-	return t
+	namedQueue map[string]*queue.Queue
 }
 
 // NewRunner returns a task runner
 func NewRunner() *Runner {
-	return NewRunnerSize(defaultQueueCap)
+	t := &Runner{
+		stopC:      make(chan struct{}),
+		state:      running,
+		namedQueue: make(map[string]*queue.Queue),
+		cancels:    make(map[uint64]context.CancelFunc),
+	}
+
+	t.AddNamedWorker(defaultQueueName)
+	return t
 }
 
 // AddNamedWorker add a named worker, the named worker has uniq queue, so jobs are linear execution
-func (s *Runner) AddNamedWorker(name string, cap uint64) (uint64, error) {
+func (s *Runner) AddNamedWorker(name string) (uint64, error) {
 	s.Lock()
 	q, ok := s.namedQueue[name]
 	if !ok {
-		q = make(chan *Job, cap)
+		q = &queue.Queue{}
 		s.namedQueue[name] = q
 	}
 	s.Unlock()
@@ -217,25 +213,26 @@ func (s *Runner) IsNamedWorkerBusy(worker string) bool {
 	s.RLock()
 	defer s.RUnlock()
 
-	return len(s.getNamedQueue(worker)) > 0
+	return s.getNamedQueue(worker).Len() > 0
 }
 
-func (s *Runner) startWorker(name string, q chan *Job) (uint64, error) {
+func (s *Runner) startWorker(name string, q *queue.Queue) (uint64, error) {
 	return s.RunCancelableTask(func(ctx context.Context) {
 		for {
-			select {
-			case <-ctx.Done():
+			jobs, err := q.Get(batch)
+			if err != nil {
 				return
-			case job := <-q:
-				if job == nil {
-					return
-				}
+			}
+
+			for _, j := range jobs {
+				job := j.(*Job)
 
 				job.Lock()
 
 				switch job.state {
 				case Pending:
 					job.setState(Running)
+					job.Unlock()
 					err := job.fun()
 					job.Lock()
 					if err != nil {
@@ -254,32 +251,46 @@ func (s *Runner) startWorker(name string, q chan *Job) (uint64, error) {
 				case Cancelling:
 					job.setState(Cancelled)
 				}
+
+				job.Unlock()
 			}
 		}
 	})
 }
 
 // RunJob run a job
-func (s *Runner) RunJob(task func() error) (*Job, error) {
-	return s.RunJobWithNamedWorker(defaultQueueName, task)
+func (s *Runner) RunJob(desc string, task func() error) (*Job, error) {
+	return s.RunJobWithNamedWorker(desc, defaultQueueName, task)
 }
 
 // RunJobWithNamedWorker run a job in a named worker
-func (s *Runner) RunJobWithNamedWorker(worker string, task func() error) (*Job, error) {
+func (s *Runner) RunJobWithNamedWorker(desc, worker string, task func() error) (*Job, error) {
+	return s.RunJobWithNamedWorkerWithCB(desc, worker, task, nil)
+}
+
+// RunJobWithNamedWorkerWithCB run a job in a named worker
+func (s *Runner) RunJobWithNamedWorkerWithCB(desc, worker string, task func() error, cb func(*Job)) (*Job, error) {
 	s.Lock()
-	defer s.Unlock()
 
 	if s.state != running {
+		s.Unlock()
 		return nil, errUnavailable
 	}
 
-	job := newJob(task)
-	c := s.getNamedQueue(worker)
-	if c == nil {
+	job := newJob(desc, task)
+	q := s.getNamedQueue(worker)
+	if q == nil {
+		s.Unlock()
 		return nil, fmt.Errorf("named worker %s is not exists", worker)
 	}
 
-	s.getNamedQueue(worker) <- job
+	if cb != nil {
+		cb(job)
+	}
+
+	q.Put(job)
+
+	s.Unlock()
 	return job, nil
 }
 
@@ -312,6 +323,9 @@ func (s *Runner) RunCancelableTask(task func(context.Context)) (uint64, error) {
 	s.stop.Add(1)
 
 	go func() {
+		if err := recover(); err != nil {
+			panic(err)
+		}
 		defer s.stop.Done()
 		task(ctx)
 	}()
@@ -376,6 +390,10 @@ func (s *Runner) Stop() error {
 		cancel()
 	}
 
+	for _, q := range s.namedQueue {
+		q.Dispose()
+	}
+
 	go func() {
 		s.stop.Wait()
 		s.stopC <- struct{}{}
@@ -387,24 +405,14 @@ func (s *Runner) Stop() error {
 	case <-s.stopC:
 	}
 
-	for _, ch := range s.namedQueue {
-		close(ch)
-	}
-
 	s.state = stopped
 	return nil
 }
 
-func (s *Runner) getDefaultQueue() chan *Job {
+func (s *Runner) getDefaultQueue() *queue.Queue {
 	return s.getNamedQueue(defaultQueueName)
 }
 
-func (s *Runner) getNamedQueue(name string) chan *Job {
+func (s *Runner) getNamedQueue(name string) *queue.Queue {
 	return s.namedQueue[name]
-}
-
-func (s *Runner) recover() {
-	if r := recover(); r != nil {
-		panic(r)
-	}
 }

@@ -95,7 +95,8 @@ On each node, use `/apps/deepfabric` as base folder, and create configuration fi
     "redis": {
         "listen": "192.168.1.201:6379",
         "readBufferSize": 512,
-        "writeBufferSize": 512
+        "writeBufferSize": 512,
+        "writeBatchLimit": 64
     },
 
     "node": {
@@ -128,6 +129,9 @@ On each node, use `/apps/deepfabric` as base folder, and create configuration fi
             "raftLogGCCountLimit": 49152,
             "raftLogGCSizeLimit": 50331648,
             "raftProposeBatchLimit": 256,
+            "raftMessageSendBatchLimit": 64,
+            "raftMessageProcessBatchLimit": 64,
+            "raftMessageWorkerCount": 16,
             "raftLogGCThreshold": 50,
             "cellCheckSizeDiff": 8388608,
             "cellMaxSize": 83886080,
@@ -160,7 +164,8 @@ On each node, use `/apps/deepfabric` as base folder, and create configuration fi
     "redis": {
         "listen": "192.168.1.202:6379",
         "readBufferSize": 512,
-        "writeBufferSize": 512
+        "writeBufferSize": 512,
+        "writeBatchLimit": 64
     },
 
     "node": {
@@ -193,6 +198,9 @@ On each node, use `/apps/deepfabric` as base folder, and create configuration fi
             "raftLogGCCountLimit": 49152,
             "raftLogGCSizeLimit": 50331648,
             "raftProposeBatchLimit": 256,
+            "raftMessageSendBatchLimit": 64,
+            "raftMessageProcessBatchLimit": 64,
+            "raftMessageWorkerCount": 16,
             "raftLogGCThreshold": 50,
             "cellCheckSizeDiff": 8388608,
             "cellMaxSize": 83886080,
@@ -225,7 +233,8 @@ On each node, use `/apps/deepfabric` as base folder, and create configuration fi
     "redis": {
         "listen": "192.168.1.203:6379",
         "readBufferSize": 512,
-        "writeBufferSize": 512
+        "writeBufferSize": 512,
+        "writeBatchLimit": 64
     },
 
     "node": {
@@ -258,6 +267,9 @@ On each node, use `/apps/deepfabric` as base folder, and create configuration fi
             "raftLogGCCountLimit": 49152,
             "raftLogGCSizeLimit": 50331648,
             "raftProposeBatchLimit": 256,
+            "raftMessageSendBatchLimit": 64,
+            "raftMessageProcessBatchLimit": 64,
+            "raftMessageWorkerCount": 16,
             "raftLogGCThreshold": 50,
             "cellCheckSizeDiff": 8388608,
             "cellMaxSize": 83886080,

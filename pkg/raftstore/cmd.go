@@ -227,10 +227,10 @@ func (pr *PeerReplicate) execReadLocal(cmd *cmd) {
 	pr.metrics.propose.readLocal++
 }
 
-func (pr *PeerReplicate) execReadIndex(meta *proposalMeta) {
+func (pr *PeerReplicate) execReadIndex(meta *proposalMeta) bool {
 	if !pr.isLeader() {
 		meta.cmd.respNotLeader(pr.cellID, meta.term, nil)
-		return
+		return true
 	}
 
 	lastPendingReadCount := pr.pendingReadCount()
@@ -248,10 +248,11 @@ func (pr *PeerReplicate) execReadIndex(meta *proposalMeta) {
 		readyReadCount == lastReadyReadCount {
 		// The message gets dropped silently, can't be handled anymore.
 		meta.cmd.respNotLeader(pr.cellID, meta.term, nil)
-		return
+		return true
 	}
 
 	pr.pendingReads.push(meta.cmd)
-	pr.raftReady()
 	pr.metrics.propose.readIndex++
+
+	return false
 }

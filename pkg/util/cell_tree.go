@@ -66,6 +66,7 @@ func (t *CellTree) length() int {
 // It finds and deletes all the overlapped cells first, and then
 // insert the cell.
 func (t *CellTree) Update(cell metapb.Cell) {
+	t.Lock()
 	item := &CellItem{cell: cell}
 
 	result := t.find(cell)
@@ -75,7 +76,6 @@ func (t *CellTree) Update(cell metapb.Cell) {
 
 	var overlaps []*CellItem
 
-	t.Lock()
 	// between [cell, first], so is iterator all.min >= cell.min' cell
 	// until all.min > cell.max
 	t.tree.DescendLessOrEqual(result, func(i btree.Item) bool {

@@ -1,6 +1,7 @@
 package raftstore
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
@@ -25,22 +26,25 @@ func (s *transportTestSuite) SetUpSuite(c *C) {
 	s.toID = 2
 
 	s1 := new(Store)
-	s1.cfg = newTestStoreCfg(s.fromID, s.fromAddr)
+	s1.id = s.fromID
+	globalCfg = newTestStoreCfg(s.fromAddr)
 	s1.runner = util.NewRunner()
 	s.from = newTransport(s1, nil, nil)
 	s.from.getStoreAddrFun = s.parse
+	go s.from.start()
+	<-s.from.server.Started()
 
 	s2 := new(Store)
-	s2.cfg = newTestStoreCfg(s.toID, s.toAddr)
+	s2.id = s.toID
+	globalCfg = newTestStoreCfg(s.toAddr)
 	s2.runner = util.NewRunner()
 	s.to = newTransport(s2, nil, nil)
 	s.to.getStoreAddrFun = s.parse
 
-	go s.from.start()
 	go s.to.start()
-
-	<-s.from.server.Started()
 	<-s.to.server.Started()
+
+	fmt.Println("starttyyttttttttttttttttttttttttttttt")
 }
 
 func (s *transportTestSuite) TearDownSuite(c *C) {
@@ -57,6 +61,7 @@ func (s *transportTestSuite) TestSend(c *C) {
 	s.from.send(msg)
 
 	s.to.handler = func(msg interface{}) {
+		fmt.Println("iiiiiiiiiiiiiiiiiiiiiiiiiiiii")
 		ch <- msg
 	}
 
@@ -79,7 +84,7 @@ func (s *transportTestSuite) parse(storeID uint64) (string, error) {
 	return "", nil
 }
 
-func newTestStoreCfg(id uint64, addr string) *Cfg {
+func newTestStoreCfg(addr string) *Cfg {
 	c := new(Cfg)
 	c.StoreAddr = addr
 	c.StoreAdvertiseAddr = c.StoreAddr
@@ -90,5 +95,6 @@ func newTestStoreCfg(id uint64, addr string) *Cfg {
 	c.Raft.MaxSizePerMsg = 1024 * 1024
 	c.Raft.MaxSizePerEntry = 8 * 1024 * 1024
 	c.Raft.MaxInflightMsgs = 256
+	c.RaftMessageSendBatchLimit = 10
 	return c
 }

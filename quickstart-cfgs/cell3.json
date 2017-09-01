@@ -2,7 +2,8 @@
     "redis": {
         "listen": ":6373",
         "readBufferSize": 512,
-        "writeBufferSize": 512
+        "writeBufferSize": 512,
+        "writeBatchLimit": 64
     },
 
     "node": {
@@ -35,6 +36,9 @@
             "raftLogGCCountLimit": 49152,
             "raftLogGCSizeLimit": 50331648,
             "raftProposeBatchLimit": 256,
+            "raftMessageSendBatchLimit": 64,
+            "raftMessageProcessBatchLimit": 64,
+            "raftMessageWorkerCount": 16,
             "raftLogGCThreshold": 50,
             "cellCheckSizeDiff": 8388608,
             "cellMaxSize": 83886080,

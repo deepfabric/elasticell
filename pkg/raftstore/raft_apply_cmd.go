@@ -111,11 +111,13 @@ func (d *applyDelegate) doApplyRaftCMD(req *raftcmdpb.RaftCMDRequest, term uint6
 			observeRequestStored(cmd)
 		}
 
-		buildTerm(d.term, resp)
-		buildUUID(req.Header.UUID, resp)
+		if resp != nil {
+			buildTerm(d.term, resp)
+			buildUUID(req.Header.UUID, resp)
 
-		// resp client
-		cmd.resp(resp)
+			// resp client
+			cmd.resp(resp)
+		}
 	}
 
 	return ctx, result
@@ -170,7 +172,7 @@ func (d *applyDelegate) doExecChangePeer(ctx *execContext) (*raftcmdpb.RaftCMDRe
 		// Remove ourself, we will destroy all cell data later.
 		// So we need not to apply following logs.
 		if d.peerID == req.Peer.ID {
-			d.pendingRemove = true
+			d.setPendingRemove()
 		}
 
 		removePeer(&d.cell, req.Peer.StoreID)
@@ -183,7 +185,7 @@ func (d *applyDelegate) doExecChangePeer(ctx *execContext) (*raftcmdpb.RaftCMDRe
 
 	state := mraft.Normal
 
-	if d.pendingRemove {
+	if d.isPendingRemove() {
 		state = mraft.Tombstone
 	}
 
@@ -250,7 +252,7 @@ func (d *applyDelegate) doExecSplit(ctx *execContext) (*raftcmdpb.RaftCMDRespons
 		return nil, nil, nil
 	}
 
-	log.Infof("raftstore-apply[cell-%d]: split, splitKey=<%+v> cell=<%+v>",
+	log.Infof("raftstore-apply[cell-%d]: split, splitKey=<%d> cell=<%+v>",
 		d.cell.ID,
 		req.SplitKey,
 		d.cell)
@@ -356,6 +358,10 @@ func (d *applyDelegate) execWriteRequest(ctx *execContext) *raftcmdpb.RaftCMDRes
 	resp := new(raftcmdpb.RaftCMDResponse)
 
 	for _, req := range ctx.req.Requests {
+		log.Debugf("req: apply raft log. cell=<%d>, uuid=<%d>",
+			d.cell.ID,
+			req.UUID)
+
 		if h, ok := d.store.redisWriteHandles[req.Type]; ok {
 			resp.Responses = append(resp.Responses, h(ctx, req))
 		}

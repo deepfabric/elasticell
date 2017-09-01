@@ -14,48 +14,36 @@
 package server
 
 import (
-	"sync/atomic"
-
+	"github.com/Workiva/go-datastructures/queue"
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
 	"github.com/deepfabric/elasticell/pkg/redis"
 	"github.com/deepfabric/elasticell/pkg/util"
 	"github.com/fagongzi/goetty"
 	gedis "github.com/fagongzi/goetty/protocol/redis"
-	"golang.org/x/net/context"
 )
 
 type session struct {
-	ctx       context.Context
-	cancel    context.CancelFunc
-	resps     chan *raftcmdpb.Response
-	conn      goetty.IOSession
-	fromProxy bool
+	closed bool
+	resps  *queue.Queue
 
-	closed int32
+	conn goetty.IOSession
+	addr string
+
+	fromProxy bool
 }
 
 func newSession(conn goetty.IOSession) *session {
-	ctx, cancel := context.WithCancel(context.TODO())
-
 	return &session{
-		ctx:    ctx,
-		cancel: cancel,
-		resps:  make(chan *raftcmdpb.Response, 32),
-		conn:   conn,
+		resps: &queue.Queue{},
+		conn:  conn,
+		addr:  conn.RemoteAddr(),
 	}
 }
 
-func (s *session) isClosed() bool {
-	return atomic.LoadInt32(&s.closed) == 1
-}
-
 func (s *session) close() {
-	atomic.StoreInt32(&s.closed, 1)
-	s.cancel()
-	close(s.resps)
-
-	log.Debugf("redis-[%s]: closed", s.conn.RemoteAddr())
+	s.resps.Dispose()
+	log.Debugf("redis-[%s]: closed", s.addr)
 }
 
 func (s *session) setFromProxy() {
@@ -73,31 +61,32 @@ func (s *session) onResp(header *raftcmdpb.RaftResponseHeader, resp *raftcmdpb.R
 		resp.ErrorResult = util.MustMarshal(header)
 	}
 
-	s.resps <- resp
+	if s != nil {
+		s.resps.Put(resp)
+	}
 }
 
 func (s *session) writeLoop() {
 	for {
-		select {
-		case <-s.ctx.Done():
+		resps, err := s.resps.Get(globalCfg.Redis.WriteBatchLimit)
+		if nil != err {
 			return
-		case resp := <-s.resps:
-			if resp != nil {
-				s.doResp(resp)
-			}
 		}
+
+		buf := s.conn.OutBuf()
+		for _, resp := range resps {
+			s.doResp(resp.(*raftcmdpb.Response), buf)
+		}
+		s.conn.WriteOutBuf()
 	}
 }
 
-func (s *session) doResp(resp *raftcmdpb.Response) {
-	buf := s.conn.OutBuf()
-
+func (s *session) doResp(resp *raftcmdpb.Response, buf *goetty.ByteBuf) {
 	if s.fromProxy {
 		data := util.MustMarshal(resp)
 		buf.WriteByte(redis.ProxyBegin)
 		buf.WriteInt(len(data))
 		buf.Write(data)
-		s.conn.WriteOutBuf()
 		return
 	}
 
@@ -134,6 +123,4 @@ func (s *session) doResp(resp *raftcmdpb.Response) {
 	if resp.StatusResult != nil {
 		gedis.WriteStatus(resp.StatusResult, buf)
 	}
-
-	s.conn.WriteOutBuf()
 }

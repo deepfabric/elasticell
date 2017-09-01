@@ -44,6 +44,8 @@ const (
 	proposeChange         = requestPolicy(4)
 
 	transferLeaderAllowLogLag = 10
+
+	eventBatch = 1024
 )
 
 type proposalMeta struct {
@@ -52,90 +54,225 @@ type proposalMeta struct {
 }
 
 func (pr *PeerReplicate) onRaftTick(arg interface{}) {
-	if pr.isStopped() {
+	err := pr.ticks.Put(emptyStruct)
+	if err != nil {
 		log.Infof("raftstore[cell-%d]: raft tick stopped",
 			pr.ps.getCell().ID)
 		return
 	}
 
-	pr.tickC <- emptyStruct
-	util.DefaultTimeoutWheel().Schedule(pr.store.cfg.getRaftBaseTickDuration(), pr.onRaftTick, nil)
+	queueGauge.WithLabelValues(labelQueueTick).Set(float64(pr.ticks.Len()))
+	util.DefaultTimeoutWheel().Schedule(globalCfg.getRaftBaseTickDuration(), pr.onRaftTick, nil)
+
+	pr.addEvent()
 }
 
-func (pr *PeerReplicate) onRaftLoop(arg interface{}) {
-	if pr.isStopped() {
-		log.Infof("raftstore[cell-%d]: raft loop stopped",
-			pr.ps.getCell().ID)
-		return
-	}
-
-	pr.raftReady()
-	util.DefaultTimeoutWheel().Schedule(time.Millisecond*50, pr.onRaftLoop, nil)
-}
-
-func (pr *PeerReplicate) raftReady() {
-	pr.loopC <- emptyStruct
+func (pr *PeerReplicate) addEvent() {
+	pr.events.Put(emptyStruct)
 }
 
 func (pr *PeerReplicate) readyToServeRaft(ctx context.Context) {
 	pr.onRaftTick(nil)
-	pr.onRaftLoop(nil)
 
 	for {
-		select {
-		case <-ctx.Done():
-			pr.setStop()
-
+		_, err := pr.events.Get(eventBatch)
+		if err != nil {
 			pr.metrics.flush()
 
-			close(pr.tickC)
-			close(pr.loopC)
-			close(pr.applyResultC)
-			close(pr.stepC)
-			close(pr.proposeC)
-			close(pr.reqCtxC)
+			pr.ticks.Dispose()
+			pr.steps.Dispose()
+			pr.reports.Dispose()
+			pr.applyResults.Dispose()
+			pr.proposes.Dispose()
+
+			// resp all stale requests
+			requests := pr.requests.Dispose()
+			for _, r := range requests {
+				req := r.(*reqCtx)
+				if req.cb != nil {
+					pr.store.respStoreNotMatch(errStoreNotMatch, req.req, req.cb)
+				}
+			}
 
 			log.Infof("raftstore[cell-%d]: handle serve raft stopped",
 				pr.cellID)
 			return
-		case <-pr.tickC:
-			pr.rn.Tick()
-			pr.metrics.flush()
-		case msg := <-pr.stepC:
-			if nil != msg {
-				if pr.isLeader() && msg.From != 0 {
-					pr.peerHeartbeatsMap.put(msg.From, time.Now())
-				}
+		}
 
-				err := pr.rn.Step(*msg)
-				if err != nil {
-					pr.raftReady()
-				}
-			}
-		case reqCtx := <-pr.reqCtxC:
-			if nil != reqCtx {
-				pr.batch.push(reqCtx)
-				if pr.batch.isPreEntriesSaved() {
-					pr.proposeNextBatch()
-				}
-			}
-		case <-pr.loopC:
-			pr.doRaftReady()
-			pr.handlePollApply()
-		case meta := <-pr.proposeC:
-			if nil != meta {
-				pr.propose(meta)
-			}
+		pr.handleTick()
+		pr.handleStep()
+		pr.handleReport()
+		pr.handleApplyResult()
+		pr.handleRequest()
+		pr.handlePropose()
+
+		if pr.rn.HasReadySince(pr.ps.lastReadyIndex) {
+			pr.handleReady()
 		}
 	}
 }
 
-func (pr *PeerReplicate) doRaftReady() {
+func (pr *PeerReplicate) handleTick() {
+	size := pr.ticks.Len()
+	ticks, err := pr.ticks.Get(size)
+	if err != nil {
+		return
+	}
+
+	for _ = range ticks {
+		pr.rn.Tick()
+	}
+
+	pr.metrics.flush()
+
+	size = pr.ticks.Len()
+	queueGauge.WithLabelValues(labelQueueTick).Set(float64(size))
+
+	if size > 0 {
+		pr.addEvent()
+	}
+}
+
+func (pr *PeerReplicate) handleStep() {
+	size := pr.steps.Len()
+	msgs, err := pr.steps.Get(size)
+	if err != nil {
+		return
+	}
+
+	for _, m := range msgs {
+		msg := m.(raftpb.Message)
+		if pr.isLeader() && msg.From != 0 {
+			pr.peerHeartbeatsMap.put(msg.From, time.Now())
+		}
+
+		err := pr.rn.Step(msg)
+		if err != nil {
+			log.Errorf("[cell-%d]: step failed, error:\n%+v",
+				pr.cellID,
+				err)
+		}
+
+		if log.DebugEnabled() {
+			if len(msg.Entries) > 0 {
+				log.Debugf("req: step raft, cell=<%d>", pr.cellID)
+			}
+		}
+	}
+
+	size = pr.steps.Len()
+	queueGauge.WithLabelValues(labelQueueStep).Set(float64(size))
+
+	if size > 0 {
+		pr.addEvent()
+	}
+}
+
+func (pr *PeerReplicate) handleReport() {
+	size := pr.reports.Len()
+	msgs, err := pr.reports.Get(size)
+	if err != nil {
+		return
+	}
+
+	for _, m := range msgs {
+		msg := m.(raftpb.Message)
+		pr.rn.ReportUnreachable(msg.To)
+		if msg.Type == raftpb.MsgSnap {
+			pr.rn.ReportSnapshot(msg.To, raft.SnapshotFailure)
+		}
+	}
+
+	size = pr.reports.Len()
+	queueGauge.WithLabelValues(labelQueueReport).Set(float64(size))
+
+	if size > 0 {
+		pr.addEvent()
+	}
+}
+
+func (pr *PeerReplicate) handleApplyResult() {
+	size := pr.applyResults.Len()
+	results, err := pr.applyResults.Get(size)
+	if err != nil {
+		return
+	}
+
+	for _, r := range results {
+		result := r.(*asyncApplyResult)
+		pr.doPollApply(result)
+	}
+
+	if size > 0 {
+		pr.nextBatch()
+	}
+
+	size = pr.applyResults.Len()
+	queueGauge.WithLabelValues(labelQueueApplyResult).Set(float64(size))
+
+	if size > 0 {
+		pr.addEvent()
+	}
+}
+
+func (pr *PeerReplicate) handleRequest() {
+	size := pr.requests.Len()
+	requests, err := pr.requests.Get(size)
+	if err != nil {
+		return
+	}
+
+	for _, r := range requests {
+		req := r.(*reqCtx)
+		pr.batch.push(req)
+	}
+
+	if size > 0 && pr.batch.isLastComplete() {
+		pr.nextBatch()
+	}
+
+	size = pr.requests.Len()
+	queueGauge.WithLabelValues(labelQueueReq).Set(float64(size))
+
+	if size > 0 {
+		pr.addEvent()
+	}
+
+}
+
+func (pr *PeerReplicate) handlePropose() {
+	size := pr.proposes.Len()
+	proposes, err := pr.proposes.Get(size)
+	if err != nil {
+		return
+	}
+
+	complete := 0
+	for _, p := range proposes {
+		meta := p.(*proposalMeta)
+		if pr.propose(meta) {
+			complete++
+		}
+	}
+
+	if complete > 0 {
+		pr.nextBatch()
+	}
+
+	size = pr.proposes.Len()
+	queueGauge.WithLabelValues(labelQueuePropose).Set(float64(size))
+
+	if size > 0 {
+		pr.addEvent()
+	}
+}
+
+func (pr *PeerReplicate) handleReady() {
 	// If we continue to handle all the messages, it may cause too many messages because
 	// leader will send all the remaining messages to this follower, which can lead
 	// to full message queue under high load.
 	if pr.ps.isApplyingSnap() {
-		log.Debugf("raftstore[cell-%d]: still applying snapshot, skip further handling",
+		log.Infof("raftstore[cell-%d]: still applying snapshot, skip further handling",
 			pr.cellID)
 		return
 	}
@@ -154,9 +291,11 @@ func (pr *PeerReplicate) doRaftReady() {
 
 	if pr.rn.HasReadySince(pr.ps.lastReadyIndex) {
 		rd := pr.rn.ReadySince(pr.ps.lastReadyIndex)
-		log.Debugf("raftstore[cell-%d]: raft ready, last ready index=<%d>",
+
+		log.Debugf("raftstore[cell-%d]: raft ready after %d",
 			pr.cellID,
 			pr.ps.lastReadyIndex)
+
 		ctx := &tempRaftContext{
 			raftState:  pr.ps.raftState,
 			applyState: pr.ps.applyState,
@@ -173,22 +312,16 @@ func (pr *PeerReplicate) doRaftReady() {
 }
 
 func (pr *PeerReplicate) addApplyResult(result *asyncApplyResult) {
-	if pr.isStopped() {
+	err := pr.applyResults.Put(result)
+	if err != nil {
+		log.Infof("raftstore[cell-%d]: raft apply result stopped",
+			pr.ps.getCell().ID)
 		return
 	}
 
-	pr.applyResultC <- result
-}
+	queueGauge.WithLabelValues(labelQueueApplyResult).Set(float64(pr.applyResults.Len()))
 
-func (pr *PeerReplicate) handlePollApply() {
-	for {
-		select {
-		case result := <-pr.applyResultC:
-			pr.doPollApply(result)
-		default:
-			return
-		}
-	}
+	pr.addEvent()
 }
 
 func (pr *PeerReplicate) doPollApply(result *asyncApplyResult) {
@@ -196,8 +329,6 @@ func (pr *PeerReplicate) doPollApply(result *asyncApplyResult) {
 	if result.result != nil {
 		pr.store.doPostApplyResult(result)
 	}
-
-	pr.proposeNextBatch()
 }
 
 func (pr *PeerReplicate) handleRaftReadyAppend(ctx *tempRaftContext, rd *raft.Ready) {
@@ -209,7 +340,7 @@ func (pr *PeerReplicate) handleRaftReadyAppend(ctx *tempRaftContext, rd *raft.Re
 			log.Infof("raftstore[cell-%d]: ********become leader now********",
 				pr.cellID)
 			pr.doHeartbeat()
-			pr.proposeNextBatch()
+			pr.resetBatch()
 		}
 	}
 
@@ -333,54 +464,94 @@ func (pr *PeerReplicate) handleSaveApplyState(ctx *tempRaftContext) {
 	}
 }
 
-func (pr *PeerReplicate) readyToReceiveCMD(ctx context.Context) {
-	for {
-		select {
-		case <-ctx.Done():
-			close(pr.batchC)
-			log.Infof("raftstore[cell-%d]: handle req stopped", pr.cellID)
-			return
-		case c := <-pr.batchC:
-			if nil != c {
-				pr.store.notify(c)
-			}
-		}
-	}
-}
-
 func (pr *PeerReplicate) notifyPropose(meta *proposalMeta) {
-	if pr.isStopped() {
+	err := pr.proposes.Put(meta)
+	if err != nil {
+		log.Infof("raftstore[cell-%d]: raft propose stopped",
+			pr.ps.getCell().ID)
 		return
 	}
 
-	pr.proposeC <- meta
+	if log.DebugEnabled() {
+		for _, req := range meta.cmd.req.Requests {
+			log.Debugf("req: added to proposal queue. uuid=<%d>",
+				req.UUID)
+		}
+	}
+
+	queueGauge.WithLabelValues(labelQueuePropose).Set(float64(pr.proposes.Len()))
+
+	pr.addEvent()
 }
 
-func (pr *PeerReplicate) propose(meta *proposalMeta) {
+func (pr *PeerReplicate) preProposal(cmd *cmd) bool {
+	// we handle all read, write and admin cmd here
+	if cmd.req.Header == nil || cmd.req.Header.UUID == nil {
+		cmd.resp(errorOtherCMDResp(errMissingUUIDCMD))
+		return false
+	}
+
+	err := pr.store.validateStoreID(cmd.req)
+	if err != nil {
+		cmd.respOtherError(err)
+		return false
+	}
+
+	// pr := s.replicatesMap.get(cmd.req.Header.CellId)
+	// if nil == pr {
+	// 	cmd.respCellNotFound(cmd.req.Header.CellId, 0)
+	// 	return
+	// }
+
+	term := pr.getCurrentTerm()
+
+	pe := pr.store.validateCell(cmd.req)
+	if err != nil {
+		cmd.resp(errorPbResp(pe, cmd.req.Header.UUID, term))
+		return false
+	}
+
+	// Note:
+	// The peer that is being checked is a leader. It might step down to be a follower later. It
+	// doesn't matter whether the peer is a leader or not. If it's not a leader, the proposing
+	// command log entry can't be committed.
+	meta := &proposalMeta{
+		cmd:  cmd,
+		term: term,
+	}
+
+	pr.notifyPropose(meta)
+
+	return true
+}
+
+func (pr *PeerReplicate) propose(meta *proposalMeta) bool {
 	if globalCfg.EnableRequestMetrics {
 		observeRequestWaitting(meta.cmd)
 	}
 
-	log.Debugf("raftstore[cell-%d]: handle propose, meta=<%+v>",
-		pr.cellID,
-		meta)
+	if log.DebugEnabled() {
+		for _, req := range meta.cmd.req.Requests {
+			log.Debugf("req: start to proposal. uuid=<%d>",
+				req.UUID)
+		}
+	}
 
 	isConfChange := false
 	policy, err := pr.getHandlePolicy(meta.cmd.req)
 	if err != nil {
 		resp := errorOtherCMDResp(err)
 		meta.cmd.resp(resp)
-		return
+		return true
 	}
 
 	doPropose := false
 	switch policy {
 	case readLocal:
 		pr.execReadLocal(meta.cmd)
-		return
+		return true
 	case readIndex:
-		pr.execReadIndex(meta)
-		return
+		return pr.execReadIndex(meta)
 	case proposeNormal:
 		doPropose = pr.proposeNormal(meta)
 	case proposeTransferLeader:
@@ -391,14 +562,16 @@ func (pr *PeerReplicate) propose(meta *proposalMeta) {
 	}
 
 	if !doPropose {
-		return
+		return true
 	}
 
 	err = pr.startProposeJob(meta, isConfChange)
 	if err != nil {
 		meta.cmd.respOtherError(err)
-		return
+		return true
 	}
+
+	return false
 }
 
 func (pr *PeerReplicate) proposeNormal(meta *proposalMeta) bool {
@@ -413,7 +586,7 @@ func (pr *PeerReplicate) proposeNormal(meta *proposalMeta) bool {
 
 	raftFlowProposalSizeHistogram.Observe(float64(size))
 
-	if size > pr.store.cfg.Raft.MaxSizePerEntry {
+	if size > globalCfg.Raft.MaxSizePerEntry {
 		cmd.respLargeRaftEntrySize(pr.cellID, size, meta.term)
 		return false
 	}
@@ -435,7 +608,6 @@ func (pr *PeerReplicate) proposeNormal(meta *proposalMeta) bool {
 	}
 
 	pr.metrics.propose.normal++
-	pr.raftReady()
 	return true
 }
 
@@ -479,7 +651,6 @@ func (pr *PeerReplicate) proposeConfChange(meta *proposalMeta) bool {
 		changePeer.Peer.ID)
 
 	pr.metrics.propose.confChange++
-	pr.raftReady()
 	return true
 }
 
@@ -506,10 +677,10 @@ func (pr *PeerReplicate) doTransferLeader(peer *metapb.Peer) {
 	log.Infof("raftstore[cell-%d]: transfer leader to %d",
 		pr.cellID,
 		peer.ID)
+
 	pr.rn.TransferLeader(peer.ID)
 
 	pr.metrics.propose.transferLeader++
-	pr.raftReady()
 }
 
 func (pr *PeerReplicate) isTransferLeaderAllowed(newLeaderPeer *metapb.Peer) bool {
@@ -621,15 +792,11 @@ func (pr *PeerReplicate) isLeader() bool {
 }
 
 func (pr *PeerReplicate) send(msgs []raftpb.Message) {
-	if pr.isStopped() {
-		return
-	}
-
 	for _, msg := range msgs {
 		err := pr.sendRaftMsg(msg)
 		if err != nil {
 			// We don't care that the message is sent failed, so here just log this error
-			log.Warnf("raftstore[cell-%d]: send msg failure, from_peer=<%d> to_peer=<%d>, errors:\n%+v",
+			log.Warnf("raftstore[cell-%d]: send msg failure, from_peer=<%d> to_peer=<%d>, errors:\n%s",
 				pr.ps.getCell().ID,
 				msg.From,
 				msg.To,
@@ -739,19 +906,40 @@ func (pr *PeerReplicate) getCurrentTerm() uint64 {
 	return pr.rn.Status().Term
 }
 
-func (pr *PeerReplicate) step(msg raftpb.Message) error {
-	pr.stepC <- &msg
-	return nil
+func (pr *PeerReplicate) step(msg raftpb.Message) {
+	err := pr.steps.Put(msg)
+	if err != nil {
+		log.Infof("raftstore[cell-%d]: raft step stopped",
+			pr.ps.getCell().ID)
+		return
+	}
+
+	queueGauge.WithLabelValues(labelQueueStep).Set(float64(pr.steps.Len()))
+
+	pr.addEvent()
 }
 
-func getRaftConfig(id, appliedIndex uint64, store raft.Storage, cfg *RaftCfg) *raft.Config {
+func (pr *PeerReplicate) reportUnreachable(msg raftpb.Message) {
+	err := pr.reports.Put(msg)
+	if err != nil {
+		log.Infof("raftstore[cell-%d]: raft report stopped",
+			pr.ps.getCell().ID)
+		return
+	}
+
+	queueGauge.WithLabelValues(labelQueueReport).Set(float64(pr.reports.Len()))
+
+	pr.addEvent()
+}
+
+func getRaftConfig(id, appliedIndex uint64, store raft.Storage) *raft.Config {
 	return &raft.Config{
 		ID:              id,
 		Applied:         appliedIndex,
-		ElectionTick:    cfg.ElectionTick,
-		HeartbeatTick:   cfg.HeartbeatTick,
-		MaxSizePerMsg:   cfg.MaxSizePerMsg,
-		MaxInflightMsgs: cfg.MaxInflightMsgs,
+		ElectionTick:    globalCfg.Raft.ElectionTick,
+		HeartbeatTick:   globalCfg.Raft.HeartbeatTick,
+		MaxSizePerMsg:   globalCfg.Raft.MaxSizePerMsg,
+		MaxInflightMsgs: globalCfg.Raft.MaxInflightMsgs,
 		Storage:         store,
 		CheckQuorum:     true,
 		PreVote:         false,

@@ -163,7 +163,12 @@ func (s *RedisServer) doConnection(session goetty.IOSession) error {
 				})
 			}
 		} else if req, ok := value.(*raftcmdpb.Request); ok {
-			log.Debugf("redis-[%s]: read a raft req, req=<%+v>", addr, req)
+			if len(req.UUID) > 0 {
+				log.Debugf("req: read a raft req. from=<%s>, uuid=<%d>, cmd=<%s>",
+					addr,
+					req.UUID,
+					req.Cmd)
+			}
 
 			rs.setFromProxy()
 			err = s.onProxyReq(req, rs)
@@ -181,9 +186,7 @@ func (s *RedisServer) onResp(resp *raftcmdpb.RaftCMDResponse) {
 	for _, rsp := range resp.Responses {
 		rs := s.routing.delete(rsp.UUID)
 		if rs != nil {
-			if !rs.isClosed() {
-				rs.onResp(resp.Header, rsp)
-			}
+			rs.onResp(resp.Header, rsp)
 		}
 	}
 }

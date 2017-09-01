@@ -27,6 +27,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/push"
 	"github.com/prometheus/common/expfmt"
 	"github.com/prometheus/common/model"
+	"golang.org/x/net/context"
 )
 
 const contentTypeHeader = "Content-Type"
@@ -39,7 +40,7 @@ type MetricCfg struct {
 }
 
 // InitMetric init the metric
-func InitMetric(cfg *MetricCfg) {
+func InitMetric(runner *Runner, cfg *MetricCfg) {
 	if cfg.IntervalSec == 0 || len(cfg.Address) == 0 {
 		log.Info("metric: disable prometheus push client")
 		return
@@ -47,20 +48,25 @@ func InitMetric(cfg *MetricCfg) {
 
 	log.Info("metric: start prometheus push client")
 
-	go startPrometheusPushClient(cfg.Job, cfg.Address, time.Duration(cfg.IntervalSec)*time.Second)
-}
+	runner.RunCancelableTask(func(ctx context.Context) {
+		t := time.NewTicker(time.Duration(cfg.IntervalSec) * time.Second)
+		defer t.Stop()
 
-// startPrometheusPushClient pushs metrics to Prometheus Pushgateway.
-func startPrometheusPushClient(job, addr string, interval time.Duration) {
-	for {
-		err := doPush(job, push.HostnameGroupingKey(), addr, prometheus.DefaultGatherer, "PUT")
+		for {
+			select {
+			case <-ctx.Done():
+				log.Info("stop: prometheus push client stopped")
+				t.Stop()
+				return
+			case <-t.C:
+				err := doPush(cfg.Job, push.HostnameGroupingKey(), cfg.Address, prometheus.DefaultGatherer, "PUT")
 
-		if err != nil {
-			log.Errorf("metric: could not push metrics to prometheus pushgateway: errors:\n%+v", err)
+				if err != nil {
+					log.Errorf("metric: could not push metrics to prometheus pushgateway: errors:\n%+v", err)
+				}
+			}
 		}
-
-		time.Sleep(interval)
-	}
+	})
 }
 
 func doPush(job string, grouping map[string]string, pushURL string, g prometheus.Gatherer, method string) error {

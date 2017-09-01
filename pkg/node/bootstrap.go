@@ -164,6 +164,7 @@ func (n *Node) startStore() {
 		n.store.Start()
 		<-c.Done()
 		n.store.Stop()
+		log.Infof("stopped: store stopped, storeID=<%d>", n.storeMeta.ID)
 	})
 }
 

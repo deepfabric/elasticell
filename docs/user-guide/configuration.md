@@ -24,6 +24,7 @@
 |redis:listen|The address to serve redis|
 |redis:readBufferSize|The buffer size for read redis command|
 |redis:writeBufferSize|The buffer size for write redis command|
+|redis:writeBatchLimit|Max number of responses for flush|
 |node:clusterID|The Elasticell cluster id, 0 means not join the cluster|
 |node:labels|Key-value label of this node, these infomation is used for PD schedule|
 |node:pdRPCAddr|GRPC address for PD cluster|
@@ -39,6 +40,9 @@
 |node:raftStore:raftLogGCCountLimit|Max count of raft log that should be compact|
 |node:raftStore:raftLogGCSizeLimit|Max size of raft log that should be compact|
 |node:raftStore:raftProposeBatchLimit|Max number of requests in a raft proposal|
+|node:raftStore:raftMessageSendBatchLimit|Max number of read raft message from send queue|
+|node:raftStore:raftMessageProcessBatchLimit|Max number of read raft message from received queue|
+|node:raftStore:raftMessageWorkerCount|Worker count of process raft message|
 |node:raftStore:raftLogGCThreshold|Max index of raft log offset that should be compact|
 |node:raftStore:cellCheckSizeDiff|Max data size that should be check real size to split|
 |node:raftStore:cellMaxSize|Max data size of a cell|

@@ -39,8 +39,9 @@ type Cfg struct {
 type RedisCfg struct {
 	Listen string `json:"listen"`
 
-	ReadBufferSize  int `json:"readBufferSize"`
-	WriteBufferSize int `json:"writeBufferSize"`
+	ReadBufferSize  int   `json:"readBufferSize"`
+	WriteBufferSize int   `json:"writeBufferSize"`
+	WriteBatchLimit int64 `json:"writeBatchLimit"`
 }
 
 // GetCfg get cfg from command

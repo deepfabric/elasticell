@@ -34,14 +34,17 @@ type Cfg struct {
 	RaftLogGCSizeLimit  int64  `json:"raftLogGCSizeLimit"`
 	RaftLogGCThreshold  uint64 `json:"raftLogGCThreshold"`
 
-	RaftProposeBatchLimit int `json:"raftProposeBatchLimit"`
+	RaftProposeBatchLimit        int    `json:"raftProposeBatchLimit"`
+	RaftMessageSendBatchLimit    int64  `json:"raftMessageSendBatchLimit"`
+	RaftMessageProcessBatchLimit int64  `json:"raftMessageProcessBatchLimit"`
+	RaftMessageWorkerCount       uint64 `json:"raftMessageWorkerCount"`
+	ApplyWorkerCount             uint64 `json:"applyWorkerCount"`
 
 	CellCheckSizeDiff int64  `json:"cellCheckSizeDiff"`
 	CellMaxSize       uint64 `json:"cellMaxSize"`
 	CellSplitSize     uint64 `json:"cellSplitSize"`
 
-	Raft             *RaftCfg `json:"raft"`
-	ApplyWorkerCount uint64   `json:"applyWorkerCount"`
+	Raft *RaftCfg `json:"raft"`
 
 	EnableRequestMetrics bool `json:"enableRequestMetrics"`
 }

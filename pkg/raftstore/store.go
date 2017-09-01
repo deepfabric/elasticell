@@ -15,11 +15,10 @@ package raftstore
 
 import (
 	"bytes"
-
+	"fmt"
 	"time"
 
-	"fmt"
-
+	"github.com/Workiva/go-datastructures/queue"
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
@@ -36,13 +35,19 @@ import (
 )
 
 const (
-	applyWorker            = "apply-work-%d"
-	snapWorker             = "snap-work"
-	pdWorker               = "pd-work"
-	splitWorker            = "split-work"
-	raftGCWorker           = "raft-gc-worker"
-	defaultWorkerQueueSize = 64
-	defaultNotifyChanSize  = 1024
+	applyWorker  = "apply-worker-%d"
+	snapWorker   = "snap-worerk"
+	pdWorker     = "pd-worker"
+	splitWorker  = "split-worker"
+	raftGCWorker = "raft-gc-worker"
+
+	size8    = 8
+	size16   = 16
+	size32   = 32
+	size64   = 64
+	size128  = 128
+	size1024 = 1024
+	size2048 = 2048
 )
 
 var (
@@ -51,8 +56,6 @@ var (
 
 // Store is the store for raft
 type Store struct {
-	cfg *Cfg
-
 	id        uint64
 	clusterID uint64
 	startAt   uint32
@@ -68,10 +71,10 @@ type Store struct {
 	delegates     *applyDelegateMap
 	pendingCells  []metapb.Cell
 
-	trans      *transport
-	engine     storage.Driver
-	runner     *util.Runner
-	notifyChan chan interface{}
+	trans    *transport
+	engine   storage.Driver
+	runner   *util.Runner
+	messages []*queue.Queue
 
 	redisReadHandles  map[raftcmdpb.CMDType]func(*raftcmdpb.Request) *raftcmdpb.Response
 	redisWriteHandles map[raftcmdpb.CMDType]func(*execContext, *raftcmdpb.Request) *raftcmdpb.Response
@@ -82,18 +85,24 @@ type Store struct {
 
 // NewStore returns store
 func NewStore(clusterID uint64, pdClient *pd.Client, meta metapb.Store, engine storage.Driver, cfg *Cfg) *Store {
+	globalCfg = cfg
+
 	s := new(Store)
 	s.clusterID = clusterID
 	s.id = meta.ID
 	s.meta = meta
 	s.startAt = uint32(time.Now().Unix())
 	s.engine = engine
-	s.cfg = cfg
 	s.pdClient = pdClient
 	s.snapshotManager = newDefaultSnapshotManager(cfg, engine.GetDataEngine())
 
 	s.trans = newTransport(s, pdClient, s.notify)
-	s.notifyChan = make(chan interface{}, defaultNotifyChanSize)
+
+	s.messages = make([]*queue.Queue, globalCfg.RaftMessageWorkerCount)
+	var index uint64
+	for ; index < globalCfg.RaftMessageWorkerCount; index++ {
+		s.messages[index] = &queue.Queue{}
+	}
 
 	s.keyRanges = util.NewCellTree()
 	s.replicatesMap = newCellPeersMap()
@@ -101,13 +110,13 @@ func NewStore(clusterID uint64, pdClient *pd.Client, meta metapb.Store, engine s
 	s.delegates = newApplyDelegateMap()
 
 	s.runner = util.NewRunner()
-	for i := 0; i < int(s.cfg.ApplyWorkerCount); i++ {
-		s.runner.AddNamedWorker(fmt.Sprintf(applyWorker, i), defaultWorkerQueueSize)
+	for i := 0; i < int(globalCfg.ApplyWorkerCount); i++ {
+		s.runner.AddNamedWorker(fmt.Sprintf(applyWorker, i))
 	}
-	s.runner.AddNamedWorker(snapWorker, defaultWorkerQueueSize)
-	s.runner.AddNamedWorker(pdWorker, defaultWorkerQueueSize)
-	s.runner.AddNamedWorker(splitWorker, defaultWorkerQueueSize)
-	s.runner.AddNamedWorker(raftGCWorker, defaultWorkerQueueSize)
+	s.runner.AddNamedWorker(snapWorker)
+	s.runner.AddNamedWorker(pdWorker)
+	s.runner.AddNamedWorker(splitWorker)
+	s.runner.AddNamedWorker(raftGCWorker)
 
 	s.redisReadHandles = make(map[raftcmdpb.CMDType]func(*raftcmdpb.Request) *raftcmdpb.Response)
 	s.redisWriteHandles = make(map[raftcmdpb.CMDType]func(*execContext, *raftcmdpb.Request) *raftcmdpb.Response)
@@ -115,7 +124,6 @@ func NewStore(clusterID uint64, pdClient *pd.Client, meta metapb.Store, engine s
 	s.initRedisHandle()
 	s.init()
 
-	globalCfg = cfg
 	return s
 }
 
@@ -198,7 +206,7 @@ func (s *Store) Start() {
 	log.Infof("bootstrap: transfer started")
 
 	s.startHandleNotifyMsg()
-	log.Infof("bootstrap: ready to handle notify msg")
+	log.Infof("bootstrap: ready to handle raft message")
 
 	s.startStoreHeartbeatTask()
 	log.Infof("bootstrap: ready to handle store heartbeat")
@@ -224,49 +232,58 @@ func (s *Store) startTransfer() {
 }
 
 func (s *Store) startHandleNotifyMsg() {
-	s.runner.RunCancelableTask(func(ctx context.Context) {
-		for {
-			select {
-			case <-ctx.Done():
-				log.Infof("stop: store msg handler stopped")
-				return
-			case n := <-s.notifyChan:
-				if msg, ok := n.(*mraft.RaftMessage); ok {
-					s.onRaftMessage(msg)
-				} else if msg, ok := n.(*cmd); ok {
-					s.onRaftCMD(msg)
-				} else if msg, ok := n.(*splitCheckResult); ok {
-					s.onSplitCheckResult(msg)
-				} else if msg, ok := n.(*mraft.SnapshotData); ok {
-					err := s.snapshotManager.ReceiveSnapData(msg)
-					if err != nil {
-						log.Errorf("raftstore-snap[cell-%d]: received snap data failed, errors:\n%+v",
-							msg.Key.CellID,
-							err)
-					}
-				} else if msg, ok := n.(*mraft.SnapKey); ok {
-					err := s.snapshotManager.CleanSnap(msg)
-					if err != nil {
-						log.Errorf("raftstore-snap[cell-%d]: start received snap data failed, errors:\n%+v",
-							msg.CellID,
-							err)
-					}
-				} else if msg, ok := n.(*mraft.SnapshotDataEnd); ok {
-					err := s.snapshotManager.ReceiveSnapDataComplete(msg)
-					if err != nil {
-						log.Errorf("raftstore-snap[cell-%d]: received snap data complete failed, errors:\n%+v",
-							msg.Key.CellID,
-							err)
+	index := 0
+	for _, messageQ := range s.messages {
+		q := messageQ
+		id := index
+		index++
+
+		s.runner.RunCancelableTask(func(ctx context.Context) {
+			for {
+				ns, err := q.Get(globalCfg.RaftMessageProcessBatchLimit)
+				if err != nil {
+					log.Infof("stop: store raft message handler<%d> stopped", id)
+					return
+				}
+
+				for _, n := range ns {
+					if msg, ok := n.(*mraft.RaftMessage); ok {
+						s.onRaftMessage(msg)
+					} else if msg, ok := n.(*splitCheckResult); ok {
+						s.onSplitCheckResult(msg)
+					} else if msg, ok := n.(*mraft.SnapshotData); ok {
+						err := s.snapshotManager.ReceiveSnapData(msg)
+						if err != nil {
+							log.Errorf("raftstore-snap[cell-%d]: received snap data failed, errors:\n%+v",
+								msg.Key.CellID,
+								err)
+						}
+					} else if msg, ok := n.(*mraft.SnapKey); ok {
+						err := s.snapshotManager.CleanSnap(msg)
+						if err != nil {
+							log.Errorf("raftstore-snap[cell-%d]: start received snap data failed, errors:\n%+v",
+								msg.CellID,
+								err)
+						}
+					} else if msg, ok := n.(*mraft.SnapshotDataEnd); ok {
+						err := s.snapshotManager.ReceiveSnapDataComplete(msg)
+						if err != nil {
+							log.Errorf("raftstore-snap[cell-%d]: received snap data complete failed, errors:\n%+v",
+								msg.Key.CellID,
+								err)
+						}
 					}
 				}
+
+				queueGauge.WithLabelValues(labelQueueNotify).Set(float64(q.Len()))
 			}
-		}
-	})
+		})
+	}
 }
 
 func (s *Store) startStoreHeartbeatTask() {
 	s.runner.RunCancelableTask(func(ctx context.Context) {
-		ticker := time.NewTicker(s.cfg.getStoreHeartbeatDuration())
+		ticker := time.NewTicker(globalCfg.getStoreHeartbeatDuration())
 		defer ticker.Stop()
 
 		var err error
@@ -275,14 +292,13 @@ func (s *Store) startStoreHeartbeatTask() {
 		for {
 			select {
 			case <-ctx.Done():
-				log.Infof("stop: store heart beat job stopped")
+				log.Infof("stop: store heartbeat job stopped")
 				return
 			case <-ticker.C:
 				if job != nil && job.IsNotComplete() {
 					// cancel last if not complete
 					job.Cancel()
 				}
-
 				job, err = s.addPDJob(s.handleStoreHeartbeat)
 				if err != nil {
 					log.Errorf("heartbeat-store[%d]: add job failed, errors:\n %+v",
@@ -297,13 +313,13 @@ func (s *Store) startStoreHeartbeatTask() {
 
 func (s *Store) startCellHeartbeatTask() {
 	s.runner.RunCancelableTask(func(ctx context.Context) {
-		ticker := time.NewTicker(s.cfg.getCellHeartbeatDuration())
+		ticker := time.NewTicker(globalCfg.getCellHeartbeatDuration())
 		defer ticker.Stop()
 
 		for {
 			select {
 			case <-ctx.Done():
-				log.Infof("stop: cell heart beat job stopped")
+				log.Infof("stop: cell heartbeat job stopped")
 				return
 			case <-ticker.C:
 				s.handleCellHeartbeat()
@@ -314,7 +330,7 @@ func (s *Store) startCellHeartbeatTask() {
 
 func (s *Store) startGCTask() {
 	s.runner.RunCancelableTask(func(ctx context.Context) {
-		ticker := time.NewTicker(s.cfg.getRaftGCLogDuration())
+		ticker := time.NewTicker(globalCfg.getRaftGCLogDuration())
 		defer ticker.Stop()
 
 		for {
@@ -331,7 +347,7 @@ func (s *Store) startGCTask() {
 
 func (s *Store) startCellReportTask() {
 	s.runner.RunCancelableTask(func(ctx context.Context) {
-		ticker := time.NewTicker(s.cfg.getReportCellDuration())
+		ticker := time.NewTicker(globalCfg.getReportCellDuration())
 		defer ticker.Stop()
 
 		for {
@@ -348,13 +364,13 @@ func (s *Store) startCellReportTask() {
 
 func (s *Store) startCellSplitCheckTask() {
 	s.runner.RunCancelableTask(func(ctx context.Context) {
-		ticker := time.NewTicker(s.cfg.getSplitCellCheckDuration())
+		ticker := time.NewTicker(globalCfg.getSplitCellCheckDuration())
 		defer ticker.Stop()
 
 		for {
 			select {
 			case <-ctx.Done():
-				log.Infof("stop: cell heartbeat job stopped")
+				log.Infof("stop: split check job stopped")
 				return
 			case <-ticker.C:
 				s.handleCellSplitCheck()
@@ -365,8 +381,17 @@ func (s *Store) startCellSplitCheckTask() {
 
 // Stop returns the error when stop store
 func (s *Store) Stop() error {
-	err := s.runner.Stop()
+	for _, q := range s.messages {
+		q.Dispose()
+	}
+
+	s.replicatesMap.foreach(func(pr *PeerReplicate) (bool, error) {
+		pr.stopEventLoop()
+		return true, nil
+	})
+
 	s.trans.stop()
+	err := s.runner.Stop()
 	return err
 }
 
@@ -434,8 +459,29 @@ func (s *Store) OnRedisCommand(cmdType raftcmdpb.CMDType, cmd redis.Command, cb 
 	return uuid, nil
 }
 
-func (s *Store) notify(msg interface{}) {
-	s.notifyChan <- msg
+func (s *Store) notify(n interface{}) {
+	var id uint64
+
+	if msg, ok := n.(*mraft.RaftMessage); ok {
+		id = msg.CellID
+	} else if msg, ok := n.(*splitCheckResult); ok {
+		id = msg.cellID
+	} else if msg, ok := n.(*mraft.SnapshotData); ok {
+		id = msg.Key.CellID
+	} else if msg, ok := n.(*mraft.SnapKey); ok {
+		id = msg.CellID
+	} else if msg, ok := n.(*mraft.SnapshotDataEnd); ok {
+		id = msg.Key.CellID
+	}
+
+	if id == 0 {
+		return
+	}
+
+	index := (globalCfg.RaftMessageWorkerCount - 1) & id
+	q := s.messages[index]
+	q.Put(n)
+	queueGauge.WithLabelValues(labelQueueNotify).Set(float64(q.Len()))
 }
 
 func (s *Store) onRaftMessage(msg *mraft.RaftMessage) {
@@ -473,40 +519,6 @@ func (s *Store) onRaftMessage(msg *mraft.RaftMessage) {
 
 	pr := s.getPeerReplicate(msg.CellID)
 	pr.step(msg.Message)
-}
-
-func (s *Store) onRaftCMD(cmd *cmd) {
-	// we handle all read, write and admin cmd here
-	if cmd.req.Header == nil || cmd.req.Header.UUID == nil {
-		cmd.resp(errorOtherCMDResp(errMissingUUIDCMD))
-		return
-	}
-
-	err := s.validateStoreID(cmd.req)
-	if err != nil {
-		cmd.respOtherError(err)
-		return
-	}
-
-	pr := s.replicatesMap.get(cmd.req.Header.CellId)
-	term := pr.getCurrentTerm()
-
-	pe := s.validateCell(cmd.req)
-	if err != nil {
-		cmd.resp(errorPbResp(pe, cmd.req.Header.UUID, term))
-		return
-	}
-
-	// Note:
-	// The peer that is being checked is a leader. It might step down to be a follower later. It
-	// doesn't matter whether the peer is a leader or not. If it's not a leader, the proposing
-	// command log entry can't be committed.
-	meta := &proposalMeta{
-		cmd:  cmd,
-		term: term,
-	}
-
-	pr.notifyPropose(meta)
 }
 
 func (s *Store) onSplitCheckResult(result *splitCheckResult) {
@@ -647,7 +659,7 @@ func (s *Store) tryToCreatePeerReplicate(cellID uint64, msg *mraft.RaftMessage) 
 	message := msg.Message
 	if message.Type != raftpb.MsgVote &&
 		(message.Type != raftpb.MsgHeartbeat || message.Commit != invalidIndex) {
-		log.Infof("raftstore[cell-%d]: target peer doesn't exist, peer=<%s> message=<%s>",
+		log.Infof("raftstore[cell-%d]: target peer doesn't exist, peer=<%+v> message=<%s>",
 			cellID,
 			target,
 			message.Type)
@@ -658,10 +670,18 @@ func (s *Store) tryToCreatePeerReplicate(cellID uint64, msg *mraft.RaftMessage) 
 	item := s.keyRanges.Search(msg.Start)
 	if item.ID > 0 {
 		if bytes.Compare(encStartKey(&item), getDataEndKey(msg.End)) < 0 {
-			log.Infof("raftstore[cell-%d]: msg is overlapped with cell, cell=<%s> msg=<%s>",
+			var state string
+			p := s.getPeerReplicate(item.ID)
+			if p != nil {
+				state = fmt.Sprintf("local=<%s> apply=<%s>", p.ps.raftState.String(),
+					p.ps.applyState.String())
+			}
+
+			log.Infof("raftstore[cell-%d]: msg is overlapped with cell, cell=<%s> msg=<%s> state=<%s>",
 				cellID,
 				item.String(),
-				msg.String())
+				msg.String(),
+				state)
 			return false
 		}
 	}
@@ -718,7 +738,7 @@ func (s *Store) destroyPeer(cellID uint64, target metapb.Peer, async bool) {
 			cellID,
 			target)
 
-		s.startDestroyJob(cellID)
+		s.startDestroyJob(cellID, target)
 	}
 }
 
@@ -807,32 +827,36 @@ func (s *Store) addPeerToCache(peer metapb.Peer) {
 }
 
 func (s *Store) addPDJob(task func() error) (*util.Job, error) {
-	return s.addNamedJob(pdWorker, task)
+	return s.addNamedJob("", pdWorker, task)
 }
 
 func (s *Store) addRaftLogGCJob(task func() error) (*util.Job, error) {
-	return s.addNamedJob(raftGCWorker, task)
+	return s.addNamedJob("", raftGCWorker, task)
 }
 
-func (s *Store) addSnapJob(task func() error) (*util.Job, error) {
-	return s.addNamedJob(snapWorker, task)
+func (s *Store) addSnapJob(task func() error, cb func(*util.Job)) (*util.Job, error) {
+	return s.addNamedJobWithCB("", snapWorker, task, cb)
 }
 
-func (s *Store) addApplyJob(cellID uint64, task func() error) (*util.Job, error) {
-	index := (s.cfg.ApplyWorkerCount - 1) & cellID
-	return s.addNamedJob(fmt.Sprintf(applyWorker, index), task)
+func (s *Store) addApplyJob(cellID uint64, desc string, task func() error, cb func(*util.Job)) (*util.Job, error) {
+	index := (globalCfg.ApplyWorkerCount - 1) & cellID
+	return s.addNamedJobWithCB(desc, fmt.Sprintf(applyWorker, index), task, cb)
 }
 
 func (s *Store) addSplitJob(task func() error) (*util.Job, error) {
-	return s.addNamedJob(splitWorker, task)
+	return s.addNamedJob("", splitWorker, task)
 }
 
-func (s *Store) addNamedJob(worker string, task func() error) (*util.Job, error) {
-	return s.runner.RunJobWithNamedWorker(worker, task)
+func (s *Store) addNamedJob(desc, worker string, task func() error) (*util.Job, error) {
+	return s.runner.RunJobWithNamedWorker(desc, worker, task)
+}
+
+func (s *Store) addNamedJobWithCB(desc, worker string, task func() error, cb func(*util.Job)) (*util.Job, error) {
+	return s.runner.RunJobWithNamedWorkerWithCB(desc, worker, task, cb)
 }
 
 func (s *Store) handleStoreHeartbeat() error {
-	stats, err := util.DiskStats(s.cfg.StoreDataPath)
+	stats, err := util.DiskStats(globalCfg.StoreDataPath)
 	if err != nil {
 		log.Errorf("heartbeat-store[%d]: handle store heartbeat failed, errors:\n %+v",
 			s.GetID(),
@@ -928,14 +952,14 @@ func (s *Store) handleCellSplitCheck() {
 			return true, nil
 		}
 
-		if pr.sizeDiffHint < s.cfg.CellCheckSizeDiff {
+		if pr.sizeDiffHint < globalCfg.CellCheckSizeDiff {
 			return true, nil
 		}
 
 		log.Debugf("raftstore-split[cell-%d]: cell need to check whether should split, diff=<%d> max=<%d>",
 			pr.cellID,
 			pr.sizeDiffHint,
-			s.cfg.CellCheckSizeDiff)
+			globalCfg.CellCheckSizeDiff)
 
 		err := pr.startSplitCheckJob()
 		if err != nil {
@@ -1016,12 +1040,12 @@ func (s *Store) handleRaftGCLog() {
 		firstIdx, _ := pr.ps.FirstIndex()
 
 		if appliedIdx > firstIdx &&
-			appliedIdx-firstIdx >= s.cfg.RaftLogGCCountLimit {
+			appliedIdx-firstIdx >= globalCfg.RaftLogGCCountLimit {
 			compactIdx = appliedIdx
-		} else if pr.sizeDiffHint >= s.cfg.RaftLogGCSizeLimit {
+		} else if pr.sizeDiffHint >= globalCfg.RaftLogGCSizeLimit {
 			compactIdx = appliedIdx
 		} else if replicatedIdx < firstIdx ||
-			replicatedIdx-firstIdx <= s.cfg.RaftLogGCThreshold {
+			replicatedIdx-firstIdx <= globalCfg.RaftLogGCThreshold {
 			return true, nil
 		} else {
 			compactIdx = replicatedIdx
@@ -1042,8 +1066,7 @@ func (s *Store) handleRaftGCLog() {
 
 		term, _ := pr.rn.Term(compactIdx)
 
-		req := newCompactLogRequest(compactIdx, term)
-		s.sendAdminRequest(pr.getCell(), pr.peer, req)
+		pr.onAdminRequest(newCompactLogRequest(compactIdx, term))
 
 		return true, nil
 	})
@@ -1051,22 +1074,6 @@ func (s *Store) handleRaftGCLog() {
 	if gcLogCount > 0 {
 		raftLogCompactCounter.Add(float64(gcLogCount))
 	}
-}
-
-func (s *Store) sendAdminRequest(cell metapb.Cell, peer metapb.Peer, adminReq *raftcmdpb.AdminRequest) {
-	req := new(raftcmdpb.RaftCMDRequest)
-	req.Header = &raftcmdpb.RaftRequestHeader{
-		CellId:    cell.ID,
-		CellEpoch: cell.Epoch,
-		Peer:      peer,
-		UUID:      uuid.NewV4().Bytes(),
-	}
-	req.AdminRequest = adminReq
-
-	cmd := newCMD(req, nil)
-	s.notify(cmd)
-
-	commandCounterVec.WithLabelValues(raftcmdpb.CMDType_name[int32(req.AdminRequest.Type)]).Inc()
 }
 
 func (s *Store) getMetaEngine() storage.Engine {

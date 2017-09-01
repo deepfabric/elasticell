@@ -41,16 +41,16 @@ func TestTask(t *testing.T) {
 		t.Error("run task failed, task not run after 50ms")
 	}
 
-	runner.AddNamedWorker("name-0", 2)
+	runner.AddNamedWorker("name-0")
 	yes := false
 	var ok int32
 	complete := make(chan struct{}, 1)
-	runner.RunJobWithNamedWorker("name-0", func() error {
+	runner.RunJobWithNamedWorker("", "name-0", func() error {
 		atomic.StoreInt32(&ok, 1)
 		return nil
 	})
 
-	runner.RunJobWithNamedWorker("name-0", func() error {
+	runner.RunJobWithNamedWorker("", "name-0", func() error {
 		if atomic.LoadInt32(&ok) > 0 {
 			yes = true
 		}
@@ -98,11 +98,11 @@ func TestTask(t *testing.T) {
 
 func TestNamedTask(t *testing.T) {
 	runner := NewRunner()
-	runner.AddNamedWorker("apply", 64)
+	runner.AddNamedWorker("apply")
 
 	cnt := 0
 	complete := make(chan struct{}, 1)
-	runner.RunJobWithNamedWorker("apply", func() error {
+	runner.RunJobWithNamedWorker("", "apply", func() error {
 		cnt++
 		complete <- struct{}{}
 		return nil
@@ -113,7 +113,7 @@ func TestNamedTask(t *testing.T) {
 		t.Errorf("run named job failed. expect=<%d>, actual=<%d>", 1, cnt)
 	}
 
-	runner.RunJobWithNamedWorker("apply", func() error {
+	runner.RunJobWithNamedWorker("", "apply", func() error {
 		cnt++
 		complete <- struct{}{}
 		return nil

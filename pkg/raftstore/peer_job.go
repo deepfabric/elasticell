@@ -28,21 +28,19 @@ import (
 
 func (pr *PeerReplicate) startApplyingSnapJob() {
 	pr.ps.applySnapJobLock.Lock()
-	job, err := pr.store.addApplyJob(pr.cellID, pr.doApplyingSnapshotJob)
+	_, err := pr.store.addApplyJob(pr.cellID, "doApplyingSnapshotJob", pr.doApplyingSnapshotJob, pr.ps.setApplySnapJob)
 	if err != nil {
 		log.Fatalf("raftstore[cell-%d]: add apply snapshot task fail, errors:\n %+v",
 			pr.cellID,
 			err)
 	}
-
-	pr.ps.applySnapJob = job
 	pr.ps.applySnapJobLock.Unlock()
 }
 
 func (ps *peerStorage) startDestroyDataJob(cellID uint64, start, end []byte) error {
-	_, err := ps.store.addApplyJob(cellID, func() error {
+	_, err := ps.store.addApplyJob(cellID, "doDestroyDataJob", func() error {
 		return ps.doDestroyDataJob(cellID, start, end)
-	})
+	}, nil)
 
 	return err
 }
@@ -58,9 +56,9 @@ func (pr *PeerReplicate) startRegistrationJob() {
 		appliedIndexTerm: pr.ps.getAppliedIndexTerm(),
 	}
 
-	_, err := pr.store.addApplyJob(pr.cellID, func() error {
+	_, err := pr.store.addApplyJob(pr.cellID, "doRegistrationJob", func() error {
 		return pr.doRegistrationJob(delegate)
-	})
+	}, nil)
 
 	if err != nil {
 		log.Fatalf("raftstore[cell-%d]: add registration job failed, errors:\n %+v",
@@ -70,9 +68,9 @@ func (pr *PeerReplicate) startRegistrationJob() {
 }
 
 func (pr *PeerReplicate) startApplyCommittedEntriesJob(cellID uint64, term uint64, commitedEntries []raftpb.Entry) error {
-	_, err := pr.store.addApplyJob(pr.cellID, func() error {
+	_, err := pr.store.addApplyJob(pr.cellID, "doApplyCommittedEntries", func() error {
 		return pr.doApplyCommittedEntries(cellID, term, commitedEntries)
-	})
+	}, nil)
 	return err
 }
 
@@ -84,18 +82,18 @@ func (pr *PeerReplicate) startRaftLogGCJob(cellID, startIndex, endIndex uint64) 
 	return err
 }
 
-func (s *Store) startDestroyJob(cellID uint64) error {
-	_, err := s.addApplyJob(cellID, func() error {
-		return s.doDestroy(cellID)
-	})
+func (s *Store) startDestroyJob(cellID uint64, peer metapb.Peer) error {
+	_, err := s.addApplyJob(cellID, "doDestroy", func() error {
+		return s.doDestroy(cellID, peer)
+	}, nil)
 
 	return err
 }
 
 func (pr *PeerReplicate) startProposeJob(meta *proposalMeta, isConfChange bool) error {
-	_, err := pr.store.addApplyJob(pr.cellID, func() error {
+	_, err := pr.store.addApplyJob(pr.cellID, "doPropose", func() error {
 		return pr.doPropose(meta, isConfChange)
-	})
+	}, nil)
 
 	return err
 }
@@ -221,7 +219,7 @@ func (ps *peerStorage) doGenerateSnapshotJob() error {
 	start := time.Now()
 
 	if ps.genSnapJob == nil {
-		log.Fatalf("raftstore[cell-%d]: generating snapshot job chan is nil", ps.getCell().ID)
+		log.Fatalf("raftstore[cell-%d]: generating snapshot job is nil", ps.getCell().ID)
 	}
 
 	applyState, err := ps.loadApplyState()
@@ -316,12 +314,12 @@ func (pr *PeerReplicate) doRegistrationJob(delegate *applyDelegate) error {
 	return nil
 }
 
-func (s *Store) doDestroy(cellID uint64) error {
+func (s *Store) doDestroy(cellID uint64, peer metapb.Peer) error {
 	d := s.delegates.delete(cellID)
 	if d != nil {
 		d.destroy()
 		// TODO: think send notify, then liner process this and other apply result
-		s.destroyPeer(cellID, metapb.Peer{ID: d.peerID, StoreID: s.GetID()}, false)
+		s.destroyPeer(cellID, peer, false)
 	}
 
 	return nil

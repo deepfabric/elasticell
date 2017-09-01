@@ -13,6 +13,17 @@ var (
 	labelRequestRaft     = "raft"
 	labelRequestStored   = "stored"
 	labelRequestResponse = "response"
+	labelRequestInQueue  = "in-queue"
+
+	labelQueueReport      = "report"
+	labelQueueReq         = "req"
+	labelQueueBatch       = "batch"
+	labelQueuePropose     = "propose"
+	labelQueueTick        = "tick"
+	labelQueueApplyResult = "apply-result"
+	labelQueueStep        = "step"
+	labelQueueNotify      = "notify"
+	labelQueueMsgs        = "msgs"
 )
 
 var (
@@ -25,18 +36,23 @@ var (
 			Buckets:   prometheus.ExponentialBuckets(0.0005, 2.0, 20),
 		}, []string{"stage"})
 
-	requestBatchSizeGauge = prometheus.NewGauge(
+	queueGauge = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "elasticell",
 			Subsystem: "cell",
-			Name:      "request_batch_size",
-			Help:      "Total size of propose batch size.",
-		})
+			Name:      "queue_size",
+			Help:      "Total size of queue size.",
+		}, []string{"type"})
 )
 
 func initMetricsForRequest() {
 	prometheus.MustRegister(requestDurationHistogram)
-	prometheus.MustRegister(requestBatchSizeGauge)
+	prometheus.MustRegister(queueGauge)
+
+}
+
+func observeRequestInQueue(start time.Time) {
+	requestDurationHistogram.WithLabelValues(labelRequestInQueue).Observe(time.Now().Sub(start).Seconds())
 }
 
 func observeRequestWaitting(cmd *cmd) {

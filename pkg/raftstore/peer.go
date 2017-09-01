@@ -15,7 +15,6 @@ package raftstore
 
 import (
 	"fmt"
-	"sync/atomic"
 	"time"
 
 	"github.com/Workiva/go-datastructures/queue"
@@ -27,13 +26,7 @@ import (
 	"github.com/deepfabric/elasticell/pkg/pd"
 	"github.com/deepfabric/elasticell/pkg/util"
 	"github.com/deepfabric/etcd/raft"
-	"github.com/deepfabric/etcd/raft/raftpb"
 	"golang.org/x/net/context"
-)
-
-const (
-	defaultChanBuf   = 1024
-	defaultQueueSize = 1024
 )
 
 // PeerReplicate is the cell's peer replicate. Every cell replicate has a PeerReplicate.
@@ -47,13 +40,13 @@ type PeerReplicate struct {
 
 	batch *proposeBatch
 
-	loopC        chan struct{}
-	tickC        chan struct{}
-	batchC       chan *cmd
-	reqCtxC      chan *reqCtx
-	proposeC     chan *proposalMeta
-	applyResultC chan *asyncApplyResult
-	stepC        chan *raftpb.Message
+	events       *queue.Queue
+	ticks        *queue.Queue
+	steps        *queue.Queue
+	reports      *queue.Queue
+	applyResults *queue.Queue
+	requests     *queue.Queue
+	proposes     *queue.Queue
 
 	peerHeartbeatsMap *peerHeartbeatsMap
 	pendingReads      *readIndexQueue
@@ -67,7 +60,6 @@ type PeerReplicate struct {
 	deleteKeysHint  uint64
 
 	cancelTaskIds []uint64
-	stopped       uint32
 
 	metrics localMetrics
 }
@@ -118,24 +110,25 @@ func newPeerReplicate(store *Store, cell *metapb.Cell, peerID uint64) (*PeerRepl
 	pr.ps = ps
 	pr.batch = newBatch(pr)
 
-	c := getRaftConfig(peerID, ps.getAppliedIndex(), ps, store.cfg.Raft)
+	c := getRaftConfig(peerID, ps.getAppliedIndex(), ps)
 	rn, err := raft.NewRawNode(c, nil)
 	if err != nil {
 		return nil, err
 	}
+
 	pr.rn = rn
-	pr.loopC = make(chan struct{}, defaultChanBuf)
-	pr.tickC = make(chan struct{}, defaultChanBuf)
-	pr.reqCtxC = make(chan *reqCtx, defaultChanBuf)
-	pr.proposeC = make(chan *proposalMeta, defaultChanBuf)
-	pr.applyResultC = make(chan *asyncApplyResult, defaultChanBuf)
-	pr.stepC = make(chan *raftpb.Message, defaultChanBuf)
-	pr.batchC = make(chan *cmd)
+	pr.events = &queue.Queue{}
+	pr.ticks = &queue.Queue{}
+	pr.steps = &queue.Queue{}
+	pr.reports = &queue.Queue{}
+	pr.applyResults = &queue.Queue{}
+	pr.requests = &queue.Queue{}
+	pr.proposes = &queue.Queue{}
 
 	pr.store = store
 	pr.pendingReads = &readIndexQueue{
 		cellID:   cell.ID,
-		reads:    queue.NewRingBuffer(defaultQueueSize),
+		reads:    queue.NewRingBuffer(size1024),
 		readyCnt: 0,
 	}
 	pr.peerHeartbeatsMap = newPeerHeartbeatsMap()
@@ -154,8 +147,6 @@ func newPeerReplicate(store *Store, cell *metapb.Cell, peerID uint64) (*PeerRepl
 	id, _ := store.runner.RunCancelableTask(pr.readyToServeRaft)
 	pr.cancelTaskIds = append(pr.cancelTaskIds, id)
 
-	id, _ = store.runner.RunCancelableTask(pr.readyToReceiveCMD)
-	pr.cancelTaskIds = append(pr.cancelTaskIds, id)
 	return pr, nil
 }
 
@@ -175,36 +166,71 @@ func (pr *PeerReplicate) maybeCampaign() (bool, error) {
 	return true, nil
 }
 
-func (pr *PeerReplicate) onReq(req *raftcmdpb.Request, cb func(*raftcmdpb.RaftCMDResponse)) {
-	pr.reqCtxC <- &reqCtx{
-		req: req,
-		cb:  cb,
-	}
+func (pr *PeerReplicate) onAdminRequest(adminReq *raftcmdpb.AdminRequest) {
+	pr.addRequest(&reqCtx{
+		admin: adminReq,
+	})
+	commandCounterVec.WithLabelValues(raftcmdpb.CMDType_name[int32(adminReq.Type)]).Inc()
+}
 
+func (pr *PeerReplicate) onReq(req *raftcmdpb.Request, cb func(*raftcmdpb.RaftCMDResponse)) {
 	if globalCfg.EnableRequestMetrics {
 		now := time.Now().UnixNano()
 		req.StartAt = now
 		req.LastStageAt = now
 	}
-
 	commandCounterVec.WithLabelValues(raftcmdpb.CMDType_name[int32(req.Type)]).Inc()
+
+	start := time.Now()
+	pr.addRequest(&reqCtx{
+		req: req,
+		cb:  cb,
+	})
+	if globalCfg.EnableRequestMetrics {
+		observeRequestInQueue(start)
+	}
+
+	log.Debugf("req: added to cell req queue. uuid=<%d>, cell=<%d>",
+		req.UUID,
+		pr.cellID)
 }
 
-func (pr *PeerReplicate) proposeNextBatch() {
-	if pr.batch.hasCMD() {
-		pr.batch.prePropose()
-		pr.batchC <- pr.batch.pop()
-	} else {
-		pr.batch.postPropose()
+func (pr *PeerReplicate) addRequest(req *reqCtx) {
+	err := pr.requests.Put(req)
+	if err != nil {
+		if req.cb != nil {
+			pr.store.respStoreNotMatch(errStoreNotMatch, req.req, req.cb)
+		}
+		return
+	}
+
+	queueGauge.WithLabelValues(labelQueueReq).Set(float64(pr.requests.Len()))
+
+	pr.addEvent()
+}
+
+// In 3 case, we can process next batch
+// 1. The raft log is applied
+// 2. Read index is ready
+// 3. Already responsed client
+func (pr *PeerReplicate) nextBatch() {
+	pr.batch.completeBatch()
+
+	for {
+		if pr.batch.isEmpty() {
+			return
+		}
+
+		pr.batch.doBatch()
+		c := pr.batch.pop()
+		if pr.preProposal(c) {
+			return
+		}
 	}
 }
 
-func (pr *PeerReplicate) setStop() {
-	atomic.StoreUint32(&pr.stopped, 1)
-}
-
-func (pr *PeerReplicate) isStopped() bool {
-	return atomic.LoadUint32(&pr.stopped) == 1
+func (pr *PeerReplicate) resetBatch() {
+	pr.batch = newBatch(pr)
 }
 
 func (pr *PeerReplicate) handleHeartbeat() {
@@ -229,7 +255,7 @@ func (pr *PeerReplicate) doHeartbeat() error {
 	req := new(pdpb.CellHeartbeatReq)
 	req.Cell = pr.getCell()
 	req.Leader = &pr.peer
-	req.DownPeers = pr.collectDownPeers(pr.store.cfg.getMaxPeerDownSecDuration())
+	req.DownPeers = pr.collectDownPeers(globalCfg.getMaxPeerDownSecDuration())
 	req.PendingPeers = pr.collectPendingPeers()
 
 	rsp, err := pr.store.pdClient.CellHeartbeat(context.TODO(), req)
@@ -250,16 +276,13 @@ func (pr *PeerReplicate) doHeartbeat() error {
 			log.Fatal("bug: peer can not be nil")
 		}
 
-		adminReq := newChangePeerRequest(rsp.ChangePeer.Type, *rsp.ChangePeer.Peer)
-		pr.store.sendAdminRequest(pr.getCell(), pr.peer, adminReq)
+		pr.onAdminRequest(newChangePeerRequest(rsp.ChangePeer.Type, *rsp.ChangePeer.Peer))
 	} else if rsp.TransferLeader != nil {
 		log.Infof("heartbeat-cell[%d]: try to transfer leader, from=<%v> to=<%+v>",
 			pr.cellID,
 			pr.peer.ID,
 			rsp.TransferLeader.Peer.ID)
-
-		adminReq := newTransferLeaderRequest(rsp.TransferLeader)
-		pr.store.sendAdminRequest(pr.getCell(), pr.peer, adminReq)
+		pr.onAdminRequest(newTransferLeaderRequest(rsp.TransferLeader))
 	}
 
 	return nil
@@ -325,11 +348,15 @@ func (pr *PeerReplicate) collectPendingPeers() []metapb.Peer {
 	return pendingPeers
 }
 
+func (pr *PeerReplicate) stopEventLoop() {
+	pr.events.Dispose()
+}
+
 func (pr *PeerReplicate) destroy() error {
 	log.Infof("raftstore-destroy[cell-%d]: begin to destroy",
 		pr.cellID)
 
-	pr.setStop()
+	pr.stopEventLoop()
 
 	wb := pr.store.engine.NewWriteBatch()
 
