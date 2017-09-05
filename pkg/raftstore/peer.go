@@ -221,8 +221,9 @@ func (pr *PeerReplicate) nextBatch() {
 			return
 		}
 
-		pr.batch.doBatch()
+		pr.batch.startBatch()
 		c := pr.batch.pop()
+		// Only one proposal can be do at once
 		if pr.preProposal(c) {
 			return
 		}

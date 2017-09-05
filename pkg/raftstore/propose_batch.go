@@ -48,7 +48,7 @@ func (b *proposeBatch) isLastComplete() bool {
 	return b.complete
 }
 
-func (b *proposeBatch) doBatch() {
+func (b *proposeBatch) startBatch() {
 	b.complete = false
 }
 
