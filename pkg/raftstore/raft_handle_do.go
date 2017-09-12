@@ -17,7 +17,6 @@ import (
 	"bytes"
 	"fmt"
 	"sync/atomic"
-
 	"time"
 
 	"github.com/Workiva/go-datastructures/queue"
@@ -35,12 +34,26 @@ import (
 	"golang.org/x/net/context"
 )
 
-type tempRaftContext struct {
+type readyContext struct {
 	raftState  mraft.RaftLocalState
 	applyState mraft.RaftApplyState
 	lastTerm   uint64
 	snapCell   *metapb.Cell
 	wb         storage.WriteBatch
+}
+
+func (ctx *readyContext) reset() {
+	ctx.raftState = emptyRaftState
+	ctx.applyState = emptyApplyState
+	ctx.lastTerm = 0
+	ctx.snapCell = nil
+	ctx.wb = nil
+}
+
+type splitCheckResult struct {
+	cellID   uint64
+	epoch    metapb.CellEpoch
+	splitKey []byte
 }
 
 type applySnapResult struct {
@@ -54,8 +67,8 @@ type readIndexQueue struct {
 	readyCnt int32
 }
 
-func (q *readIndexQueue) push(cmd *cmd) error {
-	return q.reads.Put(cmd)
+func (q *readIndexQueue) push(c *cmd) error {
+	return q.reads.Put(c)
 }
 
 func (q *readIndexQueue) pop() *cmd {
@@ -90,7 +103,7 @@ func (q *readIndexQueue) size() int {
 }
 
 // ====================== raft ready handle methods
-func (ps *peerStorage) doAppendSnapshot(ctx *tempRaftContext, snap raftpb.Snapshot) error {
+func (ps *peerStorage) doAppendSnapshot(ctx *readyContext, snap raftpb.Snapshot) error {
 	log.Infof("raftstore[cell-%d]: begin to apply snapshot", ps.getCell().ID)
 
 	snapData := &mraft.RaftSnapshotData{}
@@ -146,7 +159,7 @@ func (ps *peerStorage) doAppendSnapshot(ctx *tempRaftContext, snap raftpb.Snapsh
 // doAppendEntries the given entries to the raft log using previous last index or self.last_index.
 // Return the new last index for later update. After we commit in engine, we can set last_index
 // to the return one.
-func (ps *peerStorage) doAppendEntries(ctx *tempRaftContext, entries []raftpb.Entry) error {
+func (ps *peerStorage) doAppendEntries(ctx *readyContext, entries []raftpb.Entry) error {
 	c := len(entries)
 
 	if c == 0 {
@@ -191,7 +204,7 @@ func (ps *peerStorage) doAppendEntries(ctx *tempRaftContext, entries []raftpb.En
 	return nil
 }
 
-func (pr *PeerReplicate) doSaveRaftState(ctx *tempRaftContext) error {
+func (pr *PeerReplicate) doSaveRaftState(ctx *readyContext) error {
 	data, _ := ctx.raftState.Marshal()
 	err := ctx.wb.Set(getRaftStateKey(pr.ps.getCell().ID), data)
 	if err != nil {
@@ -203,7 +216,7 @@ func (pr *PeerReplicate) doSaveRaftState(ctx *tempRaftContext) error {
 	return err
 }
 
-func (pr *PeerReplicate) doSaveApplyState(ctx *tempRaftContext) error {
+func (pr *PeerReplicate) doSaveApplyState(ctx *readyContext) error {
 	err := ctx.wb.Set(getApplyStateKey(pr.ps.getCell().ID), util.MustMarshal(&ctx.applyState))
 	if err != nil {
 		log.Errorf("raftstore[cell-%d]: save temp apply state failure, errors:\n %+v",
@@ -214,7 +227,7 @@ func (pr *PeerReplicate) doSaveApplyState(ctx *tempRaftContext) error {
 	return err
 }
 
-func (pr *PeerReplicate) doApplySnap(ctx *tempRaftContext, rd *raft.Ready) *applySnapResult {
+func (pr *PeerReplicate) doApplySnap(ctx *readyContext, rd *raft.Ready) *applySnapResult {
 	pr.ps.raftState = ctx.raftState
 	pr.ps.setApplyState(&ctx.applyState)
 	pr.ps.lastTerm = ctx.lastTerm
@@ -260,6 +273,7 @@ func (pr *PeerReplicate) applyCommittedEntries(rd *raft.Ready) {
 
 		if len(rd.CommittedEntries) > 0 {
 			pr.ps.lastReadyIndex = rd.CommittedEntries[len(rd.CommittedEntries)-1].Index
+
 			err := pr.startApplyCommittedEntriesJob(pr.cellID, pr.getCurrentTerm(), rd.CommittedEntries)
 			if err != nil {
 				log.Fatalf("raftstore[cell-%d]: add apply committed entries job failed, errors:\n %+v",
@@ -270,12 +284,10 @@ func (pr *PeerReplicate) applyCommittedEntries(rd *raft.Ready) {
 	}
 }
 
-func (pr *PeerReplicate) doPropose(meta *proposalMeta, isConfChange bool) error {
-	cmd := meta.cmd
-
+func (pr *PeerReplicate) doPropose(c *cmd, isConfChange bool) error {
 	delegate := pr.store.delegates.get(pr.cellID)
 	if delegate == nil {
-		cmd.respCellNotFound(pr.cellID, meta.term)
+		c.respCellNotFound(pr.cellID)
 		return nil
 	}
 
@@ -284,13 +296,13 @@ func (pr *PeerReplicate) doPropose(meta *proposalMeta, isConfChange bool) error 
 	}
 
 	if isConfChange {
-		c := delegate.getPendingChangePeerCMD()
-		if nil != delegate.getPendingChangePeerCMD() {
-			delegate.notifyStaleCMD(c)
+		changeC := delegate.getPendingChangePeerCMD()
+		if nil != changeC && changeC.req != nil {
+			delegate.notifyStaleCMD(changeC)
 		}
-		delegate.setPedingChangePeerCMD(meta.term, cmd)
+		delegate.setPedingChangePeerCMD(c)
 	} else {
-		delegate.appendPendingCmd(meta.term, cmd)
+		delegate.appendPendingCmd(c)
 	}
 
 	return nil
@@ -590,13 +602,13 @@ func (s *Store) doApplyRaftLogGC(cellID uint64, result *raftGCResult) {
 func (pr *PeerReplicate) doApplyReads(rd *raft.Ready) {
 	if pr.readyToHandleRead() {
 		for _, state := range rd.ReadStates {
-			cmd := pr.pendingReads.pop()
-			if bytes.Compare(state.RequestCtx, cmd.getUUID()) != 0 {
+			c := pr.pendingReads.pop()
+			if bytes.Compare(state.RequestCtx, c.getUUID()) != 0 {
 				log.Fatalf("raftstore[cell-%d]: apply read failed, uuid not match",
 					pr.cellID)
 			}
 
-			pr.doExecReadCmd(cmd)
+			pr.doExecReadCmd(c)
 		}
 
 		if len(rd.ReadStates) > 0 {
@@ -617,13 +629,13 @@ func (pr *PeerReplicate) doApplyReads(rd *raft.Ready) {
 			if n > 0 {
 				// all uncommitted reads will be dropped silently in raft.
 				for index := 0; index < n; index++ {
-					cmd := pr.pendingReads.pop()
-					resp := errorStaleCMDResp(cmd.getUUID(), pr.getCurrentTerm())
+					c := pr.pendingReads.pop()
+					resp := errorStaleCMDResp(c.getUUID(), pr.getCurrentTerm())
 
 					log.Debugf("raftstore[cell-%d]: resp stale, cmd=<%+v>",
 						pr.cellID,
-						cmd)
-					cmd.resp(resp)
+						c)
+					c.resp(resp)
 				}
 			}
 
@@ -631,12 +643,12 @@ func (pr *PeerReplicate) doApplyReads(rd *raft.Ready) {
 
 			// we are not leader now, so all writes in the batch is actually stale
 			for i := 0; i < pr.batch.size(); i++ {
-				cmd := pr.batch.pop()
-				resp := errorStaleCMDResp(cmd.getUUID(), pr.getCurrentTerm())
+				c := pr.batch.pop()
+				resp := errorStaleCMDResp(c.getUUID(), pr.getCurrentTerm())
 				log.Debugf("raftstore[cell-%d]: resp stale, cmd=<%+v>",
 					pr.cellID,
-					cmd)
-				cmd.resp(resp)
+					c)
+				c.resp(resp)
 			}
 			pr.resetBatch()
 		}
@@ -725,16 +737,18 @@ func (ps *peerStorage) Entries(low, high, maxSize uint64) ([]raftpb.Entry, error
 
 		e, err := ps.unmarshal(v, low)
 		if err != nil {
+			releaseEntry(e)
 			return nil, err
 		}
 
 		ents = append(ents, *e)
+		releaseEntry(e)
 		return ents, nil
 	}
 
 	endKey := getRaftLogKey(ps.getCell().ID, high)
 	err = ps.store.getMetaEngine().Scan(startKey, endKey, func(key, value []byte) (bool, error) {
-		e := &raftpb.Entry{}
+		e := acquireEntry()
 		util.MustUnmarshal(e, value)
 
 		// May meet gap or has been compacted.
@@ -748,6 +762,7 @@ func (ps *peerStorage) Entries(low, high, maxSize uint64) ([]raftpb.Entry, error
 		exceededMaxSize = totalSize > maxSize
 		if !exceededMaxSize || len(ents) == 0 {
 			ents = append(ents, *e)
+			releaseEntry(e)
 		}
 
 		return !exceededMaxSize, nil
@@ -796,10 +811,13 @@ func (ps *peerStorage) Term(idx uint64) (uint64, error) {
 
 	e, err := ps.unmarshal(v, idx)
 	if err != nil {
+		releaseEntry(e)
 		return 0, err
 	}
 
-	return e.Term, nil
+	t := e.Term
+	releaseEntry(e)
+	return t, nil
 }
 
 func (ps *peerStorage) LastIndex() (uint64, error) {
@@ -845,7 +863,7 @@ func (ps *peerStorage) Snapshot() (raftpb.Snapshot, error) {
 		ps.getCell().Epoch)
 	ps.snapTriedCnt++
 
-	_, err := ps.store.addSnapJob(ps.doGenerateSnapshotJob, ps.setGenSnapJob)
+	err := ps.store.addSnapJob(ps.doGenerateSnapshotJob, ps.setGenSnapJob)
 	if err != nil {
 		log.Fatalf("raftstore[cell-%d]: add generate job failed, errors:\n %+v",
 			ps.getCell().ID,

@@ -378,13 +378,14 @@ func (ps *peerStorage) loadApplyState() (*mraft.RaftApplyState, error) {
 }
 
 func (ps *peerStorage) unmarshal(v []byte, expectIndex uint64) (*raftpb.Entry, error) {
-	e := &raftpb.Entry{}
+	e := acquireEntry()
 	if err := e.Unmarshal(v); err != nil {
 		log.Errorf("raftstore[cell-%d]: unmarshal entry failure, index=<%d>, v=<%+v> errors:\n %+v",
 			ps.getCell().ID,
 			expectIndex,
 			v,
 			err)
+		releaseEntry(e)
 		return nil, err
 	}
 
@@ -411,7 +412,7 @@ func (ps *peerStorage) clearData() error {
 	startKey := encStartKey(&cell)
 	endKey := encEndKey(&cell)
 
-	_, err := ps.store.addSnapJob(func() error {
+	err := ps.store.addSnapJob(func() error {
 		log.Infof("raftstore-destroy[cell-%d]: deleting data, start=<%v> end=<%v>",
 			cellID,
 			startKey,

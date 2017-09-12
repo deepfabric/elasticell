@@ -18,13 +18,13 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/Workiva/go-datastructures/queue"
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
 	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
 	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
 	"github.com/deepfabric/elasticell/pkg/pd"
+	"github.com/deepfabric/elasticell/pkg/pool"
 	"github.com/deepfabric/elasticell/pkg/redis"
 	"github.com/deepfabric/elasticell/pkg/storage"
 	"github.com/deepfabric/elasticell/pkg/util"
@@ -74,10 +74,10 @@ type Store struct {
 	trans    *transport
 	engine   storage.Driver
 	runner   *util.Runner
-	messages []*queue.Queue
+	messages []*util.Queue
 
 	redisReadHandles  map[raftcmdpb.CMDType]func(*raftcmdpb.Request) *raftcmdpb.Response
-	redisWriteHandles map[raftcmdpb.CMDType]func(*execContext, *raftcmdpb.Request) *raftcmdpb.Response
+	redisWriteHandles map[raftcmdpb.CMDType]func(*applyContext, *raftcmdpb.Request) *raftcmdpb.Response
 
 	sendingSnapCount   uint32
 	reveivingSnapCount uint32
@@ -98,10 +98,10 @@ func NewStore(clusterID uint64, pdClient *pd.Client, meta metapb.Store, engine s
 
 	s.trans = newTransport(s, pdClient, s.notify)
 
-	s.messages = make([]*queue.Queue, globalCfg.RaftMessageWorkerCount)
+	s.messages = make([]*util.Queue, globalCfg.RaftMessageWorkerCount)
 	var index uint64
 	for ; index < globalCfg.RaftMessageWorkerCount; index++ {
-		s.messages[index] = &queue.Queue{}
+		s.messages[index] = &util.Queue{}
 	}
 
 	s.keyRanges = util.NewCellTree()
@@ -119,7 +119,7 @@ func NewStore(clusterID uint64, pdClient *pd.Client, meta metapb.Store, engine s
 	s.runner.AddNamedWorker(raftGCWorker)
 
 	s.redisReadHandles = make(map[raftcmdpb.CMDType]func(*raftcmdpb.Request) *raftcmdpb.Response)
-	s.redisWriteHandles = make(map[raftcmdpb.CMDType]func(*execContext, *raftcmdpb.Request) *raftcmdpb.Response)
+	s.redisWriteHandles = make(map[raftcmdpb.CMDType]func(*applyContext, *raftcmdpb.Request) *raftcmdpb.Response)
 
 	s.initRedisHandle()
 	s.init()
@@ -239,16 +239,21 @@ func (s *Store) startHandleNotifyMsg() {
 		index++
 
 		s.runner.RunCancelableTask(func(ctx context.Context) {
+			items := make([]interface{}, globalCfg.RaftMessageProcessBatchLimit, globalCfg.RaftMessageProcessBatchLimit)
+
 			for {
-				ns, err := q.Get(globalCfg.RaftMessageProcessBatchLimit)
+				ns, err := q.Get(globalCfg.RaftMessageProcessBatchLimit, items)
 				if err != nil {
 					log.Infof("stop: store raft message handler<%d> stopped", id)
 					return
 				}
 
-				for _, n := range ns {
+				for i := int64(0); i < ns; i++ {
+					n := items[i]
+
 					if msg, ok := n.(*mraft.RaftMessage); ok {
 						s.onRaftMessage(msg)
+						pool.ReleaseRaftMessage(msg)
 					} else if msg, ok := n.(*splitCheckResult); ok {
 						s.onSplitCheckResult(msg)
 					} else if msg, ok := n.(*mraft.SnapshotData); ok {
@@ -288,6 +293,9 @@ func (s *Store) startStoreHeartbeatTask() {
 
 		var err error
 		var job *util.Job
+		cb := func(j *util.Job) {
+			job = j
+		}
 
 		for {
 			select {
@@ -299,7 +307,7 @@ func (s *Store) startStoreHeartbeatTask() {
 					// cancel last if not complete
 					job.Cancel()
 				}
-				job, err = s.addPDJob(s.handleStoreHeartbeat)
+				err = s.addPDJob(s.handleStoreHeartbeat, cb)
 				if err != nil {
 					log.Errorf("heartbeat-store[%d]: add job failed, errors:\n %+v",
 						s.GetID(),
@@ -449,11 +457,10 @@ func (s *Store) OnRedisCommand(cmdType raftcmdpb.CMDType, cmd redis.Command, cb 
 	}
 
 	uuid := uuid.NewV4().Bytes()
-	req := &raftcmdpb.Request{
-		UUID: uuid,
-		Type: cmdType,
-		Cmd:  cmd,
-	}
+	req := pool.AcquireRequest()
+	req.UUID = uuid
+	req.Type = cmdType
+	req.Cmd = cmd
 
 	pr.onReq(req, cb)
 	return uuid, nil
@@ -826,32 +833,32 @@ func (s *Store) addPeerToCache(peer metapb.Peer) {
 	s.peerCache.put(peer.ID, peer)
 }
 
-func (s *Store) addPDJob(task func() error) (*util.Job, error) {
-	return s.addNamedJob("", pdWorker, task)
+func (s *Store) addPDJob(task func() error, cb func(*util.Job)) error {
+	return s.addNamedJobWithCB("", pdWorker, task, cb)
 }
 
-func (s *Store) addRaftLogGCJob(task func() error) (*util.Job, error) {
+func (s *Store) addRaftLogGCJob(task func() error) error {
 	return s.addNamedJob("", raftGCWorker, task)
 }
 
-func (s *Store) addSnapJob(task func() error, cb func(*util.Job)) (*util.Job, error) {
+func (s *Store) addSnapJob(task func() error, cb func(*util.Job)) error {
 	return s.addNamedJobWithCB("", snapWorker, task, cb)
 }
 
-func (s *Store) addApplyJob(cellID uint64, desc string, task func() error, cb func(*util.Job)) (*util.Job, error) {
+func (s *Store) addApplyJob(cellID uint64, desc string, task func() error, cb func(*util.Job)) error {
 	index := (globalCfg.ApplyWorkerCount - 1) & cellID
 	return s.addNamedJobWithCB(desc, fmt.Sprintf(applyWorker, index), task, cb)
 }
 
-func (s *Store) addSplitJob(task func() error) (*util.Job, error) {
+func (s *Store) addSplitJob(task func() error) error {
 	return s.addNamedJob("", splitWorker, task)
 }
 
-func (s *Store) addNamedJob(desc, worker string, task func() error) (*util.Job, error) {
+func (s *Store) addNamedJob(desc, worker string, task func() error) error {
 	return s.runner.RunJobWithNamedWorker(desc, worker, task)
 }
 
-func (s *Store) addNamedJobWithCB(desc, worker string, task func() error, cb func(*util.Job)) (*util.Job, error) {
+func (s *Store) addNamedJobWithCB(desc, worker string, task func() error, cb func(*util.Job)) error {
 	return s.runner.RunJobWithNamedWorkerWithCB(desc, worker, task, cb)
 }
 

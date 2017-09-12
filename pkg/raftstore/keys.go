@@ -14,15 +14,12 @@
 package raftstore
 
 import (
-	"fmt"
-
 	"bytes"
-
 	"encoding/binary"
+	"fmt"
 
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
-	"github.com/fagongzi/goetty"
 )
 
 // for cell meta
@@ -56,6 +53,8 @@ var (
 	dataPrefixKey      = []byte{dataPrefix}
 	dataMinKey         = []byte{dataPrefix}
 	dataMaxKey         = []byte{dataPrefix + 1}
+
+	dataPrefixKeySize = len(dataPrefixKey)
 )
 
 var (
@@ -106,28 +105,33 @@ func getCellStateKey(cellID uint64) []byte {
 }
 
 func getCellMetaKey(cellID uint64, suffix byte) []byte {
-	buf := goetty.NewByteBuf(9 + len(cellMetaPrefixKey))
+	buf := acquireBuf()
 	buf.Write(cellMetaPrefixKey)
 	buf.WriteInt64(int64(cellID))
 	buf.WriteByte(suffix)
 	_, data, _ := buf.ReadBytes(buf.Readable())
+
+	releaseBuf(buf)
 	return data
 }
 
 func getCellMetaPrefix(cellID uint64) []byte {
-	buf := goetty.NewByteBuf(len(cellMetaPrefixKey) + 8)
+	buf := acquireBuf()
 	buf.Write(cellMetaPrefixKey)
 	buf.WriteInt64(int64(cellID))
 	_, data, _ := buf.ReadBytes(buf.Readable())
+
+	releaseBuf(buf)
 	return data
 }
 
 func getDataKey(key []byte) []byte {
-	buf := goetty.NewByteBuf(len(key) + len(dataPrefixKey))
+	buf := acquireBuf()
 	buf.Write(dataPrefixKey)
 	buf.Write(key)
-
 	_, data, _ := buf.ReadBytes(buf.Readable())
+
+	releaseBuf(buf)
 	return data
 }
 
@@ -173,10 +177,12 @@ func getApplyStateKey(cellID uint64) []byte {
 }
 
 func getCellRaftPrefix(cellID uint64) []byte {
-	buf := goetty.NewByteBuf(len(cellRaftPrefixKey) + 8)
+	buf := acquireBuf()
 	buf.Write(cellRaftPrefixKey)
 	buf.WriteInt64(int64(cellID))
 	_, data, _ := buf.ReadBytes(buf.Readable())
+
+	releaseBuf(buf)
 	return data
 }
 
@@ -194,14 +200,15 @@ func getRaftLogIndex(key []byte) (uint64, error) {
 }
 
 func getCellIDKey(cellID uint64, suffix byte, extraCap int, extra uint64) []byte {
-	buf := goetty.NewByteBuf(len(cellRaftPrefixKey) + 9 + extraCap)
+	buf := acquireBuf()
 	buf.Write(cellRaftPrefixKey)
 	buf.WriteInt64(int64(cellID))
 	buf.WriteByte(suffix)
 	if extraCap > 0 {
 		buf.WriteInt64(int64(extra))
 	}
-
 	_, data, _ := buf.ReadBytes(buf.Readable())
+
+	releaseBuf(buf)
 	return data
 }

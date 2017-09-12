@@ -90,7 +90,7 @@ func (e *memoryDataEngine) ApplySnapshot(path string) error {
 		return nil
 	}
 
-	buf := goetty.NewByteBufSize(len(data), 0)
+	buf := goetty.NewByteBuf(len(data))
 	buf.Write(data)
 
 	for {
@@ -125,5 +125,6 @@ func (e *memoryDataEngine) ApplySnapshot(path string) error {
 		}
 	}
 
+	buf.Release()
 	return nil
 }

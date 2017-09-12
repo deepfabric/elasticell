@@ -14,104 +14,31 @@
 package raftstore
 
 import (
-	"errors"
-
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/errorpb"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
+	"github.com/deepfabric/elasticell/pkg/pool"
 	"github.com/deepfabric/elasticell/pkg/util/uuid"
 )
 
-var (
-	errStaleCMD           = errors.New("stale command")
-	errStaleEpoch         = errors.New("stale epoch")
-	errNotLeader          = errors.New("NotLeader")
-	errCellNotFound       = errors.New("cell not found")
-	errMissingUUIDCMD     = errors.New("missing request uuid")
-	errLargeRaftEntrySize = errors.New("entry is too large")
-	errKeyNotInCell       = errors.New("key not in cell")
-	errStoreNotMatch      = errors.New("key not in store")
-
-	infoStaleCMD  = new(errorpb.StaleCommand)
-	storeNotMatch = new(errorpb.StoreNotMatch)
-)
-
-type splitCheckResult struct {
-	cellID   uint64
-	epoch    metapb.CellEpoch
-	splitKey []byte
-}
-
-func buildTerm(term uint64, resp *raftcmdpb.RaftCMDResponse) {
-	if resp.Header == nil {
-		return
-	}
-
-	resp.Header.CurrentTerm = term
-}
-
-func buildUUID(uuid []byte, resp *raftcmdpb.RaftCMDResponse) {
-	if resp.Header == nil {
-		return
-	}
-
-	if resp.Header.UUID != nil {
-		resp.Header.UUID = uuid
-	}
-}
-
-func errorOtherCMDResp(err error) *raftcmdpb.RaftCMDResponse {
-	resp := errorBaseResp(nil, 0)
-	resp.Header.Error.Message = err.Error()
-	return resp
-}
-
-func errorPbResp(err *errorpb.Error, uuid []byte, currentTerm uint64) *raftcmdpb.RaftCMDResponse {
-	resp := errorBaseResp(uuid, currentTerm)
-	resp.Header.Error = *err
-
-	return resp
-}
-
-func errorStaleCMDResp(uuid []byte, currentTerm uint64) *raftcmdpb.RaftCMDResponse {
-	resp := errorBaseResp(uuid, currentTerm)
-	resp.Header.Error.Message = errStaleCMD.Error()
-	resp.Header.Error.StaleCommand = infoStaleCMD
-
-	return resp
-}
-
-func errorStaleEpochResp(uuid []byte, currentTerm uint64, newCells ...metapb.Cell) *raftcmdpb.RaftCMDResponse {
-	resp := errorBaseResp(uuid, currentTerm)
-
-	resp.Header.Error.Message = errStaleCMD.Error()
-	resp.Header.Error.StaleEpoch = &errorpb.StaleEpoch{
-		NewCells: newCells,
-	}
-
-	return resp
-}
-
-func errorBaseResp(uuid []byte, currentTerm uint64) *raftcmdpb.RaftCMDResponse {
-	resp := new(raftcmdpb.RaftCMDResponse)
-	resp.Header = new(raftcmdpb.RaftResponseHeader)
-	buildTerm(currentTerm, resp)
-	buildUUID(uuid, resp)
-
-	return resp
-}
-
 type cmd struct {
-	req *raftcmdpb.RaftCMDRequest
-	cb  func(*raftcmdpb.RaftCMDResponse)
+	req  *raftcmdpb.RaftCMDRequest
+	cb   func(*raftcmdpb.RaftCMDResponse)
+	term uint64
+}
+
+func (c *cmd) reset() {
+	c.req = nil
+	c.cb = nil
+	c.term = 0
 }
 
 func newCMD(req *raftcmdpb.RaftCMDRequest, cb func(*raftcmdpb.RaftCMDResponse)) *cmd {
-	return &cmd{
-		req: req,
-		cb:  cb,
-	}
+	c := acquireCmd()
+	c.req = req
+	c.cb = cb
+	return c
 }
 
 func (s *Store) respStoreNotMatch(err error, req *raftcmdpb.Request, cb func(*raftcmdpb.RaftCMDResponse)) {
@@ -119,10 +46,10 @@ func (s *Store) respStoreNotMatch(err error, req *raftcmdpb.Request, cb func(*ra
 		Message:       err.Error(),
 		StoreNotMatch: storeNotMatch,
 	}, uuid.NewV4().Bytes(), 0)
-	rsp.Responses = append(rsp.Responses, &raftcmdpb.Response{
-		UUID:          req.UUID,
-		OriginRequest: req,
-	})
+
+	resp := pool.AcquireResponse()
+	resp.UUID = req.UUID
+	rsp.Responses = append(rsp.Responses, resp)
 	cb(rsp)
 }
 
@@ -141,21 +68,15 @@ func (c *cmd) resp(resp *raftcmdpb.RaftCMDResponse) {
 				}
 
 				for _, req := range c.req.Requests {
-					resp.Responses = append(resp.Responses, &raftcmdpb.Response{
-						UUID: req.UUID,
-					})
+					rsp := pool.AcquireResponse()
+					rsp.UUID = req.UUID
+
+					resp.Responses = append(resp.Responses, rsp)
 				}
 			} else {
 				for idx, req := range c.req.Requests {
 					resp.Responses[idx].UUID = req.UUID
 				}
-			}
-		}
-
-		if resp.Header != nil {
-			for idx, req := range c.req.Requests {
-				req.Cmd[1] = getOriginKey(req.Cmd[1])
-				resp.Responses[idx].OriginRequest = req
 			}
 		}
 
@@ -167,22 +88,31 @@ func (c *cmd) resp(resp *raftcmdpb.RaftCMDResponse) {
 		if globalCfg.EnableRequestMetrics {
 			observeRequestResponse(c)
 		}
+	} else {
+		pool.ReleaseRaftResponseAll(resp)
 	}
+
+	c.release()
 }
 
-func (c *cmd) respCellNotFound(cellID uint64, term uint64) {
+func (c *cmd) release() {
+	pool.ReleaseRaftRequestAll(c.req)
+	releaseCmd(c)
+}
+
+func (c *cmd) respCellNotFound(cellID uint64) {
 	err := new(errorpb.CellNotFound)
 	err.CellID = cellID
 
 	rsp := errorPbResp(&errorpb.Error{
 		Message:      errCellNotFound.Error(),
 		CellNotFound: err,
-	}, c.req.Header.UUID, term)
+	}, c.req.Header.UUID, c.term)
 
 	c.resp(rsp)
 }
 
-func (c *cmd) respLargeRaftEntrySize(cellID uint64, size uint64, term uint64) {
+func (c *cmd) respLargeRaftEntrySize(cellID uint64, size uint64) {
 	err := &errorpb.RaftEntryTooLarge{
 		CellID:    cellID,
 		EntrySize: size,
@@ -191,7 +121,7 @@ func (c *cmd) respLargeRaftEntrySize(cellID uint64, size uint64, term uint64) {
 	rsp := errorPbResp(&errorpb.Error{
 		Message:           errLargeRaftEntrySize.Error(),
 		RaftEntryTooLarge: err,
-	}, c.getUUID(), term)
+	}, c.getUUID(), c.term)
 
 	c.resp(rsp)
 }
@@ -201,7 +131,7 @@ func (c *cmd) respOtherError(err error) {
 	c.resp(rsp)
 }
 
-func (c *cmd) respNotLeader(cellID uint64, term uint64, leader *metapb.Peer) {
+func (c *cmd) respNotLeader(cellID uint64, leader *metapb.Peer) {
 	err := &errorpb.NotLeader{
 		CellID: cellID,
 	}
@@ -213,7 +143,7 @@ func (c *cmd) respNotLeader(cellID uint64, term uint64, leader *metapb.Peer) {
 	rsp := errorPbResp(&errorpb.Error{
 		Message:   errNotLeader.Error(),
 		NotLeader: err,
-	}, c.getUUID(), term)
+	}, c.getUUID(), c.term)
 
 	c.resp(rsp)
 }
@@ -222,24 +152,24 @@ func (c *cmd) getUUID() []byte {
 	return c.req.Header.UUID
 }
 
-func (pr *PeerReplicate) execReadLocal(cmd *cmd) {
-	pr.doExecReadCmd(cmd)
+func (pr *PeerReplicate) execReadLocal(c *cmd) {
+	pr.doExecReadCmd(c)
 	pr.metrics.propose.readLocal++
 }
 
-func (pr *PeerReplicate) execReadIndex(meta *proposalMeta) bool {
+func (pr *PeerReplicate) execReadIndex(c *cmd) bool {
 	if !pr.isLeader() {
-		meta.cmd.respNotLeader(pr.cellID, meta.term, nil)
+		c.respNotLeader(pr.cellID, nil)
 		return true
 	}
 
 	lastPendingReadCount := pr.pendingReadCount()
 	lastReadyReadCount := pr.readyReadCount()
 
-	log.Debugf("raftstore[cell-%d]: to read index, meta=<%+v>",
+	log.Debugf("raftstore[cell-%d]: to read index, cmd=<%+v>",
 		pr.cellID,
-		meta)
-	pr.rn.ReadIndex(meta.cmd.getUUID())
+		c)
+	pr.rn.ReadIndex(c.getUUID())
 
 	pendingReadCount := pr.pendingReadCount()
 	readyReadCount := pr.readyReadCount()
@@ -247,11 +177,11 @@ func (pr *PeerReplicate) execReadIndex(meta *proposalMeta) bool {
 	if pendingReadCount == lastPendingReadCount &&
 		readyReadCount == lastReadyReadCount {
 		// The message gets dropped silently, can't be handled anymore.
-		meta.cmd.respNotLeader(pr.cellID, meta.term, nil)
+		c.respNotLeader(pr.cellID, nil)
 		return true
 	}
 
-	pr.pendingReads.push(meta.cmd)
+	pr.pendingReads.push(c)
 	pr.metrics.propose.readIndex++
 
 	return false

@@ -15,25 +15,28 @@ package raftstore
 
 import (
 	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
+	"github.com/deepfabric/elasticell/pkg/pool"
 	"github.com/deepfabric/elasticell/pkg/redis"
 	"github.com/deepfabric/elasticell/pkg/util"
 )
 
-func (s *Store) execKVSet(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execKVSet(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
 	if len(args) != 2 {
-		return &raftcmdpb.Response{
-			ErrorResult: redis.ErrInvalidCommandResp,
-		}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = redis.ErrInvalidCommandResp
+
+		return rsp
 	}
 
 	err := s.getKVEngine().Set(args[0], args[1])
 	if err != nil {
-		return &raftcmdpb.Response{
-			ErrorResult: util.StringToSlice(err.Error()),
-		}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = util.StringToSlice(err.Error())
+
+		return rsp
 	}
 
 	size := int64(len(args[0]) + len(args[1]))
@@ -41,7 +44,10 @@ func (s *Store) execKVSet(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.R
 	ctx.metrics.writtenBytes += size
 	ctx.metrics.sizeDiffHint += size
 
-	return &raftcmdpb.Response{StatusResult: redis.OKStatusResp}
+	rsp := pool.AcquireResponse()
+	rsp.StatusResult = redis.OKStatusResp
+
+	return rsp
 }
 
 func (s *Store) execKVGet(req *raftcmdpb.Request) *raftcmdpb.Response {
@@ -49,21 +55,23 @@ func (s *Store) execKVGet(req *raftcmdpb.Request) *raftcmdpb.Response {
 	args := cmd.Args()
 
 	if len(args) != 1 {
-		return &raftcmdpb.Response{
-			ErrorResult: redis.ErrInvalidCommandResp,
-		}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = redis.ErrInvalidCommandResp
+
+		return rsp
 	}
 
 	value, err := s.getKVEngine().Get(args[0])
 	if err != nil {
-		return &raftcmdpb.Response{
-			ErrorResult: util.StringToSlice(err.Error()),
-		}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = util.StringToSlice(err.Error())
+
+		return rsp
 	}
 
-	return &raftcmdpb.Response{
-		BulkResult: value,
-	}
+	rsp := pool.AcquireResponse()
+	rsp.BulkResult = value
+	return rsp
 }
 
 func (s *Store) execKVStrLen(req *raftcmdpb.Request) *raftcmdpb.Response {
@@ -71,180 +79,200 @@ func (s *Store) execKVStrLen(req *raftcmdpb.Request) *raftcmdpb.Response {
 	args := cmd.Args()
 
 	if len(args) != 1 {
-		return &raftcmdpb.Response{
-			ErrorResult: redis.ErrInvalidCommandResp,
-		}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = redis.ErrInvalidCommandResp
+
+		return rsp
 	}
 
 	n, err := s.getKVEngine().StrLen(args[0])
 	if err != nil {
-		return &raftcmdpb.Response{
-			ErrorResult: util.StringToSlice(err.Error()),
-		}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = util.StringToSlice(err.Error())
+
+		return rsp
 	}
 
-	return &raftcmdpb.Response{
-		IntegerResult: &n,
-	}
+	rsp := pool.AcquireResponse()
+	rsp.IntegerResult = &n
+	return rsp
 }
 
-func (s *Store) execKVIncrBy(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execKVIncrBy(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
 	if len(args) != 2 {
-		return &raftcmdpb.Response{
-			ErrorResult: redis.ErrInvalidCommandResp,
-		}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = redis.ErrInvalidCommandResp
+
+		return rsp
 	}
 
 	incrment, err := util.StrInt64(args[1])
 	if err != nil {
-		return &raftcmdpb.Response{
-			ErrorResult: redis.ErrInvalidCommandResp,
-		}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = redis.ErrInvalidCommandResp
+
+		return rsp
 	}
 
 	n, err := s.getKVEngine().IncrBy(args[0], incrment)
 	if err != nil {
-		return &raftcmdpb.Response{
-			ErrorResult: util.StringToSlice(err.Error()),
-		}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = util.StringToSlice(err.Error())
+
+		return rsp
 	}
 
-	return &raftcmdpb.Response{
-		IntegerResult: &n,
-	}
+	rsp := pool.AcquireResponse()
+	rsp.IntegerResult = &n
+	return rsp
 }
 
-func (s *Store) execKVIncr(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execKVIncr(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
 	if len(args) != 1 {
-		return &raftcmdpb.Response{
-			ErrorResult: redis.ErrInvalidCommandResp,
-		}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = redis.ErrInvalidCommandResp
+
+		return rsp
 	}
 
 	n, err := s.getKVEngine().IncrBy(args[0], 1)
 	if err != nil {
-		return &raftcmdpb.Response{
-			ErrorResult: util.StringToSlice(err.Error()),
-		}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = util.StringToSlice(err.Error())
+		return rsp
 	}
 
-	return &raftcmdpb.Response{
-		IntegerResult: &n,
-	}
+	rsp := pool.AcquireResponse()
+	rsp.IntegerResult = &n
+	return rsp
 }
 
-func (s *Store) execKVDecrby(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execKVDecrby(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
 	if len(args) != 2 {
-		return &raftcmdpb.Response{
-			ErrorResult: redis.ErrInvalidCommandResp,
-		}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = redis.ErrInvalidCommandResp
+
+		return rsp
 	}
 
 	incrment, err := util.StrInt64(args[1])
 	if err != nil {
-		return &raftcmdpb.Response{
-			ErrorResult: redis.ErrInvalidCommandResp,
-		}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = redis.ErrInvalidCommandResp
+
+		return rsp
 	}
 
 	n, err := s.getKVEngine().DecrBy(args[0], incrment)
 	if err != nil {
-		return &raftcmdpb.Response{
-			ErrorResult: util.StringToSlice(err.Error()),
-		}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = util.StringToSlice(err.Error())
+		return rsp
 	}
 
-	return &raftcmdpb.Response{
-		IntegerResult: &n,
-	}
+	rsp := pool.AcquireResponse()
+	rsp.IntegerResult = &n
+	return rsp
 }
 
-func (s *Store) execKVDecr(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execKVDecr(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
 	if len(args) != 1 {
-		return &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = redis.ErrInvalidCommandResp
+
+		return rsp
 	}
 
 	n, err := s.getKVEngine().DecrBy(args[0], 1)
 	if err != nil {
-		return &raftcmdpb.Response{
-			ErrorResult: util.StringToSlice(err.Error()),
-		}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = util.StringToSlice(err.Error())
+		return rsp
 	}
 
-	return &raftcmdpb.Response{
-		IntegerResult: &n,
-	}
+	rsp := pool.AcquireResponse()
+	rsp.IntegerResult = &n
+	return rsp
 }
 
-func (s *Store) execKVGetSet(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execKVGetSet(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
 	if len(args) != 2 {
-		return &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = redis.ErrInvalidCommandResp
+
+		return rsp
 	}
 
 	value, err := s.getKVEngine().GetSet(args[0], args[1])
 	if err != nil {
-		return &raftcmdpb.Response{
-			ErrorResult: util.StringToSlice(err.Error()),
-		}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = util.StringToSlice(err.Error())
+		return rsp
 	}
 
-	return &raftcmdpb.Response{
-		BulkResult: value,
-	}
+	rsp := pool.AcquireResponse()
+	rsp.BulkResult = value
+	return rsp
 }
 
-func (s *Store) execKVAppend(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execKVAppend(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
 	if len(args) != 2 {
-		return &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = redis.ErrInvalidCommandResp
+
+		return rsp
 	}
 
 	n, err := s.getKVEngine().Append(args[0], args[1])
 	if err != nil {
-		return &raftcmdpb.Response{
-			ErrorResult: util.StringToSlice(err.Error()),
-		}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = util.StringToSlice(err.Error())
+		return rsp
 	}
 
 	size := int64(len(args[1]))
 	ctx.metrics.writtenBytes += size
 	ctx.metrics.sizeDiffHint += size
 
-	return &raftcmdpb.Response{
-		IntegerResult: &n,
-	}
+	rsp := pool.AcquireResponse()
+	rsp.IntegerResult = &n
+	return rsp
 }
 
-func (s *Store) execKVSetNX(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execKVSetNX(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
 	if len(args) != 2 {
-		return &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = redis.ErrInvalidCommandResp
+
+		return rsp
 	}
 
 	n, err := s.getKVEngine().SetNX(args[0], args[1])
 	if err != nil {
-		return &raftcmdpb.Response{
-			ErrorResult: util.StringToSlice(err.Error()),
-		}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = util.StringToSlice(err.Error())
+		return rsp
 	}
 
 	if n > 0 {
@@ -254,7 +282,7 @@ func (s *Store) execKVSetNX(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb
 		ctx.metrics.sizeDiffHint += size
 	}
 
-	return &raftcmdpb.Response{
-		IntegerResult: &n,
-	}
+	rsp := pool.AcquireResponse()
+	rsp.IntegerResult = &n
+	return rsp
 }

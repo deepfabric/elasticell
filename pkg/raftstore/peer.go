@@ -24,6 +24,7 @@ import (
 	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
 	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
 	"github.com/deepfabric/elasticell/pkg/pd"
+	"github.com/deepfabric/elasticell/pkg/pool"
 	"github.com/deepfabric/elasticell/pkg/util"
 	"github.com/deepfabric/etcd/raft"
 	"golang.org/x/net/context"
@@ -40,13 +41,13 @@ type PeerReplicate struct {
 
 	batch *proposeBatch
 
-	events       *queue.Queue
-	ticks        *queue.Queue
-	steps        *queue.Queue
-	reports      *queue.Queue
-	applyResults *queue.Queue
-	requests     *queue.Queue
-	proposes     *queue.Queue
+	events       *util.Queue
+	ticks        *util.Queue
+	steps        *util.Queue
+	reports      *util.Queue
+	applyResults *util.Queue
+	requests     *util.Queue
+	proposes     *util.Queue
 
 	peerHeartbeatsMap *peerHeartbeatsMap
 	pendingReads      *readIndexQueue
@@ -117,13 +118,13 @@ func newPeerReplicate(store *Store, cell *metapb.Cell, peerID uint64) (*PeerRepl
 	}
 
 	pr.rn = rn
-	pr.events = &queue.Queue{}
-	pr.ticks = &queue.Queue{}
-	pr.steps = &queue.Queue{}
-	pr.reports = &queue.Queue{}
-	pr.applyResults = &queue.Queue{}
-	pr.requests = &queue.Queue{}
-	pr.proposes = &queue.Queue{}
+	pr.events = &util.Queue{}
+	pr.ticks = &util.Queue{}
+	pr.steps = &util.Queue{}
+	pr.reports = &util.Queue{}
+	pr.applyResults = &util.Queue{}
+	pr.requests = &util.Queue{}
+	pr.proposes = &util.Queue{}
 
 	pr.store = store
 	pr.pendingReads = &readIndexQueue{
@@ -167,9 +168,9 @@ func (pr *PeerReplicate) maybeCampaign() (bool, error) {
 }
 
 func (pr *PeerReplicate) onAdminRequest(adminReq *raftcmdpb.AdminRequest) {
-	pr.addRequest(&reqCtx{
-		admin: adminReq,
-	})
+	r := acquireReqCtx()
+	r.admin = adminReq
+	pr.addRequest(r)
 	commandCounterVec.WithLabelValues(raftcmdpb.CMDType_name[int32(adminReq.Type)]).Inc()
 }
 
@@ -182,10 +183,12 @@ func (pr *PeerReplicate) onReq(req *raftcmdpb.Request, cb func(*raftcmdpb.RaftCM
 	commandCounterVec.WithLabelValues(raftcmdpb.CMDType_name[int32(req.Type)]).Inc()
 
 	start := time.Now()
-	pr.addRequest(&reqCtx{
-		req: req,
-		cb:  cb,
-	})
+
+	r := acquireReqCtx()
+	r.req = req
+	r.cb = cb
+	pr.addRequest(r)
+
 	if globalCfg.EnableRequestMetrics {
 		observeRequestInQueue(start)
 	}
@@ -201,6 +204,7 @@ func (pr *PeerReplicate) addRequest(req *reqCtx) {
 		if req.cb != nil {
 			pr.store.respStoreNotMatch(errStoreNotMatch, req.req, req.cb)
 		}
+		pool.ReleaseRequest(req.req)
 		return
 	}
 
@@ -242,7 +246,7 @@ func (pr *PeerReplicate) handleHeartbeat() {
 			pr.lastHBJob.Cancel()
 		}
 
-		pr.lastHBJob, err = pr.store.addPDJob(pr.doHeartbeat)
+		err = pr.store.addPDJob(pr.doHeartbeat, pr.setLastHBJob)
 		if err != nil {
 			log.Errorf("heartbeat-cell[%d]: add cell heartbeat job failed, errors:\n %+v",
 				pr.cellID,
@@ -250,6 +254,10 @@ func (pr *PeerReplicate) handleHeartbeat() {
 			pr.lastHBJob = nil
 		}
 	}
+}
+
+func (pr *PeerReplicate) setLastHBJob(job *util.Job) {
+	pr.lastHBJob = job
 }
 
 func (pr *PeerReplicate) doHeartbeat() error {

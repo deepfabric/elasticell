@@ -14,9 +14,9 @@
 package server
 
 import (
-	"github.com/Workiva/go-datastructures/queue"
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
+	"github.com/deepfabric/elasticell/pkg/pool"
 	"github.com/deepfabric/elasticell/pkg/redis"
 	"github.com/deepfabric/elasticell/pkg/util"
 	"github.com/fagongzi/goetty"
@@ -25,7 +25,7 @@ import (
 
 type session struct {
 	closed bool
-	resps  *queue.Queue
+	resps  *util.Queue
 
 	conn goetty.IOSession
 	addr string
@@ -35,14 +35,17 @@ type session struct {
 
 func newSession(conn goetty.IOSession) *session {
 	return &session{
-		resps: &queue.Queue{},
+		resps: &util.Queue{},
 		conn:  conn,
 		addr:  conn.RemoteAddr(),
 	}
 }
 
 func (s *session) close() {
-	s.resps.Dispose()
+	resps := s.resps.Dispose()
+	for _, resp := range resps {
+		pool.ReleaseResponse(resp.(*raftcmdpb.Response))
+	}
 	log.Debugf("redis-[%s]: closed", s.addr)
 }
 
@@ -50,32 +53,28 @@ func (s *session) setFromProxy() {
 	s.fromProxy = true
 }
 
-func (s *session) onResp(header *raftcmdpb.RaftResponseHeader, resp *raftcmdpb.Response) {
-	if header != nil {
-		if header.Error.RaftEntryTooLarge == nil {
-			resp.Type = raftcmdpb.RaftError
-		} else {
-			resp.Type = raftcmdpb.Invalid
-		}
-
-		resp.ErrorResult = util.MustMarshal(header)
-	}
-
+func (s *session) onResp(resp *raftcmdpb.Response) {
 	if s != nil {
 		s.resps.Put(resp)
+	} else {
+		pool.ReleaseResponse(resp)
 	}
 }
 
 func (s *session) writeLoop() {
+	items := make([]interface{}, globalCfg.Redis.WriteBatchLimit, globalCfg.Redis.WriteBatchLimit)
+
 	for {
-		resps, err := s.resps.Get(globalCfg.Redis.WriteBatchLimit)
+		n, err := s.resps.Get(globalCfg.Redis.WriteBatchLimit, items)
 		if nil != err {
 			return
 		}
 
 		buf := s.conn.OutBuf()
-		for _, resp := range resps {
-			s.doResp(resp.(*raftcmdpb.Response), buf)
+		for i := int64(0); i < n; i++ {
+			rsp := items[i].(*raftcmdpb.Response)
+			s.doResp(rsp, buf)
+			pool.ReleaseResponse(rsp)
 		}
 		s.conn.WriteOutBuf()
 	}
@@ -83,10 +82,14 @@ func (s *session) writeLoop() {
 
 func (s *session) doResp(resp *raftcmdpb.Response, buf *goetty.ByteBuf) {
 	if s.fromProxy {
-		data := util.MustMarshal(resp)
+		size := resp.Size()
 		buf.WriteByte(redis.ProxyBegin)
-		buf.WriteInt(len(data))
-		buf.Write(data)
+		buf.WriteInt(size)
+
+		index := buf.GetWriteIndex()
+		buf.Expansion(size)
+		util.MustMarshalTo(resp, buf.RawBuf()[index:index+size])
+		buf.SetWriterIndex(index + size)
 		return
 	}
 

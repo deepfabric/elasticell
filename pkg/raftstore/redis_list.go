@@ -15,6 +15,7 @@ package raftstore
 
 import (
 	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
+	"github.com/deepfabric/elasticell/pkg/pool"
 	"github.com/deepfabric/elasticell/pkg/redis"
 	"github.com/deepfabric/elasticell/pkg/util"
 )
@@ -24,28 +25,31 @@ func (s *Store) execLIndex(req *raftcmdpb.Request) *raftcmdpb.Response {
 	args := cmd.Args()
 
 	if len(args) != 2 {
-		return &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = redis.ErrInvalidCommandResp
+
+		return rsp
 	}
 
 	index, err := util.StrInt64(args[1])
 	if err != nil {
-		return &raftcmdpb.Response{
-			ErrorResult: util.StringToSlice(err.Error()),
-		}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = util.StringToSlice(err.Error())
+		return rsp
 	}
 
 	value, err := s.getListEngine().LIndex(args[0], index)
 	if err != nil {
-		return &raftcmdpb.Response{
-			ErrorResult: util.StringToSlice(err.Error()),
-		}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = util.StringToSlice(err.Error())
+		return rsp
 	}
 
 	has := true
-	return &raftcmdpb.Response{
-		BulkResult:         value,
-		HasEmptyBulkResult: &has,
-	}
+	rsp := pool.AcquireResponse()
+	rsp.BulkResult = value
+	rsp.HasEmptyBulkResult = &has
+	return rsp
 }
 
 func (s *Store) execLLEN(req *raftcmdpb.Request) *raftcmdpb.Response {
@@ -53,19 +57,22 @@ func (s *Store) execLLEN(req *raftcmdpb.Request) *raftcmdpb.Response {
 	args := cmd.Args()
 
 	if len(args) != 1 {
-		return &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = redis.ErrInvalidCommandResp
+
+		return rsp
 	}
 
 	value, err := s.getListEngine().LLen(args[0])
 	if err != nil {
-		return &raftcmdpb.Response{
-			ErrorResult: util.StringToSlice(err.Error()),
-		}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = util.StringToSlice(err.Error())
+		return rsp
 	}
 
-	return &raftcmdpb.Response{
-		IntegerResult: &value,
-	}
+	rsp := pool.AcquireResponse()
+	rsp.IntegerResult = &value
+	return rsp
 }
 
 func (s *Store) execLRange(req *raftcmdpb.Request) *raftcmdpb.Response {
@@ -73,57 +80,63 @@ func (s *Store) execLRange(req *raftcmdpb.Request) *raftcmdpb.Response {
 	args := cmd.Args()
 
 	if len(args) != 3 {
-		return &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = redis.ErrInvalidCommandResp
+
+		return rsp
 	}
 
 	start, err := util.StrInt64(args[1])
 	if err != nil {
-		return &raftcmdpb.Response{
-			ErrorResult: util.StringToSlice(err.Error()),
-		}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = util.StringToSlice(err.Error())
+		return rsp
 	}
 
 	end, err := util.StrInt64(args[2])
 	if err != nil {
-		return &raftcmdpb.Response{
-			ErrorResult: util.StringToSlice(err.Error()),
-		}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = util.StringToSlice(err.Error())
+		return rsp
 	}
 
 	value, err := s.getListEngine().LRange(args[0], start, end)
 	if err != nil {
-		return &raftcmdpb.Response{
-			ErrorResult: util.StringToSlice(err.Error()),
-		}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = util.StringToSlice(err.Error())
+		return rsp
 	}
 
 	has := true
-	return &raftcmdpb.Response{
-		SliceArrayResult:         value,
-		HasEmptySliceArrayResult: &has,
-	}
+	rsp := pool.AcquireResponse()
+	rsp.SliceArrayResult = value
+	rsp.HasEmptySliceArrayResult = &has
+	return rsp
 }
 
-func (s *Store) execLInsert(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execLInsert(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
 	if len(args) != 4 {
-		return &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = redis.ErrInvalidCommandResp
+
+		return rsp
 	}
 
 	pos, err := util.StrInt64(args[1])
 	if err != nil {
-		return &raftcmdpb.Response{
-			ErrorResult: util.StringToSlice(err.Error()),
-		}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = util.StringToSlice(err.Error())
+		return rsp
 	}
 
 	value, err := s.getListEngine().LInsert(args[0], int(pos), args[2], args[3])
 	if err != nil {
-		return &raftcmdpb.Response{
-			ErrorResult: util.StringToSlice(err.Error()),
-		}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = util.StringToSlice(err.Error())
+		return rsp
 	}
 
 	if value > 0 {
@@ -138,49 +151,55 @@ func (s *Store) execLInsert(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb
 		ctx.metrics.sizeDiffHint += size
 	}
 
-	return &raftcmdpb.Response{
-		IntegerResult: &value,
-	}
+	rsp := pool.AcquireResponse()
+	rsp.IntegerResult = &value
+	return rsp
 }
 
-func (s *Store) execLPop(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execLPop(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
 	if len(args) != 1 {
-		return &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = redis.ErrInvalidCommandResp
+
+		return rsp
 	}
 
 	value, err := s.getListEngine().LPop(args[0])
 	if err != nil {
-		return &raftcmdpb.Response{
-			ErrorResult: util.StringToSlice(err.Error()),
-		}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = util.StringToSlice(err.Error())
+		return rsp
 	}
 
 	size := int64(len(value))
 	ctx.metrics.sizeDiffHint -= size
 
 	has := true
-	return &raftcmdpb.Response{
-		BulkResult:         value,
-		HasEmptyBulkResult: &has,
-	}
+	rsp := pool.AcquireResponse()
+	rsp.BulkResult = value
+	rsp.HasEmptyBulkResult = &has
+	return rsp
 }
 
-func (s *Store) execLPush(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execLPush(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
 	if len(args) < 2 {
-		return &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = redis.ErrInvalidCommandResp
+
+		return rsp
 	}
 
 	value, err := s.getListEngine().LPush(args[0], args[1:]...)
 	if err != nil {
-		return &raftcmdpb.Response{
-			ErrorResult: util.StringToSlice(err.Error()),
-		}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = util.StringToSlice(err.Error())
+		return rsp
 	}
 
 	if value > 0 {
@@ -198,24 +217,27 @@ func (s *Store) execLPush(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.R
 		ctx.metrics.sizeDiffHint += size
 	}
 
-	return &raftcmdpb.Response{
-		IntegerResult: &value,
-	}
+	rsp := pool.AcquireResponse()
+	rsp.IntegerResult = &value
+	return rsp
 }
 
-func (s *Store) execLPushX(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execLPushX(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
 	if len(args) != 2 {
-		return &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = redis.ErrInvalidCommandResp
+
+		return rsp
 	}
 
 	value, err := s.getListEngine().LPushX(args[0], args[1])
 	if err != nil {
-		return &raftcmdpb.Response{
-			ErrorResult: util.StringToSlice(err.Error()),
-		}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = util.StringToSlice(err.Error())
+		return rsp
 	}
 
 	if value > 0 {
@@ -231,31 +253,34 @@ func (s *Store) execLPushX(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.
 		ctx.metrics.sizeDiffHint += size
 	}
 
-	return &raftcmdpb.Response{
-		IntegerResult: &value,
-	}
+	rsp := pool.AcquireResponse()
+	rsp.IntegerResult = &value
+	return rsp
 }
 
-func (s *Store) execLRem(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execLRem(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
 	if len(args) != 3 {
-		return &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = redis.ErrInvalidCommandResp
+
+		return rsp
 	}
 
 	count, err := util.StrInt64(args[1])
 	if err != nil {
-		return &raftcmdpb.Response{
-			ErrorResult: util.StringToSlice(err.Error()),
-		}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = util.StringToSlice(err.Error())
+		return rsp
 	}
 
 	value, err := s.getListEngine().LRem(args[0], count, args[2])
 	if err != nil {
-		return &raftcmdpb.Response{
-			ErrorResult: util.StringToSlice(err.Error()),
-		}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = util.StringToSlice(err.Error())
+		return rsp
 	}
 
 	if value > 0 {
@@ -263,106 +288,124 @@ func (s *Store) execLRem(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.Re
 		ctx.metrics.sizeDiffHint += size
 	}
 
-	return &raftcmdpb.Response{
-		IntegerResult: &value,
-	}
+	rsp := pool.AcquireResponse()
+	rsp.IntegerResult = &value
+	return rsp
 }
 
-func (s *Store) execLSet(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execLSet(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
 	if len(args) != 3 {
-		return &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = redis.ErrInvalidCommandResp
+
+		return rsp
 	}
 
 	index, err := util.StrInt64(args[1])
 	if err != nil {
-		return &raftcmdpb.Response{
-			ErrorResult: util.StringToSlice(err.Error()),
-		}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = util.StringToSlice(err.Error())
+		return rsp
 	}
 
 	err = s.getListEngine().LSet(args[0], index, args[2])
 	if err != nil {
-		return &raftcmdpb.Response{
-			ErrorResult: util.StringToSlice(err.Error()),
-		}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = util.StringToSlice(err.Error())
+		return rsp
 	}
 
-	return &raftcmdpb.Response{StatusResult: redis.OKStatusResp}
+	rsp := pool.AcquireResponse()
+	rsp.StatusResult = redis.OKStatusResp
+
+	return rsp
 }
 
-func (s *Store) execLTrim(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execLTrim(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
 	if len(args) != 3 {
-		return &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = redis.ErrInvalidCommandResp
+
+		return rsp
 	}
 
 	begin, err := util.StrInt64(args[1])
 	if err != nil {
-		return &raftcmdpb.Response{
-			ErrorResult: util.StringToSlice(err.Error()),
-		}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = util.StringToSlice(err.Error())
+		return rsp
 	}
 
 	end, err := util.StrInt64(args[2])
 	if err != nil {
-		return &raftcmdpb.Response{
-			ErrorResult: util.StringToSlice(err.Error()),
-		}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = util.StringToSlice(err.Error())
+		return rsp
 	}
 
 	err = s.getListEngine().LTrim(args[0], begin, end)
 	if err != nil {
-		return &raftcmdpb.Response{
-			ErrorResult: util.StringToSlice(err.Error()),
-		}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = util.StringToSlice(err.Error())
+		return rsp
 	}
 
-	return &raftcmdpb.Response{StatusResult: redis.OKStatusResp}
+	rsp := pool.AcquireResponse()
+	rsp.StatusResult = redis.OKStatusResp
+
+	return rsp
 }
 
-func (s *Store) execRPop(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execRPop(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
 	if len(args) != 1 {
-		return &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = redis.ErrInvalidCommandResp
+
+		return rsp
 	}
 
 	value, err := s.getListEngine().RPop(args[0])
 	if err != nil {
-		return &raftcmdpb.Response{
-			ErrorResult: util.StringToSlice(err.Error()),
-		}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = util.StringToSlice(err.Error())
+		return rsp
 	}
 
 	size := int64(len(value))
 	ctx.metrics.sizeDiffHint -= size
 
 	has := true
-	return &raftcmdpb.Response{
-		BulkResult:         value,
-		HasEmptyBulkResult: &has,
-	}
+	rsp := pool.AcquireResponse()
+	rsp.BulkResult = value
+	rsp.HasEmptyBulkResult = &has
+	return rsp
 }
 
-func (s *Store) execRPush(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execRPush(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
 	if len(args) < 2 {
-		return &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = redis.ErrInvalidCommandResp
+
+		return rsp
 	}
 
 	value, err := s.getListEngine().RPush(args[0], args[1:]...)
 	if err != nil {
-		return &raftcmdpb.Response{
-			ErrorResult: util.StringToSlice(err.Error()),
-		}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = util.StringToSlice(err.Error())
+		return rsp
 	}
 
 	if value > 0 {
@@ -380,24 +423,27 @@ func (s *Store) execRPush(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.R
 		ctx.metrics.sizeDiffHint += size
 	}
 
-	return &raftcmdpb.Response{
-		IntegerResult: &value,
-	}
+	rsp := pool.AcquireResponse()
+	rsp.IntegerResult = &value
+	return rsp
 }
 
-func (s *Store) execRPushX(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execRPushX(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
 	if len(args) != 2 {
-		return &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = redis.ErrInvalidCommandResp
+
+		return rsp
 	}
 
 	value, err := s.getListEngine().RPushX(args[0], args[1])
 	if err != nil {
-		return &raftcmdpb.Response{
-			ErrorResult: util.StringToSlice(err.Error()),
-		}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = util.StringToSlice(err.Error())
+		return rsp
 	}
 
 	if value > 0 {
@@ -413,7 +459,7 @@ func (s *Store) execRPushX(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.
 		ctx.metrics.sizeDiffHint += size
 	}
 
-	return &raftcmdpb.Response{
-		IntegerResult: &value,
-	}
+	rsp := pool.AcquireResponse()
+	rsp.IntegerResult = &value
+	return rsp
 }

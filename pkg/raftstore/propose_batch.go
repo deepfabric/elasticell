@@ -3,6 +3,7 @@ package raftstore
 import (
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
+	"github.com/deepfabric/elasticell/pkg/pool"
 	"github.com/deepfabric/elasticell/pkg/util/uuid"
 )
 
@@ -16,6 +17,12 @@ type reqCtx struct {
 	admin *raftcmdpb.AdminRequest
 	req   *raftcmdpb.Request
 	cb    func(*raftcmdpb.RaftCMDResponse)
+}
+
+func (r *reqCtx) reset() {
+	r.admin = nil
+	r.cb = nil
+	r.req = nil
 }
 
 type proposeBatch struct {
@@ -77,7 +84,8 @@ func (b *proposeBatch) pop() *cmd {
 	b.cmds[0] = nil
 	b.cmds = b.cmds[1:]
 
-	queueGauge.WithLabelValues(labelQueueBatch).Set(float64(len(value.req.Requests)))
+	queueGauge.WithLabelValues(labelQueueBatchSize).Set(float64(len(value.req.Requests)))
+	queueGauge.WithLabelValues(labelQueueBatch).Set(float64(b.size()))
 	return value
 }
 
@@ -85,8 +93,9 @@ func (b *proposeBatch) push(c *reqCtx) {
 	adminReq := c.admin
 	req := c.req
 	cb := c.cb
-
 	tp := b.getType(c)
+
+	releaseReqCtx(c)
 
 	// use data key to store
 	if tp != admin {
@@ -101,14 +110,13 @@ func (b *proposeBatch) push(c *reqCtx) {
 		b.isFull(len(last.req.Requests)) {
 
 		cell := b.pr.getCell()
-		raftCMD := new(raftcmdpb.RaftCMDRequest)
-		raftCMD.Header = &raftcmdpb.RaftRequestHeader{
-			CellId:     cell.ID,
-			Peer:       b.pr.getPeer(),
-			ReadQuorum: true,
-			UUID:       uuid.NewV4().Bytes(),
-			CellEpoch:  cell.Epoch,
-		}
+		raftCMD := pool.AcquireRaftCMDRequest()
+		raftCMD.Header = pool.AcquireRaftRequestHeader()
+		raftCMD.Header.CellId = cell.ID
+		raftCMD.Header.Peer = b.pr.getPeer()
+		raftCMD.Header.ReadQuorum = true
+		raftCMD.Header.UUID = uuid.NewV4().Bytes()
+		raftCMD.Header.CellEpoch = cell.Epoch
 
 		if tp == admin {
 			raftCMD.AdminRequest = adminReq
@@ -132,6 +140,7 @@ func (b *proposeBatch) push(c *reqCtx) {
 	}
 
 	b.lastType = tp
+	queueGauge.WithLabelValues(labelQueueBatch).Set(float64(b.size()))
 }
 
 func (b *proposeBatch) lastCmd() *cmd {

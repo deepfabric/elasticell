@@ -15,13 +15,16 @@ package server
 
 import (
 	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
+	"github.com/deepfabric/elasticell/pkg/pool"
 	"github.com/deepfabric/elasticell/pkg/redis"
 )
 
 func (s *RedisServer) onLIndex(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
 	args := cmd.Args()
 	if len(args) != 2 {
-		session.onResp(nil, &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp})
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = redis.ErrInvalidCommandResp
+		session.onResp(rsp)
 		return nil, nil
 	}
 
@@ -31,7 +34,9 @@ func (s *RedisServer) onLIndex(cmdType raftcmdpb.CMDType, cmd redis.Command, ses
 func (s *RedisServer) onLInsert(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
 	args := cmd.Args()
 	if len(args) != 4 {
-		session.onResp(nil, &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp})
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = redis.ErrInvalidCommandResp
+		session.onResp(rsp)
 		return nil, nil
 	}
 
@@ -41,7 +46,9 @@ func (s *RedisServer) onLInsert(cmdType raftcmdpb.CMDType, cmd redis.Command, se
 func (s *RedisServer) onLLen(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
 	args := cmd.Args()
 	if len(args) != 1 {
-		session.onResp(nil, &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp})
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = redis.ErrInvalidCommandResp
+		session.onResp(rsp)
 		return nil, nil
 	}
 
@@ -51,7 +58,9 @@ func (s *RedisServer) onLLen(cmdType raftcmdpb.CMDType, cmd redis.Command, sessi
 func (s *RedisServer) onLPop(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
 	args := cmd.Args()
 	if len(args) != 1 {
-		session.onResp(nil, &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp})
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = redis.ErrInvalidCommandResp
+		session.onResp(rsp)
 		return nil, nil
 	}
 
@@ -61,7 +70,9 @@ func (s *RedisServer) onLPop(cmdType raftcmdpb.CMDType, cmd redis.Command, sessi
 func (s *RedisServer) onLPush(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
 	args := cmd.Args()
 	if len(args) < 2 {
-		session.onResp(nil, &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp})
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = redis.ErrInvalidCommandResp
+		session.onResp(rsp)
 		return nil, nil
 	}
 
@@ -71,7 +82,9 @@ func (s *RedisServer) onLPush(cmdType raftcmdpb.CMDType, cmd redis.Command, sess
 func (s *RedisServer) onLPushX(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
 	args := cmd.Args()
 	if len(args) != 2 {
-		session.onResp(nil, &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp})
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = redis.ErrInvalidCommandResp
+		session.onResp(rsp)
 		return nil, nil
 	}
 
@@ -81,7 +94,9 @@ func (s *RedisServer) onLPushX(cmdType raftcmdpb.CMDType, cmd redis.Command, ses
 func (s *RedisServer) onLRange(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
 	args := cmd.Args()
 	if len(args) != 3 {
-		session.onResp(nil, &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp})
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = redis.ErrInvalidCommandResp
+		session.onResp(rsp)
 		return nil, nil
 	}
 
@@ -91,7 +106,9 @@ func (s *RedisServer) onLRange(cmdType raftcmdpb.CMDType, cmd redis.Command, ses
 func (s *RedisServer) onLRem(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
 	args := cmd.Args()
 	if len(args) != 3 {
-		session.onResp(nil, &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp})
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = redis.ErrInvalidCommandResp
+		session.onResp(rsp)
 		return nil, nil
 	}
 
@@ -101,7 +118,9 @@ func (s *RedisServer) onLRem(cmdType raftcmdpb.CMDType, cmd redis.Command, sessi
 func (s *RedisServer) onLSet(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
 	args := cmd.Args()
 	if len(args) != 3 {
-		session.onResp(nil, &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp})
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = redis.ErrInvalidCommandResp
+		session.onResp(rsp)
 		return nil, nil
 	}
 
@@ -111,7 +130,9 @@ func (s *RedisServer) onLSet(cmdType raftcmdpb.CMDType, cmd redis.Command, sessi
 func (s *RedisServer) onLTrim(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
 	args := cmd.Args()
 	if len(args) != 3 {
-		session.onResp(nil, &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp})
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = redis.ErrInvalidCommandResp
+		session.onResp(rsp)
 		return nil, nil
 	}
 
@@ -121,7 +142,9 @@ func (s *RedisServer) onLTrim(cmdType raftcmdpb.CMDType, cmd redis.Command, sess
 func (s *RedisServer) onRPop(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
 	args := cmd.Args()
 	if len(args) != 1 {
-		session.onResp(nil, &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp})
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = redis.ErrInvalidCommandResp
+		session.onResp(rsp)
 		return nil, nil
 	}
 
@@ -131,7 +154,9 @@ func (s *RedisServer) onRPop(cmdType raftcmdpb.CMDType, cmd redis.Command, sessi
 func (s *RedisServer) onRPush(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
 	args := cmd.Args()
 	if len(args) < 2 {
-		session.onResp(nil, &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp})
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = redis.ErrInvalidCommandResp
+		session.onResp(rsp)
 		return nil, nil
 	}
 
@@ -141,7 +166,9 @@ func (s *RedisServer) onRPush(cmdType raftcmdpb.CMDType, cmd redis.Command, sess
 func (s *RedisServer) onRPushX(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
 	args := cmd.Args()
 	if len(args) != 2 {
-		session.onResp(nil, &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp})
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = redis.ErrInvalidCommandResp
+		session.onResp(rsp)
 		return nil, nil
 	}
 

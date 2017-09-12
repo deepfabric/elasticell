@@ -20,10 +20,10 @@ import (
 
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
-	"github.com/deepfabric/elasticell/pkg/pb/mraft"
 	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
 	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
 	"github.com/deepfabric/elasticell/pkg/pd"
+	"github.com/deepfabric/elasticell/pkg/pool"
 	"github.com/deepfabric/elasticell/pkg/util"
 	"github.com/deepfabric/etcd/raft"
 	"github.com/deepfabric/etcd/raft/raftpb"
@@ -45,13 +45,8 @@ const (
 
 	transferLeaderAllowLogLag = 10
 
-	eventBatch = 1024
+	batch = 1024
 )
-
-type proposalMeta struct {
-	cmd  *cmd
-	term uint64
-}
 
 func (pr *PeerReplicate) onRaftTick(arg interface{}) {
 	err := pr.ticks.Put(emptyStruct)
@@ -73,17 +68,26 @@ func (pr *PeerReplicate) addEvent() {
 
 func (pr *PeerReplicate) readyToServeRaft(ctx context.Context) {
 	pr.onRaftTick(nil)
+	items := make([]interface{}, batch, batch)
 
 	for {
-		_, err := pr.events.Get(eventBatch)
+		_, err := pr.events.Get(batch, items)
 		if err != nil {
 			pr.metrics.flush()
 
 			pr.ticks.Dispose()
 			pr.steps.Dispose()
 			pr.reports.Dispose()
-			pr.applyResults.Dispose()
-			pr.proposes.Dispose()
+
+			results := pr.applyResults.Dispose()
+			for _, result := range results {
+				releaseAsyncApplyResult(result.(*asyncApplyResult))
+			}
+
+			cmds := pr.proposes.Dispose()
+			for _, c := range cmds {
+				releaseCmd(c.(*cmd))
+			}
 
 			// resp all stale requests
 			requests := pr.requests.Dispose()
@@ -92,6 +96,9 @@ func (pr *PeerReplicate) readyToServeRaft(ctx context.Context) {
 				if req.cb != nil {
 					pr.store.respStoreNotMatch(errStoreNotMatch, req.req, req.cb)
 				}
+
+				pool.ReleaseRequest(req.req)
+				releaseReqCtx(req)
 			}
 
 			log.Infof("raftstore[cell-%d]: handle serve raft stopped",
@@ -99,12 +106,12 @@ func (pr *PeerReplicate) readyToServeRaft(ctx context.Context) {
 			return
 		}
 
-		pr.handleTick()
-		pr.handleStep()
-		pr.handleReport()
-		pr.handleApplyResult()
-		pr.handleRequest()
-		pr.handlePropose()
+		pr.handleTick(items)
+		pr.handleStep(items)
+		pr.handleReport(items)
+		pr.handleApplyResult(items)
+		pr.handleRequest(items)
+		pr.handlePropose(items)
 
 		if pr.rn.HasReadySince(pr.ps.lastReadyIndex) {
 			pr.handleReady()
@@ -112,14 +119,18 @@ func (pr *PeerReplicate) readyToServeRaft(ctx context.Context) {
 	}
 }
 
-func (pr *PeerReplicate) handleTick() {
+func (pr *PeerReplicate) handleTick(items []interface{}) {
 	size := pr.ticks.Len()
-	ticks, err := pr.ticks.Get(size)
+	if size == 0 {
+		return
+	}
+
+	n, err := pr.ticks.Get(batch, items)
 	if err != nil {
 		return
 	}
 
-	for _ = range ticks {
+	for i := int64(0); i < n; i++ {
 		pr.rn.Tick()
 	}
 
@@ -133,15 +144,19 @@ func (pr *PeerReplicate) handleTick() {
 	}
 }
 
-func (pr *PeerReplicate) handleStep() {
+func (pr *PeerReplicate) handleStep(items []interface{}) {
 	size := pr.steps.Len()
-	msgs, err := pr.steps.Get(size)
+	if size == 0 {
+		return
+	}
+
+	n, err := pr.steps.Get(batch, items)
 	if err != nil {
 		return
 	}
 
-	for _, m := range msgs {
-		msg := m.(raftpb.Message)
+	for i := int64(0); i < n; i++ {
+		msg := items[i].(raftpb.Message)
 		if pr.isLeader() && msg.From != 0 {
 			pr.peerHeartbeatsMap.put(msg.From, time.Now())
 		}
@@ -168,15 +183,19 @@ func (pr *PeerReplicate) handleStep() {
 	}
 }
 
-func (pr *PeerReplicate) handleReport() {
+func (pr *PeerReplicate) handleReport(items []interface{}) {
 	size := pr.reports.Len()
-	msgs, err := pr.reports.Get(size)
+	if size == 0 {
+		return
+	}
+
+	n, err := pr.reports.Get(batch, items)
 	if err != nil {
 		return
 	}
 
-	for _, m := range msgs {
-		msg := m.(raftpb.Message)
+	for i := int64(0); i < n; i++ {
+		msg := items[i].(raftpb.Message)
 		pr.rn.ReportUnreachable(msg.To)
 		if msg.Type == raftpb.MsgSnap {
 			pr.rn.ReportSnapshot(msg.To, raft.SnapshotFailure)
@@ -191,19 +210,24 @@ func (pr *PeerReplicate) handleReport() {
 	}
 }
 
-func (pr *PeerReplicate) handleApplyResult() {
+func (pr *PeerReplicate) handleApplyResult(items []interface{}) {
 	size := pr.applyResults.Len()
-	results, err := pr.applyResults.Get(size)
+	if size == 0 {
+		return
+	}
+
+	n, err := pr.applyResults.Get(batch, items)
 	if err != nil {
 		return
 	}
 
-	for _, r := range results {
-		result := r.(*asyncApplyResult)
+	for i := int64(0); i < n; i++ {
+		result := items[i].(*asyncApplyResult)
 		pr.doPollApply(result)
+		releaseAsyncApplyResult(result)
 	}
 
-	if size > 0 {
+	if n > 0 {
 		pr.nextBatch()
 	}
 
@@ -215,19 +239,23 @@ func (pr *PeerReplicate) handleApplyResult() {
 	}
 }
 
-func (pr *PeerReplicate) handleRequest() {
+func (pr *PeerReplicate) handleRequest(items []interface{}) {
 	size := pr.requests.Len()
-	requests, err := pr.requests.Get(size)
+	if size == 0 {
+		return
+	}
+
+	n, err := pr.requests.Get(batch, items)
 	if err != nil {
 		return
 	}
 
-	for _, r := range requests {
-		req := r.(*reqCtx)
+	for i := int64(0); i < n; i++ {
+		req := items[i].(*reqCtx)
 		pr.batch.push(req)
 	}
 
-	if size > 0 && pr.batch.isLastComplete() {
+	if n > 0 && pr.batch.isLastComplete() {
 		pr.nextBatch()
 	}
 
@@ -237,20 +265,23 @@ func (pr *PeerReplicate) handleRequest() {
 	if size > 0 {
 		pr.addEvent()
 	}
-
 }
 
-func (pr *PeerReplicate) handlePropose() {
+func (pr *PeerReplicate) handlePropose(items []interface{}) {
 	size := pr.proposes.Len()
-	proposes, err := pr.proposes.Get(size)
+	if size == 0 {
+		return
+	}
+
+	n, err := pr.proposes.Get(batch, items)
 	if err != nil {
 		return
 	}
 
 	complete := 0
-	for _, p := range proposes {
-		meta := p.(*proposalMeta)
-		if pr.propose(meta) {
+	for i := int64(0); i < n; i++ {
+		c := items[i].(*cmd)
+		if pr.propose(c) {
 			complete++
 		}
 	}
@@ -296,16 +327,18 @@ func (pr *PeerReplicate) handleReady() {
 			pr.cellID,
 			pr.ps.lastReadyIndex)
 
-		ctx := &tempRaftContext{
-			raftState:  pr.ps.raftState,
-			applyState: pr.ps.applyState,
-			lastTerm:   pr.ps.lastTerm,
-		}
+		ctx := acquireReadyContext()
+
+		ctx.raftState = pr.ps.raftState
+		ctx.applyState = pr.ps.applyState
+		ctx.lastTerm = pr.ps.lastTerm
 
 		start := time.Now()
 
 		pr.handleRaftReadyAppend(ctx, &rd)
 		pr.handleRaftReadyApply(ctx, &rd)
+
+		releaseReadyContext(ctx)
 
 		observeRaftFlowProcessReady(start)
 	}
@@ -331,7 +364,7 @@ func (pr *PeerReplicate) doPollApply(result *asyncApplyResult) {
 	}
 }
 
-func (pr *PeerReplicate) handleRaftReadyAppend(ctx *tempRaftContext, rd *raft.Ready) {
+func (pr *PeerReplicate) handleRaftReadyAppend(ctx *readyContext, rd *raft.Ready) {
 	start := time.Now()
 
 	// If we become leader, send heartbeat to pd
@@ -372,7 +405,7 @@ func (pr *PeerReplicate) handleRaftReadyAppend(ctx *tempRaftContext, rd *raft.Re
 	observeRaftLogAppend(start)
 }
 
-func (pr *PeerReplicate) handleRaftReadyApply(ctx *tempRaftContext, rd *raft.Ready) {
+func (pr *PeerReplicate) handleRaftReadyApply(ctx *readyContext, rd *raft.Ready) {
 	if ctx.snapCell != nil {
 		// When apply snapshot, there is no log applied and not compacted yet.
 		pr.raftLogSizeHint = 0
@@ -403,7 +436,7 @@ func (pr *PeerReplicate) handleRaftReadyApply(ctx *tempRaftContext, rd *raft.Rea
 	}
 }
 
-func (pr *PeerReplicate) handleAppendSnapshot(ctx *tempRaftContext, rd *raft.Ready) {
+func (pr *PeerReplicate) handleAppendSnapshot(ctx *readyContext, rd *raft.Ready) {
 	if !raft.IsEmptySnap(rd.Snapshot) {
 		pr.store.reveivingSnapCount++
 
@@ -418,7 +451,7 @@ func (pr *PeerReplicate) handleAppendSnapshot(ctx *tempRaftContext, rd *raft.Rea
 	}
 }
 
-func (pr *PeerReplicate) handleAppendEntries(ctx *tempRaftContext, rd *raft.Ready) {
+func (pr *PeerReplicate) handleAppendEntries(ctx *readyContext, rd *raft.Ready) {
 	if len(rd.Entries) > 0 {
 		err := pr.getStore().doAppendEntries(ctx, rd.Entries)
 		if err != nil {
@@ -431,7 +464,7 @@ func (pr *PeerReplicate) handleAppendEntries(ctx *tempRaftContext, rd *raft.Read
 	}
 }
 
-func (pr *PeerReplicate) handleSaveRaftState(ctx *tempRaftContext) {
+func (pr *PeerReplicate) handleSaveRaftState(ctx *readyContext) {
 	tmp := ctx.raftState
 	origin := pr.ps.raftState
 
@@ -448,7 +481,7 @@ func (pr *PeerReplicate) handleSaveRaftState(ctx *tempRaftContext) {
 	}
 }
 
-func (pr *PeerReplicate) handleSaveApplyState(ctx *tempRaftContext) {
+func (pr *PeerReplicate) handleSaveApplyState(ctx *readyContext) {
 	tmp := ctx.applyState
 	origin := *pr.ps.getApplyState()
 
@@ -464,8 +497,8 @@ func (pr *PeerReplicate) handleSaveApplyState(ctx *tempRaftContext) {
 	}
 }
 
-func (pr *PeerReplicate) notifyPropose(meta *proposalMeta) {
-	err := pr.proposes.Put(meta)
+func (pr *PeerReplicate) notifyPropose(c *cmd) {
+	err := pr.proposes.Put(c)
 	if err != nil {
 		log.Infof("raftstore[cell-%d]: raft propose stopped",
 			pr.ps.getCell().ID)
@@ -473,7 +506,7 @@ func (pr *PeerReplicate) notifyPropose(meta *proposalMeta) {
 	}
 
 	if log.DebugEnabled() {
-		for _, req := range meta.cmd.req.Requests {
+		for _, req := range c.req.Requests {
 			log.Debugf("req: added to proposal queue. uuid=<%d>",
 				req.UUID)
 		}
@@ -484,16 +517,16 @@ func (pr *PeerReplicate) notifyPropose(meta *proposalMeta) {
 	pr.addEvent()
 }
 
-func (pr *PeerReplicate) preProposal(cmd *cmd) bool {
+func (pr *PeerReplicate) preProposal(c *cmd) bool {
 	// we handle all read, write and admin cmd here
-	if cmd.req.Header == nil || cmd.req.Header.UUID == nil {
-		cmd.resp(errorOtherCMDResp(errMissingUUIDCMD))
+	if c.req.Header == nil || c.req.Header.UUID == nil {
+		c.resp(errorOtherCMDResp(errMissingUUIDCMD))
 		return false
 	}
 
-	err := pr.store.validateStoreID(cmd.req)
+	err := pr.store.validateStoreID(c.req)
 	if err != nil {
-		cmd.respOtherError(err)
+		c.respOtherError(err)
 		return false
 	}
 
@@ -505,9 +538,9 @@ func (pr *PeerReplicate) preProposal(cmd *cmd) bool {
 
 	term := pr.getCurrentTerm()
 
-	pe := pr.store.validateCell(cmd.req)
+	pe := pr.store.validateCell(c.req)
 	if err != nil {
-		cmd.resp(errorPbResp(pe, cmd.req.Header.UUID, term))
+		c.resp(errorPbResp(pe, c.req.Header.UUID, term))
 		return false
 	}
 
@@ -515,113 +548,106 @@ func (pr *PeerReplicate) preProposal(cmd *cmd) bool {
 	// The peer that is being checked is a leader. It might step down to be a follower later. It
 	// doesn't matter whether the peer is a leader or not. If it's not a leader, the proposing
 	// command log entry can't be committed.
-	meta := &proposalMeta{
-		cmd:  cmd,
-		term: term,
-	}
-
-	pr.notifyPropose(meta)
+	c.term = term
+	pr.notifyPropose(c)
 
 	return true
 }
 
-func (pr *PeerReplicate) propose(meta *proposalMeta) bool {
+func (pr *PeerReplicate) propose(c *cmd) bool {
 	if globalCfg.EnableRequestMetrics {
-		observeRequestWaitting(meta.cmd)
+		observeRequestWaitting(c)
 	}
 
 	if log.DebugEnabled() {
-		for _, req := range meta.cmd.req.Requests {
+		for _, req := range c.req.Requests {
 			log.Debugf("req: start to proposal. uuid=<%d>",
 				req.UUID)
 		}
 	}
 
 	isConfChange := false
-	policy, err := pr.getHandlePolicy(meta.cmd.req)
+	policy, err := pr.getHandlePolicy(c.req)
 	if err != nil {
 		resp := errorOtherCMDResp(err)
-		meta.cmd.resp(resp)
+		c.resp(resp)
 		return true
 	}
 
 	doPropose := false
 	switch policy {
 	case readLocal:
-		pr.execReadLocal(meta.cmd)
+		pr.execReadLocal(c)
 		return true
 	case readIndex:
-		return pr.execReadIndex(meta)
+		return pr.execReadIndex(c)
 	case proposeNormal:
-		doPropose = pr.proposeNormal(meta)
+		doPropose = pr.proposeNormal(c)
 	case proposeTransferLeader:
-		doPropose = pr.proposeTransferLeader(meta)
+		doPropose = pr.proposeTransferLeader(c)
 	case proposeChange:
 		isConfChange = true
-		doPropose = pr.proposeConfChange(meta)
+		doPropose = pr.proposeConfChange(c)
 	}
 
 	if !doPropose {
 		return true
 	}
 
-	err = pr.startProposeJob(meta, isConfChange)
+	err = pr.startProposeJob(c, isConfChange)
 	if err != nil {
-		meta.cmd.respOtherError(err)
+		c.respOtherError(err)
 		return true
 	}
 
 	return false
 }
 
-func (pr *PeerReplicate) proposeNormal(meta *proposalMeta) bool {
-	cmd := meta.cmd
+func (pr *PeerReplicate) proposeNormal(c *cmd) bool {
 	if !pr.isLeader() {
-		cmd.respNotLeader(pr.cellID, meta.term, nil)
+		c.respNotLeader(pr.cellID, nil)
 		return false
 	}
 
-	data := util.MustMarshal(cmd.req)
+	data := util.MustMarshal(c.req)
 	size := uint64(len(data))
 
 	raftFlowProposalSizeHistogram.Observe(float64(size))
 
 	if size > globalCfg.Raft.MaxSizePerEntry {
-		cmd.respLargeRaftEntrySize(pr.cellID, size, meta.term)
+		c.respLargeRaftEntrySize(pr.cellID, size)
 		return false
 	}
 
 	idx := pr.nextProposalIndex()
 	err := pr.rn.Propose(data)
 	if err != nil {
-		cmd.resp(errorOtherCMDResp(err))
+		c.resp(errorOtherCMDResp(err))
 		return false
 	}
 	idx2 := pr.nextProposalIndex()
 	if idx == idx2 {
-		cmd.respNotLeader(pr.cellID, meta.term, nil)
+		c.respNotLeader(pr.cellID, nil)
 		return false
 	}
 
 	if globalCfg.EnableRequestMetrics {
-		observeRequestProposal(meta.cmd)
+		observeRequestProposal(c)
 	}
 
 	pr.metrics.propose.normal++
 	return true
 }
 
-func (pr *PeerReplicate) proposeConfChange(meta *proposalMeta) bool {
-	cmd := meta.cmd
-
-	err := pr.checkConfChange(cmd)
+func (pr *PeerReplicate) proposeConfChange(c *cmd) bool {
+	err := pr.checkConfChange(c)
 	if err != nil {
-		cmd.respOtherError(err)
+		c.respOtherError(err)
 		return false
 	}
 
 	changePeer := new(raftcmdpb.ChangePeerRequest)
-	util.MustUnmarshal(changePeer, cmd.req.AdminRequest.Body)
+	util.MustUnmarshal(changePeer, c.req.AdminRequest.Body)
 
 	cc := new(raftpb.ConfChange)
 	switch changePeer.ChangeType {
@@ -631,17 +657,17 @@ func (pr *PeerReplicate) proposeConfChange(meta *proposalMeta) bool {
 		cc.Type = raftpb.ConfChangeRemoveNode
 	}
 	cc.NodeID = changePeer.Peer.ID
-	cc.Context = util.MustMarshal(cmd.req)
+	cc.Context = util.MustMarshal(c.req)
 
 	idx := pr.nextProposalIndex()
 	err = pr.rn.ProposeConfChange(*cc)
 	if err != nil {
-		cmd.respOtherError(err)
+		c.respOtherError(err)
 		return false
 	}
 	idx2 := pr.nextProposalIndex()
 	if idx == idx2 {
-		cmd.respNotLeader(pr.cellID, meta.term, nil)
+		c.respNotLeader(pr.cellID, nil)
 		return false
 	}
 
@@ -654,10 +680,9 @@ func (pr *PeerReplicate) proposeConfChange(meta *proposalMeta) bool {
 	return true
 }
 
-func (pr *PeerReplicate) proposeTransferLeader(meta *proposalMeta) bool {
-	cmd := meta.cmd
+func (pr *PeerReplicate) proposeTransferLeader(c *cmd) bool {
 	req := new(raftcmdpb.TransferLeaderRequest)
-	util.MustUnmarshal(req, cmd.req.AdminRequest.Body)
+	util.MustUnmarshal(req, c.req.AdminRequest.Body)
 
 	if pr.isTransferLeaderAllowed(&req.Peer) {
 		pr.doTransferLeader(&req.Peer)
@@ -669,7 +694,7 @@ func (pr *PeerReplicate) proposeTransferLeader(meta *proposalMeta) bool {
 
 	// transfer leader command doesn't need to replicate log and apply, so we
 	// return immediately. Note that this command may fail, we can view it just as an advice
-	cmd.resp(newAdminRaftCMDResponse(raftcmdpb.TransferLeader, &raftcmdpb.TransferLeaderResponse{}))
+	c.resp(newAdminRaftCMDResponse(raftcmdpb.TransferLeader, &raftcmdpb.TransferLeaderResponse{}))
 	return false
 }
 
@@ -711,8 +736,8 @@ func (pr *PeerReplicate) isTransferLeaderAllowed(newLeaderPeer *metapb.Peer) boo
 /// 2. A `RemoveNode` request
 ///    Then at least '(total - 1)/2 + 1' other nodes (the node about to be removed is excluded)
 ///    need to be up to date for now.
-func (pr *PeerReplicate) checkConfChange(cmd *cmd) error {
-	data := cmd.req.AdminRequest.Body
+func (pr *PeerReplicate) checkConfChange(c *cmd) error {
+	data := c.req.AdminRequest.Body
 	changePeer := new(raftcmdpb.ChangePeerRequest)
 	util.MustUnmarshal(changePeer, data)
 
@@ -807,7 +832,7 @@ func (pr *PeerReplicate) send(msgs []raftpb.Message) {
 }
 
 func (pr *PeerReplicate) sendRaftMsg(msg raftpb.Message) error {
-	sendMsg := mraft.RaftMessage{}
+	sendMsg := pool.AcquireRaftMessage()
 	sendMsg.CellID = pr.ps.getCell().ID
 	sendMsg.CellEpoch = pr.ps.getCell().Epoch
 
@@ -834,7 +859,7 @@ func (pr *PeerReplicate) sendRaftMsg(msg raftpb.Message) error {
 	}
 
 	sendMsg.Message = msg
-	pr.store.trans.send(&sendMsg)
+	pr.store.trans.send(sendMsg)
 
 	switch msg.Type {
 	case raftpb.MsgApp:

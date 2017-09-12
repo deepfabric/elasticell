@@ -15,10 +15,10 @@ package redis
 
 import (
 	"errors"
-	"fmt"
 	"strconv"
 
-	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
+	"github.com/deepfabric/elasticell/pkg/log"
+	"github.com/deepfabric/elasticell/pkg/pool"
 	"github.com/deepfabric/elasticell/pkg/util"
 	"github.com/fagongzi/goetty"
 	gredis "github.com/fagongzi/goetty/protocol/redis"
@@ -77,17 +77,18 @@ func readCommandByProxyProtocol(in *goetty.ByteBuf) (bool, interface{}, error) {
 	}
 
 	in.Skip(4)
-	n, data, err := in.ReadBytes(size)
+	n, data, err := in.ReadRawBytes(size)
 	if err != nil {
-		return false, nil, err
+		log.Fatal("bug: can't read failed")
 	}
 
 	if n != size {
-		return false, nil, fmt.Errorf("read bytes not match length field, expect=<%d>, read=<%d>", size, n)
+		log.Fatal("bug: can't read mismatch")
 	}
 
-	req := new(raftcmdpb.Request)
+	req := pool.AcquireRequest()
 	util.MustUnmarshal(req, data)
+	in.Skip(size)
 	return true, req, nil
 }
 

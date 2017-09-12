@@ -28,7 +28,7 @@ import (
 
 func (pr *PeerReplicate) startApplyingSnapJob() {
 	pr.ps.applySnapJobLock.Lock()
-	_, err := pr.store.addApplyJob(pr.cellID, "doApplyingSnapshotJob", pr.doApplyingSnapshotJob, pr.ps.setApplySnapJob)
+	err := pr.store.addApplyJob(pr.cellID, "doApplyingSnapshotJob", pr.doApplyingSnapshotJob, pr.ps.setApplySnapJob)
 	if err != nil {
 		log.Fatalf("raftstore[cell-%d]: add apply snapshot task fail, errors:\n %+v",
 			pr.cellID,
@@ -38,7 +38,7 @@ func (pr *PeerReplicate) startApplyingSnapJob() {
 }
 
 func (ps *peerStorage) startDestroyDataJob(cellID uint64, start, end []byte) error {
-	_, err := ps.store.addApplyJob(cellID, "doDestroyDataJob", func() error {
+	err := ps.store.addApplyJob(cellID, "doDestroyDataJob", func() error {
 		return ps.doDestroyDataJob(cellID, start, end)
 	}, nil)
 
@@ -56,7 +56,7 @@ func (pr *PeerReplicate) startRegistrationJob() {
 		appliedIndexTerm: pr.ps.getAppliedIndexTerm(),
 	}
 
-	_, err := pr.store.addApplyJob(pr.cellID, "doRegistrationJob", func() error {
+	err := pr.store.addApplyJob(pr.cellID, "doRegistrationJob", func() error {
 		return pr.doRegistrationJob(delegate)
 	}, nil)
 
@@ -68,14 +68,14 @@ func (pr *PeerReplicate) startRegistrationJob() {
 }
 
 func (pr *PeerReplicate) startApplyCommittedEntriesJob(cellID uint64, term uint64, commitedEntries []raftpb.Entry) error {
-	_, err := pr.store.addApplyJob(pr.cellID, "doApplyCommittedEntries", func() error {
+	err := pr.store.addApplyJob(pr.cellID, "doApplyCommittedEntries", func() error {
 		return pr.doApplyCommittedEntries(cellID, term, commitedEntries)
 	}, nil)
 	return err
 }
 
 func (pr *PeerReplicate) startRaftLogGCJob(cellID, startIndex, endIndex uint64) error {
-	_, err := pr.store.addRaftLogGCJob(func() error {
+	err := pr.store.addRaftLogGCJob(func() error {
 		return pr.doRaftLogGC(cellID, startIndex, endIndex)
 	})
 
@@ -83,16 +83,16 @@ func (pr *PeerReplicate) startRaftLogGCJob(cellID, startIndex, endIndex uint64) 
 }
 
 func (s *Store) startDestroyJob(cellID uint64, peer metapb.Peer) error {
-	_, err := s.addApplyJob(cellID, "doDestroy", func() error {
+	err := s.addApplyJob(cellID, "doDestroy", func() error {
 		return s.doDestroy(cellID, peer)
 	}, nil)
 
 	return err
 }
 
-func (pr *PeerReplicate) startProposeJob(meta *proposalMeta, isConfChange bool) error {
-	_, err := pr.store.addApplyJob(pr.cellID, "doPropose", func() error {
-		return pr.doPropose(meta, isConfChange)
+func (pr *PeerReplicate) startProposeJob(c *cmd, isConfChange bool) error {
+	err := pr.store.addApplyJob(pr.cellID, "doPropose", func() error {
+		return pr.doPropose(c, isConfChange)
 	}, nil)
 
 	return err
@@ -104,7 +104,7 @@ func (pr *PeerReplicate) startSplitCheckJob() error {
 	startKey := encStartKey(&cell)
 	endKey := encEndKey(&cell)
 
-	_, err := pr.store.addSplitJob(func() error {
+	err := pr.store.addSplitJob(func() error {
 		return pr.doSplitCheck(epoch, startKey, endKey)
 	})
 
@@ -112,7 +112,7 @@ func (pr *PeerReplicate) startSplitCheckJob() error {
 }
 
 func (pr *PeerReplicate) startAskSplitJob(cell metapb.Cell, peer metapb.Peer, splitKey []byte) error {
-	_, err := pr.store.addSplitJob(func() error {
+	err := pr.store.addSplitJob(func() error {
 		return pr.doAskSplit(cell, peer, splitKey)
 	})
 
@@ -120,14 +120,14 @@ func (pr *PeerReplicate) startAskSplitJob(cell metapb.Cell, peer metapb.Peer, sp
 }
 
 func (s *Store) startReportSpltJob(left metapb.Cell, right metapb.Cell) error {
-	_, err := s.addPDJob(func() error {
+	err := s.addPDJob(func() error {
 		_, err := s.pdClient.ReportSplit(context.TODO(), &pdpb.ReportSplitReq{
 			Left:  left,
 			Right: right,
 		})
 
 		return err
-	})
+	}, nil)
 
 	return err
 }
@@ -243,6 +243,7 @@ func (ps *peerStorage) doGenerateSnapshotJob() error {
 		}
 
 		term = entry.Term
+		releaseEntry(entry)
 	}
 
 	state, err := ps.loadCellLocalState(nil)
@@ -288,12 +289,12 @@ func (ps *peerStorage) doGenerateSnapshotJob() error {
 	}
 
 	snapshot.Data = util.MustMarshal(snapData)
-
-	log.Infof("raftstore[cell-%d]: snapshot complete", ps.getCell().ID)
 	ps.genSnapJob.SetResult(snapshot)
 
 	observeSnapshotBuild(start)
 	snapshotSizeHistogram.Observe(float64(snapData.FileSize))
+
+	log.Infof("raftstore[cell-%d]: snapshot complete", ps.getCell().ID)
 	return nil
 }
 

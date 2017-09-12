@@ -20,6 +20,7 @@ import (
 
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
+	"github.com/deepfabric/elasticell/pkg/pool"
 	"github.com/deepfabric/elasticell/pkg/raftstore"
 	"github.com/deepfabric/elasticell/pkg/redis"
 	"github.com/deepfabric/elasticell/pkg/util"
@@ -158,9 +159,9 @@ func (s *RedisServer) doConnection(session goetty.IOSession) error {
 
 			err = s.onRedisCommand(req, rs)
 			if err != nil {
-				rs.onResp(nil, &raftcmdpb.Response{
-					ErrorResult: util.StringToSlice(err.Error()),
-				})
+				rsp := pool.AcquireResponse()
+				rsp.ErrorResult = util.StringToSlice(err.Error())
+				rs.onResp(rsp)
 			}
 		} else if req, ok := value.(*raftcmdpb.Request); ok {
 			if len(req.UUID) > 0 {
@@ -173,22 +174,43 @@ func (s *RedisServer) doConnection(session goetty.IOSession) error {
 			rs.setFromProxy()
 			err = s.onProxyReq(req, rs)
 			if err != nil {
-				rs.onResp(nil, &raftcmdpb.Response{
-					UUID:        req.UUID,
-					ErrorResult: util.StringToSlice(err.Error()),
-				})
+				rsp := pool.AcquireResponse()
+				rsp.ErrorResult = util.StringToSlice(err.Error())
+				rs.onResp(rsp)
+				pool.ReleaseRequest(req)
 			}
 		}
 	}
 }
 
 func (s *RedisServer) onResp(resp *raftcmdpb.RaftCMDResponse) {
+	var errorResult []byte
+	hasError := resp.Header != nil
+
 	for _, rsp := range resp.Responses {
 		rs := s.routing.delete(rsp.UUID)
 		if rs != nil {
-			rs.onResp(resp.Header, rsp)
+			if hasError {
+				if resp.Header.Error.RaftEntryTooLarge == nil {
+					rsp.Type = raftcmdpb.RaftError
+				} else {
+					rsp.Type = raftcmdpb.Invalid
+				}
+
+				if errorResult == nil {
+					errorResult = util.MustMarshal(resp.Header)
+				}
+
+				rsp.ErrorResult = errorResult
+			}
+
+			rs.onResp(rsp)
+		} else {
+			pool.ReleaseResponse(rsp)
 		}
 	}
+
+	pool.ReleaseRaftCMDResponse(resp)
 }
 
 func (s *RedisServer) onProxyReq(req *raftcmdpb.Request, session *session) error {
@@ -200,9 +222,10 @@ func (s *RedisServer) onProxyReq(req *raftcmdpb.Request, session *session) error
 	}
 
 	if len(req.Cmd) < 2 {
-		session.onResp(nil, &raftcmdpb.Response{
-			UUID:        req.UUID,
-			ErrorResult: redis.ErrNotSupportCommand})
+		rsp := pool.AcquireResponse()
+		rsp.UUID = req.UUID
+		rsp.ErrorResult = redis.ErrNotSupportCommand
+		session.onResp(rsp)
 		return nil
 	}
 
@@ -220,15 +243,17 @@ func (s *RedisServer) onRedisCommand(cmd redis.Command, session *session) error 
 	t := s.typeMapping[cmd.CmdString()]
 
 	if h, ok := s.localHandlers[t]; ok {
-		h(&raftcmdpb.Request{
-			Cmd: cmd,
-		}, session)
+		req := pool.AcquireRequest()
+		req.Cmd = cmd
+		h(req, session)
 		return nil
 	}
 
 	h, ok := s.handlers[t]
 	if !ok {
-		session.onResp(nil, &raftcmdpb.Response{ErrorResult: redis.ErrNotSupportCommand})
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = redis.ErrNotSupportCommand
+		session.onResp(rsp)
 		return nil
 	}
 
@@ -244,7 +269,9 @@ func (s *RedisServer) onRedisCommand(cmd redis.Command, session *session) error 
 func (s *RedisServer) onDel(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
 	args := cmd.Args()
 	if len(args) != 1 {
-		session.onResp(nil, &raftcmdpb.Response{ErrorResult: redis.ErrInvalidCommandResp})
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = redis.ErrInvalidCommandResp
+		session.onResp(rsp)
 		return nil, nil
 	}
 
@@ -252,8 +279,9 @@ func (s *RedisServer) onDel(cmdType raftcmdpb.CMDType, cmd redis.Command, sessio
 }
 
 func (s *RedisServer) onPing(req *raftcmdpb.Request, session *session) ([]byte, error) {
-	session.onResp(nil, &raftcmdpb.Response{
-		UUID:         req.UUID,
-		StatusResult: redis.PongResp})
+	rsp := pool.AcquireResponse()
+	rsp.UUID = req.UUID
+	rsp.StatusResult = redis.PongResp
+	session.onResp(rsp)
 	return nil, nil
 }

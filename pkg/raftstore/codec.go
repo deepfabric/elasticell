@@ -14,9 +14,9 @@
 package raftstore
 
 import (
-	"fmt"
-
+	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
+	"github.com/deepfabric/elasticell/pkg/pool"
 	"github.com/deepfabric/elasticell/pkg/util"
 	"github.com/fagongzi/goetty"
 )
@@ -53,55 +53,63 @@ func (decoder raftDecoder) Decode(in *goetty.ByteBuf) (bool, interface{}, error)
 		return true, nil, err
 	}
 
-	_, data, err := in.ReadMarkedBytes()
-	if err != nil {
-		return true, nil, err
-	}
+	data := in.GetMarkedRemindData()
 
 	switch t {
 	case typeSnap:
 		msg := &mraft.SnapKey{}
 		util.MustUnmarshal(msg, data)
+		in.MarkedBytesReaded()
 		return true, msg, nil
 	case typeSnapData:
 		msg := &mraft.SnapshotData{}
 		util.MustUnmarshal(msg, data)
+		in.MarkedBytesReaded()
 		return true, msg, nil
 	case typeSnapEnd:
 		msg := &mraft.SnapshotDataEnd{}
 		util.MustUnmarshal(msg, data)
+		in.MarkedBytesReaded()
 		return true, msg, nil
 	case typeRaft:
-		msg := &mraft.RaftMessage{}
+		msg := pool.AcquireRaftMessage()
 		util.MustUnmarshal(msg, data)
+		in.MarkedBytesReaded()
 		return true, msg, nil
 	}
 
-	return true, nil, fmt.Errorf("decoder: not support msg type, type=<%d>", t)
+	log.Fatalf("bug: not support msg type, type=<%d>", t)
+	return false, nil, nil
 }
 
 func (e raftEncoder) Encode(data interface{}, out *goetty.ByteBuf) error {
+	t := typeRaft
+	var m util.Marashal
+
 	if msg, ok := data.(*mraft.RaftMessage); ok {
-		d := util.MustMarshal(msg)
-		out.WriteInt(len(d) + 1)
-		out.WriteByte(typeRaft)
-		out.Write(d)
+		t = typeRaft
+		m = msg
 	} else if msg, ok := data.(*mraft.SnapKey); ok {
-		d := util.MustMarshal(msg)
-		out.WriteInt(len(d) + 1)
-		out.WriteByte(typeSnap)
-		out.Write(d)
+		t = typeSnap
+		m = msg
 	} else if msg, ok := data.(*mraft.SnapshotData); ok {
-		d := util.MustMarshal(msg)
-		out.WriteInt(len(d) + 1)
-		out.WriteByte(typeSnapData)
-		out.Write(d)
+		t = typeSnapData
+		m = msg
 	} else if msg, ok := data.(*mraft.SnapshotDataEnd); ok {
-		d := util.MustMarshal(msg)
-		out.WriteInt(len(d) + 1)
-		out.WriteByte(typeSnapEnd)
-		out.Write(d)
+		t = typeSnapEnd
+		m = msg
+	} else {
+		log.Fatalf("bug: unsupport msg: %+v", msg)
 	}
+
+	size := m.Size()
+	out.WriteInt(size + 1)
+	out.WriteByte(byte(t))
+
+	index := out.GetWriteIndex()
+	out.Expansion(size)
+	util.MustMarshalTo(m, out.RawBuf()[index:index+size])
+	out.SetWriterIndex(index + size)
 
 	return nil
 }

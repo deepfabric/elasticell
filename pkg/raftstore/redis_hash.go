@@ -15,25 +15,28 @@ package raftstore
 
 import (
 	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
+	"github.com/deepfabric/elasticell/pkg/pool"
 	"github.com/deepfabric/elasticell/pkg/redis"
 	"github.com/deepfabric/elasticell/pkg/util"
 )
 
-func (s *Store) execHSet(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execHSet(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
 	if len(args) != 3 {
-		return &raftcmdpb.Response{
-			ErrorResult: redis.ErrInvalidCommandResp,
-		}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = redis.ErrInvalidCommandResp
+
+		return rsp
 	}
 
 	n, err := s.getHashEngine().HSet(args[0], args[1], args[2])
 	if err != nil {
-		return &raftcmdpb.Response{
-			ErrorResult: util.StringToSlice(err.Error()),
-		}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = util.StringToSlice(err.Error())
+
+		return rsp
 	}
 
 	if n > 0 {
@@ -43,26 +46,28 @@ func (s *Store) execHSet(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.Re
 		ctx.metrics.sizeDiffHint += size
 	}
 
-	return &raftcmdpb.Response{
-		IntegerResult: &n,
-	}
+	rsp := pool.AcquireResponse()
+	rsp.IntegerResult = &n
+	return rsp
 }
 
-func (s *Store) execHDel(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execHDel(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
 	if len(args) < 2 {
-		return &raftcmdpb.Response{
-			ErrorResult: redis.ErrInvalidCommandResp,
-		}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = redis.ErrInvalidCommandResp
+
+		return rsp
 	}
 
 	n, err := s.getHashEngine().HDel(args[0], args[1:]...)
 	if err != nil {
-		return &raftcmdpb.Response{
-			ErrorResult: util.StringToSlice(err.Error()),
-		}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = util.StringToSlice(err.Error())
+
+		return rsp
 	}
 
 	if n > 0 {
@@ -75,21 +80,22 @@ func (s *Store) execHDel(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.Re
 		ctx.metrics.sizeDiffHint -= size
 	}
 
-	return &raftcmdpb.Response{
-		IntegerResult: &n,
-	}
+	rsp := pool.AcquireResponse()
+	rsp.IntegerResult = &n
+	return rsp
 }
 
-func (s *Store) execHMSet(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execHMSet(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 	var size int64
 
 	l := len(args)
 	if l < 3 || l%2 == 0 {
-		return &raftcmdpb.Response{
-			ErrorResult: redis.ErrInvalidCommandResp,
-		}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = redis.ErrInvalidCommandResp
+
+		return rsp
 	}
 
 	key := args[0]
@@ -108,35 +114,39 @@ func (s *Store) execHMSet(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.R
 
 	err := s.getHashEngine().HMSet(key, fields, values)
 	if err != nil {
-		return &raftcmdpb.Response{
-			ErrorResult: util.StringToSlice(err.Error()),
-		}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = util.StringToSlice(err.Error())
+
+		return rsp
 	}
 
 	ctx.metrics.writtenKeys++
 	ctx.metrics.writtenBytes += size
 	ctx.metrics.sizeDiffHint += size
 
-	return &raftcmdpb.Response{
-		StatusResult: redis.OKStatusResp,
-	}
+	rsp := pool.AcquireResponse()
+	rsp.StatusResult = redis.OKStatusResp
+
+	return rsp
 }
 
-func (s *Store) execHSetNX(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execHSetNX(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
 	if len(args) != 3 {
-		return &raftcmdpb.Response{
-			ErrorResult: redis.ErrInvalidCommandResp,
-		}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = redis.ErrInvalidCommandResp
+
+		return rsp
 	}
 
 	value, err := s.getHashEngine().HSetNX(args[0], args[1], args[2])
 	if err != nil {
-		return &raftcmdpb.Response{
-			ErrorResult: util.StringToSlice(err.Error()),
-		}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = util.StringToSlice(err.Error())
+
+		return rsp
 	}
 
 	if value > 0 {
@@ -145,44 +155,49 @@ func (s *Store) execHSetNX(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.
 		ctx.metrics.sizeDiffHint += size
 	}
 
-	return &raftcmdpb.Response{
-		IntegerResult: &value,
-	}
+	rsp := pool.AcquireResponse()
+	rsp.IntegerResult = &value
+	return rsp
 }
 
-func (s *Store) execHIncrBy(ctx *execContext, req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execHIncrBy(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
 	if len(args) != 3 {
-		return &raftcmdpb.Response{
-			ErrorResult: redis.ErrInvalidCommandResp,
-		}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = redis.ErrInvalidCommandResp
+
+		return rsp
 	}
 
 	incrment, err := util.StrInt64(args[2])
 	if err != nil {
-		return &raftcmdpb.Response{
-			ErrorResult: util.StringToSlice(err.Error()),
-		}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = util.StringToSlice(err.Error())
+
+		return rsp
 	}
 
 	value, err := s.getHashEngine().HIncrBy(args[0], args[1], incrment)
 	if err != nil {
-		return &raftcmdpb.Response{
-			ErrorResult: util.StringToSlice(err.Error()),
-		}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = util.StringToSlice(err.Error())
+
+		return rsp
 	}
 
 	v, err := util.StrInt64(value)
 	if err != nil {
-		return &raftcmdpb.Response{
-			ErrorResult: util.StringToSlice(err.Error()),
-		}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = util.StringToSlice(err.Error())
+
+		return rsp
 	}
-	return &raftcmdpb.Response{
-		IntegerResult: &v,
-	}
+
+	rsp := pool.AcquireResponse()
+	rsp.IntegerResult = &v
+	return rsp
 }
 
 func (s *Store) execHGet(req *raftcmdpb.Request) *raftcmdpb.Response {
@@ -190,23 +205,26 @@ func (s *Store) execHGet(req *raftcmdpb.Request) *raftcmdpb.Response {
 	args := cmd.Args()
 
 	if len(args) != 2 {
-		return &raftcmdpb.Response{
-			ErrorResult: redis.ErrInvalidCommandResp,
-		}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = redis.ErrInvalidCommandResp
+
+		return rsp
 	}
 
 	value, err := s.getHashEngine().HGet(args[0], args[1])
 	if err != nil {
-		return &raftcmdpb.Response{
-			ErrorResult: util.StringToSlice(err.Error()),
-		}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = util.StringToSlice(err.Error())
+
+		return rsp
 	}
 
 	has := true
-	return &raftcmdpb.Response{
-		BulkResult:         value,
-		HasEmptyBulkResult: &has,
-	}
+	rsp := pool.AcquireResponse()
+	rsp.BulkResult = value
+	rsp.HasEmptyBulkResult = &has
+
+	return rsp
 }
 
 func (s *Store) execHExists(req *raftcmdpb.Request) *raftcmdpb.Response {
@@ -214,16 +232,18 @@ func (s *Store) execHExists(req *raftcmdpb.Request) *raftcmdpb.Response {
 	args := cmd.Args()
 
 	if len(args) != 2 {
-		return &raftcmdpb.Response{
-			ErrorResult: redis.ErrInvalidCommandResp,
-		}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = redis.ErrInvalidCommandResp
+
+		return rsp
 	}
 
 	exists, err := s.getHashEngine().HExists(args[0], args[1])
 	if err != nil {
-		return &raftcmdpb.Response{
-			ErrorResult: util.StringToSlice(err.Error()),
-		}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = util.StringToSlice(err.Error())
+
+		return rsp
 	}
 
 	var value int64
@@ -231,9 +251,9 @@ func (s *Store) execHExists(req *raftcmdpb.Request) *raftcmdpb.Response {
 		value = 1
 	}
 
-	return &raftcmdpb.Response{
-		IntegerResult: &value,
-	}
+	rsp := pool.AcquireResponse()
+	rsp.IntegerResult = &value
+	return rsp
 }
 
 func (s *Store) execHKeys(req *raftcmdpb.Request) *raftcmdpb.Response {
@@ -241,23 +261,26 @@ func (s *Store) execHKeys(req *raftcmdpb.Request) *raftcmdpb.Response {
 	args := cmd.Args()
 
 	if len(args) != 1 {
-		return &raftcmdpb.Response{
-			ErrorResult: redis.ErrInvalidCommandResp,
-		}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = redis.ErrInvalidCommandResp
+
+		return rsp
 	}
 
 	value, err := s.getHashEngine().HKeys(args[0])
 	if err != nil {
-		return &raftcmdpb.Response{
-			ErrorResult: util.StringToSlice(err.Error()),
-		}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = util.StringToSlice(err.Error())
+
+		return rsp
 	}
 
 	var has = true
-	return &raftcmdpb.Response{
-		SliceArrayResult:         value,
-		HasEmptySliceArrayResult: &has,
-	}
+	rsp := pool.AcquireResponse()
+	rsp.SliceArrayResult = value
+	rsp.HasEmptySliceArrayResult = &has
+
+	return rsp
 }
 
 func (s *Store) execHVals(req *raftcmdpb.Request) *raftcmdpb.Response {
@@ -265,23 +288,26 @@ func (s *Store) execHVals(req *raftcmdpb.Request) *raftcmdpb.Response {
 	args := cmd.Args()
 
 	if len(args) != 1 {
-		return &raftcmdpb.Response{
-			ErrorResult: redis.ErrInvalidCommandResp,
-		}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = redis.ErrInvalidCommandResp
+
+		return rsp
 	}
 
 	value, err := s.getHashEngine().HVals(args[0])
 	if err != nil {
-		return &raftcmdpb.Response{
-			ErrorResult: util.StringToSlice(err.Error()),
-		}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = util.StringToSlice(err.Error())
+
+		return rsp
 	}
 
 	var has = true
-	return &raftcmdpb.Response{
-		SliceArrayResult:         value,
-		HasEmptySliceArrayResult: &has,
-	}
+	rsp := pool.AcquireResponse()
+	rsp.SliceArrayResult = value
+	rsp.HasEmptySliceArrayResult = &has
+
+	return rsp
 }
 
 func (s *Store) execHGetAll(req *raftcmdpb.Request) *raftcmdpb.Response {
@@ -289,23 +315,26 @@ func (s *Store) execHGetAll(req *raftcmdpb.Request) *raftcmdpb.Response {
 	args := cmd.Args()
 
 	if len(args) != 1 {
-		return &raftcmdpb.Response{
-			ErrorResult: redis.ErrInvalidCommandResp,
-		}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = redis.ErrInvalidCommandResp
+
+		return rsp
 	}
 
 	value, err := s.getHashEngine().HGetAll(args[0])
 	if err != nil {
-		return &raftcmdpb.Response{
-			ErrorResult: util.StringToSlice(err.Error()),
-		}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = util.StringToSlice(err.Error())
+
+		return rsp
 	}
 
 	var has = true
-	return &raftcmdpb.Response{
-		FvPairArrayResult:         value,
-		HasEmptyFVPairArrayResult: &has,
-	}
+	rsp := pool.AcquireResponse()
+	rsp.FvPairArrayResult = value
+	rsp.HasEmptyFVPairArrayResult = &has
+
+	return rsp
 }
 
 func (s *Store) execHLen(req *raftcmdpb.Request) *raftcmdpb.Response {
@@ -313,21 +342,23 @@ func (s *Store) execHLen(req *raftcmdpb.Request) *raftcmdpb.Response {
 	args := cmd.Args()
 
 	if len(args) != 1 {
-		return &raftcmdpb.Response{
-			ErrorResult: redis.ErrInvalidCommandResp,
-		}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = redis.ErrInvalidCommandResp
+
+		return rsp
 	}
 
 	value, err := s.getHashEngine().HLen(args[0])
 	if err != nil {
-		return &raftcmdpb.Response{
-			ErrorResult: util.StringToSlice(err.Error()),
-		}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = util.StringToSlice(err.Error())
+
+		return rsp
 	}
 
-	return &raftcmdpb.Response{
-		IntegerResult: &value,
-	}
+	rsp := pool.AcquireResponse()
+	rsp.IntegerResult = &value
+	return rsp
 }
 
 func (s *Store) execHMGet(req *raftcmdpb.Request) *raftcmdpb.Response {
@@ -335,9 +366,10 @@ func (s *Store) execHMGet(req *raftcmdpb.Request) *raftcmdpb.Response {
 	args := cmd.Args()
 
 	if len(args) < 2 {
-		return &raftcmdpb.Response{
-			ErrorResult: redis.ErrInvalidCommandResp,
-		}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = redis.ErrInvalidCommandResp
+
+		return rsp
 	}
 
 	value, errs := s.getHashEngine().HMGet(args[0], args[1:]...)
@@ -347,16 +379,19 @@ func (s *Store) execHMGet(req *raftcmdpb.Request) *raftcmdpb.Response {
 			errors[idx] = util.StringToSlice(err.Error())
 		}
 
-		return &raftcmdpb.Response{
-			ErrorResults: errors,
-		}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResults = errors
+
+		return rsp
 	}
 
 	has := true
-	return &raftcmdpb.Response{
-		SliceArrayResult:         value,
-		HasEmptySliceArrayResult: &has,
-	}
+	rsp := pool.AcquireResponse()
+	rsp.SliceArrayResult = value
+	rsp.HasEmptySliceArrayResult = &has
+
+	return rsp
+
 }
 
 func (s *Store) execHStrLen(req *raftcmdpb.Request) *raftcmdpb.Response {
@@ -364,19 +399,21 @@ func (s *Store) execHStrLen(req *raftcmdpb.Request) *raftcmdpb.Response {
 	args := cmd.Args()
 
 	if len(args) != 2 {
-		return &raftcmdpb.Response{
-			ErrorResult: redis.ErrInvalidCommandResp,
-		}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = redis.ErrInvalidCommandResp
+
+		return rsp
 	}
 
 	value, err := s.getHashEngine().HStrLen(args[0], args[1])
 	if err != nil {
-		return &raftcmdpb.Response{
-			ErrorResult: util.StringToSlice(err.Error()),
-		}
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = util.StringToSlice(err.Error())
+
+		return rsp
 	}
 
-	return &raftcmdpb.Response{
-		IntegerResult: &value,
-	}
+	rsp := pool.AcquireResponse()
+	rsp.IntegerResult = &value
+	return rsp
 }

@@ -17,6 +17,7 @@ var (
 
 	labelQueueReport      = "report"
 	labelQueueReq         = "req"
+	labelQueueBatchSize   = "batch-size"
 	labelQueueBatch       = "batch"
 	labelQueuePropose     = "propose"
 	labelQueueTick        = "tick"
@@ -55,32 +56,32 @@ func observeRequestInQueue(start time.Time) {
 	requestDurationHistogram.WithLabelValues(labelRequestInQueue).Observe(time.Now().Sub(start).Seconds())
 }
 
-func observeRequestWaitting(cmd *cmd) {
-	observeRequestWithlabel(cmd, labelRequestWaitting)
+func observeRequestWaitting(c *cmd) {
+	observeRequestWithlabel(c, labelRequestWaitting)
 }
 
-func observeRequestProposal(cmd *cmd) {
-	observeRequestWithlabel(cmd, labelRequestProposal)
+func observeRequestProposal(c *cmd) {
+	observeRequestWithlabel(c, labelRequestProposal)
 }
 
-func observeRequestRaft(cmd *cmd) {
-	observeRequestWithlabel(cmd, labelRequestRaft)
+func observeRequestRaft(c *cmd) {
+	observeRequestWithlabel(c, labelRequestRaft)
 }
 
-func observeRequestStored(cmd *cmd) {
-	observeRequestWithlabel(cmd, labelRequestStored)
+func observeRequestStored(c *cmd) {
+	observeRequestWithlabel(c, labelRequestStored)
 }
 
-func observeRequestResponse(cmd *cmd) {
+func observeRequestResponse(c *cmd) {
 	now := time.Now()
-	for _, req := range cmd.req.Requests {
+	for _, req := range c.req.Requests {
 		requestDurationHistogram.WithLabelValues(labelRequestResponse).Observe(now.Sub(time.Unix(0, req.StartAt)).Seconds())
 	}
 }
 
-func observeRequestWithlabel(cmd *cmd, label string) {
+func observeRequestWithlabel(c *cmd, label string) {
 	now := time.Now()
-	for _, req := range cmd.req.Requests {
+	for _, req := range c.req.Requests {
 		requestDurationHistogram.WithLabelValues(label).Observe(now.Sub(time.Unix(0, req.LastStageAt)).Seconds())
 		stage(req, now.UnixNano())
 	}

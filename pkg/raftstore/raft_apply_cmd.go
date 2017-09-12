@@ -22,11 +22,12 @@ import (
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
 	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
 	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
+	"github.com/deepfabric/elasticell/pkg/pool"
 	"github.com/deepfabric/elasticell/pkg/storage"
 	"github.com/deepfabric/elasticell/pkg/util"
 )
 
-type execContext struct {
+type applyContext struct {
 	wb         storage.WriteBatch
 	applyState mraft.RaftApplyState
 	req        *raftcmdpb.RaftCMDRequest
@@ -35,20 +36,29 @@ type execContext struct {
 	metrics    applyMetrics
 }
 
+func (ctx *applyContext) reset() {
+	ctx.wb = nil
+	ctx.applyState = emptyApplyState
+	ctx.req = nil
+	ctx.index = 0
+	ctx.term = 0
+	ctx.metrics = emptyApplyMetrics
+}
+
 func (d *applyDelegate) checkEpoch(req *raftcmdpb.RaftCMDRequest) bool {
 	return checkEpoch(d.cell, req)
 }
 
-func (d *applyDelegate) doApplyRaftCMD(req *raftcmdpb.RaftCMDRequest, term uint64, index uint64) (*execContext, *execResult) {
-	if index == 0 {
+func (d *applyDelegate) doApplyRaftCMD(ctx *applyContext) *execResult {
+	if ctx.index == 0 {
 		log.Fatalf("raftstore-apply[cell-%d]: apply raft command needs a none zero index",
 			d.cell.ID)
 	}
 
-	cmd := d.findCB(req.Header.UUID, term, req)
+	c := d.findCB(ctx)
 
-	if cmd != nil && globalCfg.EnableRequestMetrics {
-		observeRequestRaft(cmd)
+	if c != nil && globalCfg.EnableRequestMetrics {
+		observeRequestRaft(c)
 	}
 
 	if d.isPendingRemove() {
@@ -59,28 +69,23 @@ func (d *applyDelegate) doApplyRaftCMD(req *raftcmdpb.RaftCMDRequest, term uint6
 	var err error
 	var resp *raftcmdpb.RaftCMDResponse
 	var result *execResult
-	ctx := &execContext{
-		applyState: d.applyState,
-		req:        req,
-		index:      index,
-		term:       term,
-		wb:         d.store.engine.NewWriteBatch(),
-	}
 
-	if !d.checkEpoch(req) {
-		resp = errorStaleEpochResp(req.Header.UUID, d.term, d.cell)
+	ctx.wb = d.store.engine.NewWriteBatch()
+
+	if !d.checkEpoch(ctx.req) {
+		resp = errorStaleEpochResp(ctx.req.Header.UUID, d.term, d.cell)
 	} else {
-		if req.AdminRequest != nil {
+		if ctx.req.AdminRequest != nil {
 			resp, result, err = d.execAdminRequest(ctx)
 			if err != nil {
-				resp = errorStaleEpochResp(req.Header.UUID, d.term, d.cell)
+				resp = errorStaleEpochResp(ctx.req.Header.UUID, d.term, d.cell)
 			}
 		} else {
 			resp = d.execWriteRequest(ctx)
 		}
 	}
 
-	ctx.applyState.AppliedIndex = index
+	ctx.applyState.AppliedIndex = ctx.index
 	if !d.isPendingRemove() {
 		err := ctx.wb.Set(getApplyStateKey(d.cell.ID), util.MustMarshal(&ctx.applyState))
 		if err != nil {
@@ -98,32 +103,32 @@ func (d *applyDelegate) doApplyRaftCMD(req *raftcmdpb.RaftCMDRequest, term uint6
 	}
 
 	d.applyState = ctx.applyState
-	d.term = term
+	d.term = ctx.term
 	log.Debugf("raftstore-apply[cell-%d]: applied command, uuid=<%v> index=<%d> resp=<%+v> state=<%+v>",
 		d.cell.ID,
-		req.Header.UUID,
-		index,
+		ctx.req.Header.UUID,
+		ctx.index,
 		resp,
 		d.applyState)
 
-	if cmd != nil {
+	if c != nil {
 		if globalCfg.EnableRequestMetrics {
-			observeRequestStored(cmd)
+			observeRequestStored(c)
 		}
 
 		if resp != nil {
 			buildTerm(d.term, resp)
-			buildUUID(req.Header.UUID, resp)
+			buildUUID(ctx.req.Header.UUID, resp)
 
 			// resp client
-			cmd.resp(resp)
+			c.resp(resp)
 		}
 	}
 
-	return ctx, result
+	return result
 }
 
-func (d *applyDelegate) execAdminRequest(ctx *execContext) (*raftcmdpb.RaftCMDResponse, *execResult, error) {
+func (d *applyDelegate) execAdminRequest(ctx *applyContext) (*raftcmdpb.RaftCMDResponse, *execResult, error) {
 	cmdType := ctx.req.AdminRequest.Type
 	switch cmdType {
 	case raftcmdpb.ChangePeer:
@@ -137,7 +142,7 @@ func (d *applyDelegate) execAdminRequest(ctx *execContext) (*raftcmdpb.RaftCMDRe
 	return nil, nil, nil
 }
 
-func (d *applyDelegate) doExecChangePeer(ctx *execContext) (*raftcmdpb.RaftCMDResponse, *execResult, error) {
+func (d *applyDelegate) doExecChangePeer(ctx *applyContext) (*raftcmdpb.RaftCMDResponse, *execResult, error) {
 	req := new(raftcmdpb.ChangePeerRequest)
 	util.MustUnmarshal(req, ctx.req.AdminRequest.Body)
 
@@ -212,7 +217,7 @@ func (d *applyDelegate) doExecChangePeer(ctx *execContext) (*raftcmdpb.RaftCMDRe
 	return resp, result, nil
 }
 
-func (d *applyDelegate) doExecSplit(ctx *execContext) (*raftcmdpb.RaftCMDResponse, *execResult, error) {
+func (d *applyDelegate) doExecSplit(ctx *applyContext) (*raftcmdpb.RaftCMDResponse, *execResult, error) {
 	ctx.metrics.admin.split++
 
 	req := new(raftcmdpb.SplitRequest)
@@ -311,7 +316,7 @@ func (d *applyDelegate) doExecSplit(ctx *execContext) (*raftcmdpb.RaftCMDRespons
 	return rsp, result, nil
 }
 
-func (d *applyDelegate) doExecRaftGC(ctx *execContext) (*raftcmdpb.RaftCMDResponse, *execResult, error) {
+func (d *applyDelegate) doExecRaftGC(ctx *applyContext) (*raftcmdpb.RaftCMDResponse, *execResult, error) {
 	ctx.metrics.admin.compact++
 
 	req := new(raftcmdpb.RaftLogGCRequest)
@@ -354,8 +359,8 @@ func (d *applyDelegate) doExecRaftGC(ctx *execContext) (*raftcmdpb.RaftCMDRespon
 	return rsp, result, nil
 }
 
-func (d *applyDelegate) execWriteRequest(ctx *execContext) *raftcmdpb.RaftCMDResponse {
-	resp := new(raftcmdpb.RaftCMDResponse)
+func (d *applyDelegate) execWriteRequest(ctx *applyContext) *raftcmdpb.RaftCMDResponse {
+	resp := pool.AcquireRaftCMDResponse()
 
 	for _, req := range ctx.req.Requests {
 		log.Debugf("req: apply raft log. cell=<%d>, uuid=<%d>",
@@ -370,16 +375,16 @@ func (d *applyDelegate) execWriteRequest(ctx *execContext) *raftcmdpb.RaftCMDRes
 	return resp
 }
 
-func (pr *PeerReplicate) doExecReadCmd(cmd *cmd) {
-	resp := new(raftcmdpb.RaftCMDResponse)
+func (pr *PeerReplicate) doExecReadCmd(c *cmd) {
+	resp := pool.AcquireRaftCMDResponse()
 
-	for _, req := range cmd.req.Requests {
+	for _, req := range c.req.Requests {
 		if h, ok := pr.store.redisReadHandles[req.Type]; ok {
 			resp.Responses = append(resp.Responses, h(req))
 		}
 	}
 
-	cmd.resp(resp)
+	c.resp(resp)
 }
 
 func newAdminRaftCMDResponse(adminType raftcmdpb.AdminCmdType, subRsp util.Marashal) *raftcmdpb.RaftCMDResponse {
@@ -387,7 +392,7 @@ func newAdminRaftCMDResponse(adminType raftcmdpb.AdminCmdType, subRsp util.Maras
 	adminResp.Type = adminType
 	adminResp.Body = util.MustMarshal(subRsp)
 
-	resp := new(raftcmdpb.RaftCMDResponse)
+	resp := pool.AcquireRaftCMDResponse()
 	resp.AdminResponse = adminResp
 
 	return resp

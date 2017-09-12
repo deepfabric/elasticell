@@ -21,7 +21,9 @@ import (
 
 // Marashal marashal interface
 type Marashal interface {
+	Size() int
 	Marshal() ([]byte, error)
+	MarshalTo(data []byte) (int, error)
 }
 
 // Unmarshal unmarashal interface
@@ -53,4 +55,15 @@ func MustMarshal(target Marashal) []byte {
 	}
 
 	return data
+}
+
+// MustMarshalTo if marsh failed, will panic
+func MustMarshalTo(target Marashal, data []byte) int {
+	n, err := target.MarshalTo(data)
+	if err != nil {
+		log.Fatalf("marshal failed, errors:\n %+v",
+			err)
+	}
+
+	return n
 }

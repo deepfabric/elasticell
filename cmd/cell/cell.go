@@ -15,6 +15,8 @@ package main
 
 import (
 	"flag"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"syscall"
@@ -24,11 +26,23 @@ import (
 	"github.com/deepfabric/etcd/raft"
 )
 
+var (
+	pprof = flag.String("pprof-addr", ":9999", "pprof http server address")
+)
+
 func main() {
 	flag.Parse()
 
 	log.InitLog()
 	raft.SetLogger(log.DefaultLogger())
+
+	if "" != *pprof {
+		log.Infof("bootstrap: start pprof at: %s", *pprof)
+		go func() {
+			log.Fatalf("bootstrap: start pprof failed, errors:\n%+v",
+				http.ListenAndServe(*pprof, nil))
+		}()
+	}
 
 	cfg := server.GetCfg()
 	s := server.NewServer(cfg)

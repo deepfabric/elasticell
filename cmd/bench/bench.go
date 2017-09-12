@@ -17,17 +17,24 @@ import (
 var (
 	con            = flag.Int64("c", 0, "The clients.")
 	cn             = flag.Int64("cn", 100, "The concurrency per client.")
+	readWeight     = flag.Int("r", 1, "read weight")
+	writeWeight    = flag.Int("w", 1, "write weight")
 	num            = flag.Int64("n", 0, "The total number.")
-	size           = flag.Int("s", 256, "The value size.")
+	size           = flag.Int("v", 256, "The value size.")
 	batch          = flag.Int("b", 64, "The command batch size.")
-	readTimeout    = flag.Int("r", 30, "The timeout for read in seconds")
-	writeTimeout   = flag.Int("w", 30, "The timeout for read in seconds")
+	readTimeout    = flag.Int("rt", 30, "The timeout for read in seconds")
+	writeTimeout   = flag.Int("wt", 30, "The timeout for read in seconds")
 	connectTimeout = flag.Int("ct", 10, "The timeout for connect to server")
 	addr           = flag.String("addr", "127.0.0.1:6379", "The target address.")
 )
 
 func main() {
 	flag.Parse()
+
+	if *readWeight == 0 && *writeWeight == 0 {
+		fmt.Printf("read and write cann't be both zero")
+		os.Exit(1)
+	}
 
 	gCount := *con
 	total := *num
@@ -76,6 +83,14 @@ func main() {
 }
 
 func startG(total int64, wg, complate *sync.WaitGroup, ready chan struct{}, ans *analysis) {
+	var onlyRead, onlyWrite bool
+
+	if *readWeight == 0 {
+		onlyWrite = true
+	} else if *writeWeight == 0 {
+		onlyRead = true
+	}
+
 	if total <= 0 {
 		total = math.MaxInt64
 	}
@@ -141,14 +156,39 @@ func startG(total int64, wg, complate *sync.WaitGroup, ready chan struct{}, ans 
 	var index, lastIndex int64
 
 	start := time.Now()
+	st := start
 	b := 0
-	st := time.Now()
+	ctl := 0
+	doWrite := true
+	rc := *readWeight * 100
+	wc := *writeWeight * 100
 
 	for ; index < total; index++ {
 		key := fmt.Sprintf("%d", rand.Int63())
-		redis.WriteCommand(conn, "set", key, value)
-		b++
 
+		if onlyRead {
+			redis.WriteCommand(conn, "get", key)
+		} else if onlyWrite {
+			redis.WriteCommand(conn, "set", key, value)
+		} else {
+			limit := rc
+
+			if doWrite {
+				limit = wc
+				redis.WriteCommand(conn, "get", key)
+			} else {
+				redis.WriteCommand(conn, "set", key, value)
+			}
+
+			if ctl == limit {
+				ctl = 0
+				doWrite = !doWrite
+			}
+
+			ctl++
+		}
+
+		b++
 		if b == *batch {
 			flush(conn, q, b)
 			ans.incrSent(int64(b))

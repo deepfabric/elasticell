@@ -22,6 +22,7 @@ import (
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
 	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
+	"github.com/deepfabric/elasticell/pkg/pool"
 	"github.com/deepfabric/elasticell/pkg/util"
 	"github.com/deepfabric/etcd/raft/raftpb"
 )
@@ -43,6 +44,18 @@ type asyncApplyResult struct {
 	applyState       mraft.RaftApplyState
 	result           *execResult
 	metrics          applyMetrics
+}
+
+func (res *asyncApplyResult) reset() {
+	res.cellID = 0
+	res.appliedIndexTerm = 0
+	res.applyState = emptyApplyState
+	res.result = nil
+	res.metrics = emptyApplyMetrics
+}
+
+func (res *asyncApplyResult) hasSplitExecResult() bool {
+	return nil != res.result && res.result.splitResult != nil
 }
 
 type changePeer struct {
@@ -68,15 +81,6 @@ type execResult struct {
 	raftGCResult *raftGCResult
 }
 
-type pendingCmd struct {
-	term uint64
-	cmd  *cmd
-}
-
-func (res *asyncApplyResult) hasSplitExecResult() bool {
-	return nil != res.result && res.result.splitResult != nil
-}
-
 type applyDelegate struct {
 	sync.RWMutex
 
@@ -94,14 +98,14 @@ type applyDelegate struct {
 	appliedIndexTerm uint64
 	term             uint64
 
-	pendingCmds          []*pendingCmd
-	pendingChangePeerCMD *pendingCmd
+	pendingCMDs          []*cmd
+	pendingChangePeerCMD *cmd
 }
 
 func (d *applyDelegate) clearAllCommandsAsStale() {
 	d.Lock()
-	for _, cmd := range d.pendingCmds {
-		d.notifyStaleCMD(cmd)
+	for _, c := range d.pendingCMDs {
+		d.notifyStaleCMD(c)
 	}
 
 	if nil != d.pendingChangePeerCMD {
@@ -110,33 +114,33 @@ func (d *applyDelegate) clearAllCommandsAsStale() {
 	d.Unlock()
 }
 
-func (d *applyDelegate) findCB(uuid []byte, term uint64, req *raftcmdpb.RaftCMDRequest) *cmd {
-	if isChangePeerCMD(req) {
-		cmd := d.getPendingChangePeerCMD()
-		if cmd == nil {
+func (d *applyDelegate) findCB(ctx *applyContext) *cmd {
+	if isChangePeerCMD(ctx.req) {
+		c := d.getPendingChangePeerCMD()
+		if c == nil || c.req == nil {
 			return nil
-		} else if bytes.Compare(uuid, cmd.cmd.getUUID()) == 0 {
-			return cmd.cmd
+		} else if bytes.Compare(ctx.req.Header.UUID, c.getUUID()) == 0 {
+			return c
 		}
 
-		d.notifyStaleCMD(cmd)
+		d.notifyStaleCMD(c)
 		return nil
 	}
 
 	for {
-		head := d.popPendingCMD(term)
+		head := d.popPendingCMD(ctx.term)
 		if head == nil {
 			return nil
 		}
 
-		if bytes.Compare(head.cmd.getUUID(), uuid) == 0 {
-			return head.cmd
+		if bytes.Compare(head.getUUID(), ctx.req.Header.UUID) == 0 {
+			return head
 		}
 
 		if log.DebugEnabled() {
 			log.Debugf("raftstore-apply[cell-%d]: notify stale cmd, cmd=<%+v>",
 				d.cell.ID,
-				head.cmd)
+				head)
 		}
 
 		// Because of the lack of original RaftCmdRequest, we skip calling
@@ -145,45 +149,39 @@ func (d *applyDelegate) findCB(uuid []byte, term uint64, req *raftcmdpb.RaftCMDR
 	}
 }
 
-func (d *applyDelegate) appendPendingCmd(term uint64, cmd *cmd) {
-	d.pendingCmds = append(d.pendingCmds, &pendingCmd{
-		cmd:  cmd,
-		term: term,
-	})
+func (d *applyDelegate) appendPendingCmd(c *cmd) {
+	d.pendingCMDs = append(d.pendingCMDs, c)
 }
 
-func (d *applyDelegate) setPedingChangePeerCMD(term uint64, cmd *cmd) {
+func (d *applyDelegate) setPedingChangePeerCMD(c *cmd) {
 	d.Lock()
-	d.pendingChangePeerCMD = &pendingCmd{
-		cmd:  cmd,
-		term: term,
-	}
+	d.pendingChangePeerCMD = c
 	d.Unlock()
 }
 
-func (d *applyDelegate) getPendingChangePeerCMD() *pendingCmd {
+func (d *applyDelegate) getPendingChangePeerCMD() *cmd {
 	d.RLock()
-	cmd := d.pendingChangePeerCMD
+	c := d.pendingChangePeerCMD
 	d.RUnlock()
 
-	return cmd
+	return c
 }
 
-func (d *applyDelegate) popPendingCMD(staleTerm uint64) *pendingCmd {
+func (d *applyDelegate) popPendingCMD(staleTerm uint64) *cmd {
 	d.Lock()
-	if len(d.pendingCmds) == 0 {
+	if len(d.pendingCMDs) == 0 {
 		d.Unlock()
 		return nil
 	}
 
-	if d.pendingCmds[0].term > staleTerm {
+	if d.pendingCMDs[0].term > staleTerm {
 		d.Unlock()
 		return nil
 	}
 
-	c := d.pendingCmds[0]
-	d.pendingCmds[0] = nil
-	d.pendingCmds = d.pendingCmds[1:]
+	c := d.pendingCMDs[0]
+	d.pendingCMDs[0] = nil
+	d.pendingCMDs = d.pendingCMDs[1:]
 	d.Unlock()
 	return c
 }
@@ -193,18 +191,20 @@ func isChangePeerCMD(req *raftcmdpb.RaftCMDRequest) bool {
 		req.AdminRequest.Type == raftcmdpb.ChangePeer
 }
 
-func (d *applyDelegate) notifyStaleCMD(cmd *pendingCmd) {
-	resp := errorStaleCMDResp(cmd.cmd.getUUID(), d.term)
+func (d *applyDelegate) notifyStaleCMD(c *cmd) {
 	log.Debugf("raftstore-apply[cell-%d]: resp stale, cmd=<%+v>, current=<%d>",
 		d.cell.ID,
-		cmd,
+		c,
 		d.term)
-	cmd.cmd.resp(resp)
+	resp := errorStaleCMDResp(c.getUUID(), d.term)
+	c.resp(resp)
 }
 
-func (d *applyDelegate) notifyCellRemoved(cmd *pendingCmd) {
-	log.Infof("raftstore-destroy[cell-%d]: cmd is removed, skip. cmd=<%+v>", d.cell.ID, cmd)
-	cmd.cmd.respCellNotFound(d.cell.ID, d.term)
+func (d *applyDelegate) notifyCellRemoved(c *cmd) {
+	log.Infof("raftstore-destroy[cell-%d]: cmd is removed, skip. cmd=<%+v>",
+		d.cell.ID,
+		c)
+	c.respCellNotFound(d.cell.ID)
 }
 
 func (d *applyDelegate) applyCommittedEntries(commitedEntries []raftpb.Entry) {
@@ -213,7 +213,10 @@ func (d *applyDelegate) applyCommittedEntries(commitedEntries []raftpb.Entry) {
 	}
 
 	start := time.Now()
-	for _, entry := range commitedEntries {
+	ctx := acquireApplyContext()
+	req := pool.AcquireRaftCMDRequest()
+
+	for idx, entry := range commitedEntries {
 		if d.isPendingRemove() {
 			// This peer is about to be destroyed, skip everything.
 			break
@@ -228,22 +231,31 @@ func (d *applyDelegate) applyCommittedEntries(commitedEntries []raftpb.Entry) {
 				entry)
 		}
 
+		if idx > 0 {
+			ctx.reset()
+			req.Reset()
+		}
+
+		ctx.req = req
+		ctx.applyState = d.applyState
+		ctx.index = entry.Index
+		ctx.term = entry.Term
+
 		var result *execResult
-		var ctx *execContext
 
 		switch entry.Type {
 		case raftpb.EntryNormal:
-			ctx, result = d.applyEntry(&entry)
+			result = d.applyEntry(ctx, &entry)
 		case raftpb.EntryConfChange:
-			ctx, result = d.applyConfChange(&entry)
+			result = d.applyConfChange(ctx, &entry)
 		}
 
-		asyncResult := &asyncApplyResult{
-			cellID:           d.cell.ID,
-			appliedIndexTerm: d.appliedIndexTerm,
-			applyState:       d.applyState,
-			result:           result,
-		}
+		asyncResult := acquireAsyncApplyResult()
+
+		asyncResult.cellID = d.cell.ID
+		asyncResult.appliedIndexTerm = d.appliedIndexTerm
+		asyncResult.applyState = d.applyState
+		asyncResult.result = result
 
 		if ctx != nil {
 			asyncResult.metrics = ctx.metrics
@@ -255,14 +267,17 @@ func (d *applyDelegate) applyCommittedEntries(commitedEntries []raftpb.Entry) {
 		}
 	}
 
+	// only release RaftCMDRequest. Header and Requests fields is pb created in Unmarshal
+	pool.ReleaseRaftCMDRequest(req)
+	releaseApplyContext(ctx)
+
 	observeRaftLogApply(start)
 }
 
-func (d *applyDelegate) applyEntry(entry *raftpb.Entry) (*execContext, *execResult) {
+func (d *applyDelegate) applyEntry(ctx *applyContext, entry *raftpb.Entry) *execResult {
 	if len(entry.Data) > 0 {
-		req := &raftcmdpb.RaftCMDRequest{}
-		util.MustUnmarshal(req, entry.Data)
-		return d.doApplyRaftCMD(req, entry.Term, entry.Index)
+		util.MustUnmarshal(ctx.req, entry.Data)
+		return d.doApplyRaftCMD(ctx)
 	}
 
 	// when a peer become leader, it will send an empty entry.
@@ -284,40 +299,37 @@ func (d *applyDelegate) applyEntry(entry *raftpb.Entry) (*execContext, *execResu
 	}
 
 	for {
-		cmd := d.popPendingCMD(entry.Term - 1)
-		if cmd == nil {
-			return nil, nil
+		c := d.popPendingCMD(entry.Term - 1)
+		if c == nil {
+			return nil
 		}
 
 		// apprently, all the callbacks whose term is less than entry's term are stale.
-		d.notifyStaleCMD(cmd)
+		d.notifyStaleCMD(c)
 	}
 }
 
-func (d *applyDelegate) applyConfChange(entry *raftpb.Entry) (*execContext, *execResult) {
-	index := entry.Index
-	term := entry.Term
+func (d *applyDelegate) applyConfChange(ctx *applyContext, entry *raftpb.Entry) *execResult {
 	cc := new(raftpb.ConfChange)
+
 	util.MustUnmarshal(cc, entry.Data)
+	util.MustUnmarshal(ctx.req, cc.Context)
 
-	req := new(raftcmdpb.RaftCMDRequest)
-	util.MustUnmarshal(req, cc.Context)
-
-	ctx, result := d.doApplyRaftCMD(req, term, index)
+	result := d.doApplyRaftCMD(ctx)
 	if nil == result {
-		return nil, &execResult{
+		return &execResult{
 			adminType:  raftcmdpb.ChangePeer,
 			changePeer: &changePeer{},
 		}
 	}
 
 	result.changePeer.confChange = *cc
-	return ctx, result
+	return result
 }
 
 func (d *applyDelegate) destroy() {
-	for _, cmd := range d.pendingCmds {
-		d.notifyCellRemoved(cmd)
+	for _, c := range d.pendingCMDs {
+		d.notifyCellRemoved(c)
 	}
 
 	if d.pendingChangePeerCMD != nil {

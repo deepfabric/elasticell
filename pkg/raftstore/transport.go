@@ -18,11 +18,11 @@ import (
 	"io"
 	"time"
 
-	"github.com/Workiva/go-datastructures/queue"
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
 	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
 	"github.com/deepfabric/elasticell/pkg/pd"
+	"github.com/deepfabric/elasticell/pkg/pool"
 	"github.com/deepfabric/elasticell/pkg/util"
 	"github.com/deepfabric/etcd/raft/raftpb"
 	"github.com/fagongzi/goetty"
@@ -49,7 +49,7 @@ type transport struct {
 	getStoreAddrFun func(storeID uint64) (string, error)
 
 	conns map[string]goetty.IOSession
-	msgs  *queue.Queue
+	msgs  *util.Queue
 
 	addrs   map[uint64]string
 	ipAddrs map[string][]uint64
@@ -66,7 +66,7 @@ func newTransport(store *Store, client *pd.Client, handler func(interface{})) *t
 	t := &transport{
 		server:      goetty.NewServer(addr, decoder, encoder, goetty.NewUUIDV4IdGenerator()),
 		conns:       make(map[string]goetty.IOSession),
-		msgs:        &queue.Queue{},
+		msgs:        &util.Queue{},
 		addrs:       make(map[uint64]string),
 		handler:     handler,
 		client:      client,
@@ -125,15 +125,17 @@ func (t *transport) send(msg *mraft.RaftMessage) {
 }
 
 func (t *transport) readyToSend(ctx context.Context) {
+	items := make([]interface{}, globalCfg.RaftMessageSendBatchLimit, globalCfg.RaftMessageSendBatchLimit)
+
 	for {
-		msgs, err := t.msgs.Get(globalCfg.RaftMessageSendBatchLimit)
+		n, err := t.msgs.Get(globalCfg.RaftMessageSendBatchLimit, items)
 		if err != nil {
 			log.Infof("stop: raft transfer send worker stopped")
 			return
 		}
 
-		for _, m := range msgs {
-			msg := m.(*mraft.RaftMessage)
+		for i := int64(0); i < n; i++ {
+			msg := items[i].(*mraft.RaftMessage)
 			err := t.doSend(msg)
 			if err != nil {
 				log.Errorf("raftstore[cell-%d]: send msg failure, from_peer=<%d> to_peer=<%d>, errors:\n%s",
@@ -154,6 +156,8 @@ func (t *transport) readyToSend(ctx context.Context) {
 					pr.reportUnreachable(msg.Message)
 				}
 			}
+
+			pool.ReleaseRaftMessage(msg)
 		}
 
 		queueGauge.WithLabelValues(labelQueueMsgs).Set(float64(t.msgs.Len()))

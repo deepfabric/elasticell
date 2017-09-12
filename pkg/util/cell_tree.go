@@ -25,6 +25,23 @@ const (
 	defaultBTreeDegree = 64
 )
 
+var (
+	emptyCell metapb.Cell
+	itemPool  sync.Pool
+)
+
+func acquireItem() *CellItem {
+	v := itemPool.Get()
+	if v == nil {
+		return &CellItem{}
+	}
+	return v.(*CellItem)
+}
+
+func releaseItem(item *CellItem) {
+	itemPool.Put(item)
+}
+
 // CellItem is the cell btree item
 type CellItem struct {
 	cell metapb.Cell
@@ -175,13 +192,15 @@ func (t *CellTree) Search(key []byte) metapb.Cell {
 	t.RUnlock()
 
 	if result == nil {
-		return metapb.Cell{}
+		return emptyCell
 	}
+
 	return result.cell
 }
 
 func (t *CellTree) find(cell metapb.Cell) *CellItem {
-	item := &CellItem{cell: cell}
+	item := acquireItem()
+	item.cell = cell
 
 	var result *CellItem
 	t.tree.AscendGreaterOrEqual(item, func(i btree.Item) bool {
@@ -190,8 +209,10 @@ func (t *CellTree) find(cell metapb.Cell) *CellItem {
 	})
 
 	if result == nil || !result.Contains(cell.Start) {
+		releaseItem(item)
 		return nil
 	}
 
+	releaseItem(item)
 	return result
 }
