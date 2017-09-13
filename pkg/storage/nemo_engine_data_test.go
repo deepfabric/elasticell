@@ -152,7 +152,7 @@ func (s *testNemoDataSuite) TestApplySnapshot(c *C) {
 	hashKey := []byte("CreateSnapshot-e")
 	s.addHash(hashKey, c)
 
-	err = s.driver.GetDataEngine().CreateSnapshot(snapPath, kvKey, hashKey)
+	err = s.driver.GetDataEngine().CreateSnapshot(snapPath, kvKey, []byte("CreateSnapshot-f"))
 	c.Assert(err, IsNil)
 
 	err = util.GZIP(snapPath)
