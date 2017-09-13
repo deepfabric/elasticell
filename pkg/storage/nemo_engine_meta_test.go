@@ -123,7 +123,29 @@ func (s *testNemoMetaSuite) TestScan(c *C) {
 	err := s.driver.GetEngine().Scan(key1, []byte("TestScan-e"), func(key, value []byte) (bool, error) {
 		cnt++
 		return true, nil
-	})
+	}, false)
+
+	c.Assert(err, IsNil)
+	c.Assert(cnt, Equals, 4)
+}
+
+func (s *testNemoMetaSuite) TestPooledScan(c *C) {
+	key1 := []byte("TestScan-a")
+	key2 := []byte("TestScan-b")
+	key3 := []byte("TestScan-c")
+	key4 := []byte("TestScan-d")
+	value := []byte("value1")
+
+	s.driver.GetEngine().Set(key1, value)
+	s.driver.GetEngine().Set(key2, value)
+	s.driver.GetEngine().Set(key3, value)
+	s.driver.GetEngine().Set(key4, value)
+
+	cnt := 0
+	err := s.driver.GetEngine().Scan(key1, []byte("TestScan-e"), func(key, value []byte) (bool, error) {
+		cnt++
+		return true, nil
+	}, true)
 
 	c.Assert(err, IsNil)
 	c.Assert(cnt, Equals, 4)

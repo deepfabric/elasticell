@@ -48,8 +48,13 @@ func (e *memoryMetaEngine) RangeDelete(start, end []byte) error {
 
 // Scan scans the range and execute the handler fun.
 // returns false means end the scan.
-func (e *memoryMetaEngine) Scan(start, end []byte, handler func(key, value []byte) (bool, error)) error {
+func (e *memoryMetaEngine) Scan(start, end []byte, handler func(key, value []byte) (bool, error), pooledKey bool) error {
 	return e.kv.Scan(start, end, handler)
+}
+
+// Free free unsafe the key or value
+func (e *memoryMetaEngine) Free(unsafe []byte) {
+
 }
 
 // Seek the first key >= given key, if no found, return None.

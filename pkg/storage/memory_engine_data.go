@@ -37,10 +37,8 @@ func (e *memoryDataEngine) RangeDelete(start, end []byte) error {
 	return nil
 }
 
-func (e *memoryDataEngine) ScanSize(start []byte, end []byte, handler func(key []byte, size uint64) (bool, error)) error {
-	return e.kv.Scan(start, end, func(key, value []byte) (bool, error) {
-		return handler(key, uint64(len(value)))
-	})
+func (e *memoryDataEngine) GetTargetSizeKey(startKey []byte, endKey []byte, size uint64) (uint64, []byte, error) {
+	return 0, nil, nil
 }
 
 func (e *memoryDataEngine) CreateSnapshot(path string, start, end []byte) error {

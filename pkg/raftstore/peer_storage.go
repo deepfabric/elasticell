@@ -399,10 +399,6 @@ func (ps *peerStorage) unmarshal(v []byte, expectIndex uint64) (*raftpb.Entry, e
 	return e, nil
 }
 
-func (ps *peerStorage) clearMeta(wb storage.WriteBatch) error {
-	return ps.store.clearMeta(ps.getCell().ID, wb)
-}
-
 /// Delete all data belong to the region.
 /// If return Err, data may get partial deleted.
 func (ps *peerStorage) clearData() error {

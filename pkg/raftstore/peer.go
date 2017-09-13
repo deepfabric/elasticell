@@ -369,7 +369,7 @@ func (pr *PeerReplicate) destroy() error {
 
 	wb := pr.store.engine.NewWriteBatch()
 
-	err := pr.ps.clearMeta(wb)
+	err := pr.store.clearMeta(pr.cellID, wb)
 	if err != nil {
 		return err
 	}

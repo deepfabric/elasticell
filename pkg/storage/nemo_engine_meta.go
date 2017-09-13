@@ -49,13 +49,20 @@ func (e *nemoMetaEngine) RangeDelete(start, end []byte) error {
 
 // Scan scans the range and execute the handler fun.
 // returns false means end the scan.
-func (e *nemoMetaEngine) Scan(startKey []byte, endKey []byte, handler func(key, value []byte) (bool, error)) error {
+func (e *nemoMetaEngine) Scan(startKey []byte, endKey []byte, handler func(key, value []byte) (bool, error), pooledKey bool) error {
+	var key []byte
 	var err error
 	c := false
 
 	it := e.db.KScanWithHandle(e.handler, startKey, endKey, true)
 	for ; it.Valid(); it.Next() {
-		c, err = handler(it.Key(), it.Value())
+		if pooledKey {
+			key = it.PooledKey()
+		} else {
+			key = it.Key()
+		}
+
+		c, err = handler(key, it.Value())
 		if err != nil || !c {
 			break
 		}
@@ -63,6 +70,11 @@ func (e *nemoMetaEngine) Scan(startKey []byte, endKey []byte, handler func(key, 
 	it.Free()
 
 	return err
+}
+
+// Free free unsafe the key or value
+func (e *nemoMetaEngine) Free(unsafe []byte) {
+	gonemo.MemPool.Free(unsafe)
 }
 
 // Seek the first key >= given key, if no found, return None.

@@ -117,7 +117,9 @@ type Seekable interface {
 type Scanable interface {
 	// Scan scans the range and execute the handler fun.
 	// returns false means end the scan.
-	Scan(start, end []byte, handler func(key, value []byte) (bool, error)) error
+	Scan(start, end []byte, handler func(key, value []byte) (bool, error), pooledKey bool) error
+	// Free free the pooled bytes
+	Free(pooled []byte)
 }
 
 // RangeDeleteable support range delete
@@ -128,10 +130,9 @@ type RangeDeleteable interface {
 // DataEngine is the storage of redis data
 type DataEngine interface {
 	RangeDeleteable
-
-	// Scan scans the range and execute the handler fun.
-	// returns false means end the scan.
-	ScanSize(startKey []byte, endKey []byte, handler func(key []byte, size uint64) (bool, error)) error
+	// GetTargetSizeKey Find a key in the range [startKey, endKey) that sum size over target
+	// if found returns the key
+	GetTargetSizeKey(startKey []byte, endKey []byte, size uint64) (uint64, []byte, error)
 	// CreateSnapshot create a snapshot file under the giving path
 	CreateSnapshot(path string, start, end []byte) error
 	// ApplySnapshot apply a snapshort file from giving path

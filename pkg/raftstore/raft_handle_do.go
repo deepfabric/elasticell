@@ -117,7 +117,7 @@ func (ps *peerStorage) doAppendSnapshot(ctx *readyContext, snap raftpb.Snapshot)
 	}
 
 	if ps.isInitialized() {
-		err := ps.clearMeta(ctx.wb)
+		err := ps.store.clearMeta(ps.cell.ID, ctx.wb)
 		if err != nil {
 			log.Errorf("raftstore[cell-%d]: clear meta failed, errors:\n %+v",
 				ps.getCell().ID,
@@ -312,19 +312,7 @@ func (pr *PeerReplicate) doSplitCheck(epoch metapb.CellEpoch, startKey, endKey [
 	var size uint64
 	var splitKey []byte
 
-	err := pr.store.getDataEngine().ScanSize(startKey, endKey, func(key []byte, keySize uint64) (bool, error) {
-		size += keySize
-
-		if len(splitKey) == 0 && size >= globalCfg.CellSplitSize {
-			splitKey = key
-		}
-
-		if size > globalCfg.CellMaxSize {
-			return false, nil
-		}
-
-		return true, nil
-	})
+	size, splitKey, err := pr.store.getDataEngine().GetTargetSizeKey(startKey, endKey, globalCfg.CellSplitSize)
 
 	if err != nil {
 		log.Errorf("raftstore-split[cell-%d]: failed to scan split key, errors:\n %+v",
@@ -333,7 +321,7 @@ func (pr *PeerReplicate) doSplitCheck(epoch metapb.CellEpoch, startKey, endKey [
 		return err
 	}
 
-	if size < globalCfg.CellSplitSize {
+	if len(splitKey) == 0 {
 		log.Debugf("raftstore-split[cell-%d]: no need to split, size=<%d> split=<%d> start=<%v> end=<%v>",
 			pr.cellID,
 			size,
@@ -766,7 +754,7 @@ func (ps *peerStorage) Entries(low, high, maxSize uint64) ([]raftpb.Entry, error
 		}
 
 		return !exceededMaxSize, nil
-	})
+	}, false)
 
 	if err != nil {
 		return nil, err

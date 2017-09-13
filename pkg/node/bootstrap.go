@@ -81,7 +81,7 @@ func (n *Node) bootstrapStore() uint64 {
 	err = n.driver.GetEngine().Scan(raftstore.GetMinKey(), raftstore.GetMaxKey(), func([]byte, []byte) (bool, error) {
 		count++
 		return false, nil
-	})
+	}, false)
 
 	if err != nil {
 		log.Fatalf("bootstrap: bootstrap store failed, errors:\n %+v", err)

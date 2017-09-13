@@ -88,27 +88,11 @@ func (s *testNemoDataSuite) TestScanSize(c *C) {
 	hashKey := []byte("TestRangeDelete-e")
 	s.addHash(hashKey, c)
 
-	cnt := 0
-	var total uint64
-	err := s.driver.GetDataEngine().ScanSize(kvKey, []byte("TestRangeDelete-f"), func(key []byte, size uint64) (bool, error) {
-		cnt++
-		total = total + size
-		return true, nil
-	})
+	total, key, err := s.driver.GetDataEngine().GetTargetSizeKey(kvKey, []byte("TestRangeDelete-f"), 1024*1024)
 
 	c.Assert(err, IsNil)
 	c.Assert(total > 0, IsTrue)
-
-	cnt = 0
-	total = 0
-	err = s.driver.GetDataEngine().ScanSize([]byte{0}, []byte{255}, func(key []byte, size uint64) (bool, error) {
-		cnt++
-		total = total + size
-		return true, nil
-	})
-
-	c.Assert(err, IsNil)
-	c.Assert(total > 0, IsTrue)
+	c.Assert(len(key) == 0, IsTrue)
 }
 
 func (s *testNemoDataSuite) CreateSnapshot(c *C) {
@@ -170,17 +154,11 @@ func (s *testNemoDataSuite) TestApplySnapshot(c *C) {
 	s.checkApplyZSet(driver, zsetKey, c)
 	s.checkApplyHash(driver, hashKey, c)
 
-	cnt := 0
-	var total uint64
-	err = driver.GetDataEngine().ScanSize(kvKey, hashKey, func(key []byte, size uint64) (bool, error) {
-		cnt++
-		total = total + size
-		return true, nil
-	})
+	total, key, err := s.driver.GetDataEngine().GetTargetSizeKey(kvKey, []byte("TestRangeDelete-f"), 1024*1024)
 
 	c.Assert(err, IsNil)
-	c.Assert(cnt > 0, IsTrue)
 	c.Assert(total > 0, IsTrue)
+	c.Assert(len(key) == 0, IsTrue)
 }
 
 func (s *testNemoDataSuite) addKV(key []byte, c *C) {

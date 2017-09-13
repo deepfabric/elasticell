@@ -33,20 +33,18 @@ func (e *nemoDataEngine) RangeDelete(start, end []byte) error {
 	return e.db.RangeDel(start, end)
 }
 
-func (e *nemoDataEngine) ScanSize(startKey []byte, endKey []byte, handler func(key []byte, size uint64) (bool, error)) error {
-	var err error
-	c := false
+func (e *nemoDataEngine) GetTargetSizeKey(startKey []byte, endKey []byte, size uint64) (uint64, []byte, error) {
+	var currentSize uint64
+	var targetKey []byte
 
 	it := e.db.NewVolumeIterator(startKey, endKey)
-	for ; it.Valid(); it.Next() {
-		c, err = handler(it.Key(), uint64(it.Value()))
-		if err != nil || !c {
-			break
-		}
+	if it.TargetScan(int64(size)) {
+		targetKey = it.TargetKey()
+	} else {
+		currentSize = uint64(it.TotalVolume())
 	}
-	it.Free()
 
-	return err
+	return currentSize, targetKey, nil
 }
 
 // CreateSnapshot create a snapshot file under the giving path

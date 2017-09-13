@@ -178,7 +178,7 @@ func (s *Store) init() {
 		s.replicatesMap.put(cellID, pr)
 
 		return true, nil
-	})
+	}, false)
 
 	if err != nil {
 		log.Fatalf("bootstrap: init store failed, errors:\n %+v", err)
@@ -782,11 +782,19 @@ func (s *Store) clearMeta(cellID uint64, wb storage.WriteBatch) error {
 	metaCount := 0
 	raftCount := 0
 
+	var keys [][]byte
+	defer func() {
+		for _, key := range keys {
+			s.getMetaEngine().Free(key)
+		}
+	}()
+
 	// meta must in the range [cellID, cellID + 1)
 	metaStart := getCellMetaPrefix(cellID)
 	metaEnd := getCellMetaPrefix(cellID + 1)
 
 	err := s.getMetaEngine().Scan(metaStart, metaEnd, func(key, value []byte) (bool, error) {
+		keys = append(keys, key)
 		err := wb.Delete(key)
 		if err != nil {
 			return false, errors.Wrapf(err, "")
@@ -794,7 +802,7 @@ func (s *Store) clearMeta(cellID uint64, wb storage.WriteBatch) error {
 
 		metaCount++
 		return true, nil
-	})
+	}, true)
 
 	if err != nil {
 		return errors.Wrapf(err, "")
@@ -804,6 +812,7 @@ func (s *Store) clearMeta(cellID uint64, wb storage.WriteBatch) error {
 	raftEnd := getCellRaftPrefix(cellID + 1)
 
 	err = s.getMetaEngine().Scan(raftStart, raftEnd, func(key, value []byte) (bool, error) {
+		keys = append(keys, key)
 		err := wb.Delete(key)
 		if err != nil {
 			return false, errors.Wrapf(err, "")
@@ -811,7 +820,7 @@ func (s *Store) clearMeta(cellID uint64, wb storage.WriteBatch) error {
 
 		raftCount++
 		return true, nil
-	})
+	}, true)
 
 	if err != nil {
 		return errors.Wrapf(err, "")
