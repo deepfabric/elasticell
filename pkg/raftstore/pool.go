@@ -16,6 +16,7 @@ var (
 	applyContextPool     sync.Pool
 	entryPool            sync.Pool
 	bufPool              sync.Pool
+	redisBatchPool       sync.Pool
 )
 
 var (
@@ -23,6 +24,19 @@ var (
 	emptyApplyState   = mraft.RaftApplyState{}
 	emptyApplyMetrics = applyMetrics{}
 )
+
+func acquireRedisBatch() *redisBatch {
+	v := redisBatchPool.Get()
+	if v == nil {
+		return &redisBatch{}
+	}
+
+	return v.(*redisBatch)
+}
+
+func releaseRedisBatch(batch *redisBatch) {
+	redisBatchPool.Put(batch)
+}
 
 func acquireBuf() *goetty.ByteBuf {
 	v := bufPool.Get()

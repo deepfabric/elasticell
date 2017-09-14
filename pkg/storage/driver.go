@@ -37,6 +37,7 @@ type Driver interface {
 // KVEngine is the storage of KV
 type KVEngine interface {
 	Set(key, value []byte) error
+	MSet(keys [][]byte, values [][]byte) error
 	Get(key []byte) ([]byte, error)
 	IncrBy(key []byte, incrment int64) (int64, error)
 	DecrBy(key []byte, incrment int64) (int64, error)

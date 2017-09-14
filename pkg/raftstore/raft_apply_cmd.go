@@ -27,8 +27,24 @@ import (
 	"github.com/deepfabric/elasticell/pkg/util"
 )
 
+type redisBatch struct {
+	kvKeys   [][]byte
+	kvValues [][]byte
+}
+
+func (rb *redisBatch) set(key, value []byte) {
+	rb.kvKeys = append(rb.kvKeys, key)
+	rb.kvValues = append(rb.kvValues, value)
+}
+
+func (rb *redisBatch) hasSetBatch() bool {
+	return len(rb.kvKeys) > 0
+}
+
 type applyContext struct {
-	wb         storage.WriteBatch
+	wb storage.WriteBatch
+	rb *redisBatch
+
 	applyState mraft.RaftApplyState
 	req        *raftcmdpb.RaftCMDRequest
 	index      uint64
@@ -43,6 +59,10 @@ func (ctx *applyContext) reset() {
 	ctx.index = 0
 	ctx.term = 0
 	ctx.metrics = emptyApplyMetrics
+
+	if globalCfg.EnableRedisBatch && nil != ctx.rb {
+		releaseRedisBatch(ctx.rb)
+	}
 }
 
 func (d *applyDelegate) checkEpoch(req *raftcmdpb.RaftCMDRequest) bool {
@@ -72,6 +92,10 @@ func (d *applyDelegate) doApplyRaftCMD(ctx *applyContext) *execResult {
 
 	ctx.wb = d.store.engine.NewWriteBatch()
 
+	if globalCfg.EnableRedisBatch {
+		ctx.rb = acquireRedisBatch()
+	}
+
 	if !d.checkEpoch(ctx.req) {
 		resp = errorStaleEpochResp(ctx.req.Header.UUID, d.term, d.cell)
 	} else {
@@ -82,6 +106,15 @@ func (d *applyDelegate) doApplyRaftCMD(ctx *applyContext) *execResult {
 			}
 		} else {
 			resp = d.execWriteRequest(ctx)
+		}
+	}
+
+	if globalCfg.EnableRedisBatch && ctx.rb.hasSetBatch() {
+		err = d.store.getKVEngine().MSet(ctx.rb.kvKeys, ctx.rb.kvValues)
+		if err != nil {
+			log.Fatalf("raftstore-apply[cell-%d]: save apply context failed, errors:\n %+v",
+				d.cell.ID,
+				err)
 		}
 	}
 

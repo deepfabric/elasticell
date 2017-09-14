@@ -46,6 +46,7 @@ type Cfg struct {
 
 	Raft *RaftCfg `json:"raft"`
 
+	EnableRedisBatch     bool `json:"enableRedisBatch"`
 	EnableRequestMetrics bool `json:"enableRequestMetrics"`
 }
 

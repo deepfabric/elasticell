@@ -34,6 +34,10 @@ func (e *nemoKVEngine) Set(key, value []byte) error {
 	return e.db.Set(key, value, 0)
 }
 
+func (e *nemoKVEngine) MSet(keys [][]byte, values [][]byte) error {
+	return e.db.MSet(keys, values)
+}
+
 func (e *nemoKVEngine) Get(key []byte) ([]byte, error) {
 	return e.db.Get(key)
 }

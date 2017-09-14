@@ -31,12 +31,16 @@ func (s *Store) execKVSet(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.
 		return rsp
 	}
 
-	err := s.getKVEngine().Set(args[0], args[1])
-	if err != nil {
-		rsp := pool.AcquireResponse()
-		rsp.ErrorResult = util.StringToSlice(err.Error())
+	if globalCfg.EnableRedisBatch {
+		ctx.rb.set(args[0], args[1])
+	} else {
+		err := s.getKVEngine().Set(args[0], args[1])
+		if err != nil {
+			rsp := pool.AcquireResponse()
+			rsp.ErrorResult = util.StringToSlice(err.Error())
 
-		return rsp
+			return rsp
+		}
 	}
 
 	size := int64(len(args[0]) + len(args[1]))

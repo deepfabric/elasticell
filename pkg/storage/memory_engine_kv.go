@@ -32,6 +32,14 @@ func (e *memoryKVEngine) Set(key, value []byte) error {
 	return nil
 }
 
+func (e *memoryKVEngine) MSet(keys [][]byte, values [][]byte) error {
+	for i := 0; i < len(keys); i++ {
+		e.kv.Put(keys[i], values[i])
+	}
+
+	return nil
+}
+
 func (e *memoryKVEngine) Get(key []byte) ([]byte, error) {
 	v := e.kv.Get(key)
 	return v, nil
