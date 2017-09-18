@@ -84,12 +84,17 @@ func (pr *PeerReplicate) readyToServeRaft(ctx context.Context) {
 				releaseAsyncApplyResult(result.(*asyncApplyResult))
 			}
 
-			cmds := pr.proposes.Dispose()
-			for _, c := range cmds {
-				releaseCmd(c.(*cmd))
+			// resp all stale requests in batch and queue
+			for {
+				if pr.batch.isEmpty() {
+					break
+				}
+				c := pr.batch.pop()
+				for _, req := range c.req.Requests {
+					pr.store.respStoreNotMatch(errStoreNotMatch, req, c.cb)
+				}
 			}
 
-			// resp all stale requests
 			requests := pr.requests.Dispose()
 			for _, r := range requests {
 				req := r.(*reqCtx)
@@ -111,7 +116,6 @@ func (pr *PeerReplicate) readyToServeRaft(ctx context.Context) {
 		pr.handleReport(items)
 		pr.handleApplyResult(items)
 		pr.handleRequest(items)
-		pr.handlePropose(items)
 
 		if pr.rn.HasReadySince(pr.ps.lastReadyIndex) {
 			pr.handleReady()
@@ -227,10 +231,6 @@ func (pr *PeerReplicate) handleApplyResult(items []interface{}) {
 		releaseAsyncApplyResult(result)
 	}
 
-	if n > 0 {
-		pr.nextBatch()
-	}
-
 	size = pr.applyResults.Len()
 	queueGauge.WithLabelValues(labelQueueApplyResult).Set(float64(size))
 
@@ -240,61 +240,34 @@ func (pr *PeerReplicate) handleApplyResult(items []interface{}) {
 }
 
 func (pr *PeerReplicate) handleRequest(items []interface{}) {
-	size := pr.requests.Len()
-	if size == 0 {
-		return
-	}
+	for {
+		size := pr.requests.Len()
+		if size == 0 {
+			queueGauge.WithLabelValues(labelQueueReq).Set(float64(0))
+			break
+		}
 
-	n, err := pr.requests.Get(batch, items)
-	if err != nil {
-		return
-	}
+		n, err := pr.requests.Get(batch, items)
+		if err != nil {
+			return
+		}
 
-	for i := int64(0); i < n; i++ {
-		req := items[i].(*reqCtx)
-		pr.batch.push(req)
-	}
+		for i := int64(0); i < n; i++ {
+			req := items[i].(*reqCtx)
+			pr.batch.push(req)
+		}
 
-	if n > 0 && pr.batch.isLastComplete() {
-		pr.nextBatch()
-	}
-
-	size = pr.requests.Len()
-	queueGauge.WithLabelValues(labelQueueReq).Set(float64(size))
-
-	if size > 0 {
-		pr.addEvent()
-	}
-}
-
-func (pr *PeerReplicate) handlePropose(items []interface{}) {
-	size := pr.proposes.Len()
-	if size == 0 {
-		return
-	}
-
-	n, err := pr.proposes.Get(batch, items)
-	if err != nil {
-		return
-	}
-
-	complete := 0
-	for i := int64(0); i < n; i++ {
-		c := items[i].(*cmd)
-		if pr.propose(c) {
-			complete++
+		if n < batch {
+			break
 		}
 	}
 
-	if complete > 0 {
-		pr.nextBatch()
-	}
+	for {
+		if pr.batch.isEmpty() {
+			break
+		}
 
-	size = pr.proposes.Len()
-	queueGauge.WithLabelValues(labelQueuePropose).Set(float64(size))
-
-	if size > 0 {
-		pr.addEvent()
+		pr.propose(pr.batch.pop())
 	}
 }
 
@@ -497,27 +470,7 @@ func (pr *PeerReplicate) handleSaveApplyState(ctx *readyContext) {
 	}
 }
 
-func (pr *PeerReplicate) notifyPropose(c *cmd) {
-	err := pr.proposes.Put(c)
-	if err != nil {
-		log.Infof("raftstore[cell-%d]: raft propose stopped",
-			pr.ps.getCell().ID)
-		return
-	}
-
-	if log.DebugEnabled() {
-		for _, req := range c.req.Requests {
-			log.Debugf("req: added to proposal queue. uuid=<%d>",
-				req.UUID)
-		}
-	}
-
-	queueGauge.WithLabelValues(labelQueuePropose).Set(float64(pr.proposes.Len()))
-
-	pr.addEvent()
-}
-
-func (pr *PeerReplicate) preProposal(c *cmd) bool {
+func (pr *PeerReplicate) checkProposal(c *cmd) bool {
 	// we handle all read, write and admin cmd here
 	if c.req.Header == nil || c.req.Header.UUID == nil {
 		c.resp(errorOtherCMDResp(errMissingUUIDCMD))
@@ -549,12 +502,14 @@ func (pr *PeerReplicate) preProposal(c *cmd) bool {
 	// doesn't matter whether the peer is a leader or not. If it's not a leader, the proposing
 	// command log entry can't be committed.
 	c.term = term
-	pr.notifyPropose(c)
-
 	return true
 }
 
-func (pr *PeerReplicate) propose(c *cmd) bool {
+func (pr *PeerReplicate) propose(c *cmd) {
+	if !pr.checkProposal(c) {
+		return
+	}
+
 	if globalCfg.EnableRequestMetrics {
 		observeRequestWaitting(c)
 	}
@@ -571,16 +526,15 @@ func (pr *PeerReplicate) propose(c *cmd) bool {
 	if err != nil {
 		resp := errorOtherCMDResp(err)
 		c.resp(resp)
-		return true
+		return
 	}
 
 	doPropose := false
 	switch policy {
 	case readLocal:
 		pr.execReadLocal(c)
-		return true
 	case readIndex:
-		return pr.execReadIndex(c)
+		pr.execReadIndex(c)
 	case proposeNormal:
 		doPropose = pr.proposeNormal(c)
 	case proposeTransferLeader:
@@ -591,16 +545,13 @@ func (pr *PeerReplicate) propose(c *cmd) bool {
 	}
 
 	if !doPropose {
-		return true
+		return
 	}
 
 	err = pr.startProposeJob(c, isConfChange)
 	if err != nil {
 		c.respOtherError(err)
-		return true
 	}
-
-	return false
 }
 
 func (pr *PeerReplicate) proposeNormal(c *cmd) bool {

@@ -29,13 +29,11 @@ type proposeBatch struct {
 	pr       *PeerReplicate
 	lastType int
 	cmds     []*cmd
-	complete bool
 }
 
 func newBatch(pr *PeerReplicate) *proposeBatch {
 	return &proposeBatch{
-		pr:       pr,
-		complete: true,
+		pr: pr,
 	}
 }
 
@@ -49,18 +47,6 @@ func (b *proposeBatch) getType(c *reqCtx) int {
 	}
 
 	return read
-}
-
-func (b *proposeBatch) isLastComplete() bool {
-	return b.complete
-}
-
-func (b *proposeBatch) startBatch() {
-	b.complete = false
-}
-
-func (b *proposeBatch) completeBatch() {
-	b.complete = true
 }
 
 func (b *proposeBatch) size() int {
@@ -129,13 +115,13 @@ func (b *proposeBatch) push(c *reqCtx) {
 	} else {
 		if tp == admin {
 			log.Fatal("bug: admin request must in a single batch")
-		} else {
-			last.req.Requests = append(last.req.Requests, req)
-			if log.DebugEnabled() {
-				log.Debugf("req: add to exists batch. uuid=<%d>, batch size=<%d>",
-					req.UUID,
-					len(last.req.Requests))
-			}
+		}
+
+		last.req.Requests = append(last.req.Requests, req)
+		if log.DebugEnabled() {
+			log.Debugf("req: add to exists batch. uuid=<%d>, batch size=<%d>",
+				req.UUID,
+				len(last.req.Requests))
 		}
 	}
 

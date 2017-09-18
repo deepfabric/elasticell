@@ -598,11 +598,6 @@ func (pr *PeerReplicate) doApplyReads(rd *raft.Ready) {
 
 			pr.doExecReadCmd(c)
 		}
-
-		if len(rd.ReadStates) > 0 {
-			// If the read index is ready, we can process next batch
-			pr.nextBatch()
-		}
 	} else {
 		for _ = range rd.ReadStates {
 			pr.pendingReads.incrReadyCnt()

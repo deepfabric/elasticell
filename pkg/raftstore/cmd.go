@@ -157,10 +157,10 @@ func (pr *PeerReplicate) execReadLocal(c *cmd) {
 	pr.metrics.propose.readLocal++
 }
 
-func (pr *PeerReplicate) execReadIndex(c *cmd) bool {
+func (pr *PeerReplicate) execReadIndex(c *cmd) {
 	if !pr.isLeader() {
 		c.respNotLeader(pr.cellID, nil)
-		return true
+		return
 	}
 
 	lastPendingReadCount := pr.pendingReadCount()
@@ -178,11 +178,9 @@ func (pr *PeerReplicate) execReadIndex(c *cmd) bool {
 		readyReadCount == lastReadyReadCount {
 		// The message gets dropped silently, can't be handled anymore.
 		c.respNotLeader(pr.cellID, nil)
-		return true
+		return
 	}
 
 	pr.pendingReads.push(c)
 	pr.metrics.propose.readIndex++
-
-	return false
 }

@@ -19,7 +19,6 @@ var (
 	labelQueueReq         = "req"
 	labelQueueBatchSize   = "batch-size"
 	labelQueueBatch       = "batch"
-	labelQueuePropose     = "propose"
 	labelQueueTick        = "tick"
 	labelQueueApplyResult = "apply-result"
 	labelQueueStep        = "step"

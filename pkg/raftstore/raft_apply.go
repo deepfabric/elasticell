@@ -111,6 +111,9 @@ func (d *applyDelegate) clearAllCommandsAsStale() {
 	if nil != d.pendingChangePeerCMD {
 		d.notifyStaleCMD(d.pendingChangePeerCMD)
 	}
+
+	d.pendingCMDs = make([]*cmd, 0)
+	d.pendingChangePeerCMD = nil
 	d.Unlock()
 }
 
@@ -328,6 +331,7 @@ func (d *applyDelegate) applyConfChange(ctx *applyContext, entry *raftpb.Entry) 
 }
 
 func (d *applyDelegate) destroy() {
+	d.Lock()
 	for _, c := range d.pendingCMDs {
 		d.notifyCellRemoved(c)
 	}
@@ -335,6 +339,10 @@ func (d *applyDelegate) destroy() {
 	if d.pendingChangePeerCMD != nil {
 		d.notifyCellRemoved(d.pendingChangePeerCMD)
 	}
+
+	d.pendingCMDs = make([]*cmd, 0)
+	d.pendingChangePeerCMD = nil
+	d.Unlock()
 }
 
 func (d *applyDelegate) setPendingRemove() {

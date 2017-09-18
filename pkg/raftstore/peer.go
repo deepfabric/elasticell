@@ -47,7 +47,6 @@ type PeerReplicate struct {
 	reports      *util.Queue
 	applyResults *util.Queue
 	requests     *util.Queue
-	proposes     *util.Queue
 
 	peerHeartbeatsMap *peerHeartbeatsMap
 	pendingReads      *readIndexQueue
@@ -124,7 +123,6 @@ func newPeerReplicate(store *Store, cell *metapb.Cell, peerID uint64) (*PeerRepl
 	pr.reports = &util.Queue{}
 	pr.applyResults = &util.Queue{}
 	pr.requests = &util.Queue{}
-	pr.proposes = &util.Queue{}
 
 	pr.store = store
 	pr.pendingReads = &readIndexQueue{
@@ -211,27 +209,6 @@ func (pr *PeerReplicate) addRequest(req *reqCtx) {
 	queueGauge.WithLabelValues(labelQueueReq).Set(float64(pr.requests.Len()))
 
 	pr.addEvent()
-}
-
-// In 3 case, we can process next batch
-// 1. The raft log is applied
-// 2. Read index is ready
-// 3. Already responsed client
-func (pr *PeerReplicate) nextBatch() {
-	pr.batch.completeBatch()
-
-	for {
-		if pr.batch.isEmpty() {
-			return
-		}
-
-		pr.batch.startBatch()
-		c := pr.batch.pop()
-		// Only one proposal can be do at once
-		if pr.preProposal(c) {
-			return
-		}
-	}
 }
 
 func (pr *PeerReplicate) resetBatch() {

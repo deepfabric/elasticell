@@ -95,9 +95,7 @@ func (t *transport) doConnection(session goetty.IOSession) error {
 
 	log.Infof("transport: %s connected", remoteIP)
 	for {
-		// TODO: resume ReadTimeout
-		// msg, err := session.ReadTimeout(t.readTimeout)
-		msg, err := session.Read()
+		msg, err := session.ReadTimeout(t.readTimeout)
 		if err != nil {
 			if err == io.EOF {
 				log.Infof("transport: closed by %s", remoteIP)
