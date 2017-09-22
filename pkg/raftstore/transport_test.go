@@ -1,7 +1,6 @@
 package raftstore
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
@@ -43,8 +42,6 @@ func (s *transportTestSuite) SetUpSuite(c *C) {
 
 	go s.to.start()
 	<-s.to.server.Started()
-
-	fmt.Println("starttyyttttttttttttttttttttttttttttt")
 }
 
 func (s *transportTestSuite) TearDownSuite(c *C) {
@@ -61,7 +58,6 @@ func (s *transportTestSuite) TestSend(c *C) {
 	s.from.send(msg)
 
 	s.to.handler = func(msg interface{}) {
-		fmt.Println("iiiiiiiiiiiiiiiiiiiiiiiiiiiii")
 		ch <- msg
 	}
 
@@ -96,5 +92,6 @@ func newTestStoreCfg(addr string) *Cfg {
 	c.Raft.MaxSizePerEntry = 8 * 1024 * 1024
 	c.Raft.MaxInflightMsgs = 256
 	c.RaftMessageSendBatchLimit = 10
+	c.RaftMessageWorkerCount = 1
 	return c
 }
