@@ -156,7 +156,7 @@ func (d *applyDelegate) appendPendingCmd(c *cmd) {
 	d.pendingCMDs = append(d.pendingCMDs, c)
 }
 
-func (d *applyDelegate) setPedingChangePeerCMD(c *cmd) {
+func (d *applyDelegate) setPendingChangePeerCMD(c *cmd) {
 	d.Lock()
 	d.pendingChangePeerCMD = c
 	d.Unlock()
@@ -336,11 +336,11 @@ func (d *applyDelegate) destroy() {
 		d.notifyCellRemoved(c)
 	}
 
-	if d.pendingChangePeerCMD != nil {
+	if d.pendingChangePeerCMD != nil && d.pendingChangePeerCMD.req != nil {
 		d.notifyCellRemoved(d.pendingChangePeerCMD)
 	}
 
-	d.pendingCMDs = make([]*cmd, 0)
+	d.pendingCMDs = nil
 	d.pendingChangePeerCMD = nil
 	d.Unlock()
 }

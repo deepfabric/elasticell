@@ -62,8 +62,8 @@ func (pr *PeerReplicate) onRaftTick(arg interface{}) {
 	pr.addEvent()
 }
 
-func (pr *PeerReplicate) addEvent() {
-	pr.events.Put(emptyStruct)
+func (pr *PeerReplicate) addEvent() (bool, error) {
+	return pr.events.Offer(emptyStruct)
 }
 
 func (pr *PeerReplicate) readyToServeRaft(ctx context.Context) {
@@ -71,7 +71,12 @@ func (pr *PeerReplicate) readyToServeRaft(ctx context.Context) {
 	items := make([]interface{}, batch, batch)
 
 	for {
-		_, err := pr.events.Get(batch, items)
+		if pr.events.Len() == 0 && !pr.events.IsDisposed() {
+			time.Sleep(time.Millisecond * 10)
+			continue
+		}
+
+		_, err := pr.events.Get()
 		if err != nil {
 			pr.metrics.flush()
 
@@ -482,12 +487,6 @@ func (pr *PeerReplicate) checkProposal(c *cmd) bool {
 		c.respOtherError(err)
 		return false
 	}
-
-	// pr := s.replicatesMap.get(cmd.req.Header.CellId)
-	// if nil == pr {
-	// 	cmd.respCellNotFound(cmd.req.Header.CellId, 0)
-	// 	return
-	// }
 
 	term := pr.getCurrentTerm()
 

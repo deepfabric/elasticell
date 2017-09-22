@@ -22,7 +22,6 @@ var (
 	labelQueueTick        = "tick"
 	labelQueueApplyResult = "apply-result"
 	labelQueueStep        = "step"
-	labelQueueNotify      = "notify"
 	labelQueueMsgs        = "msgs"
 )
 

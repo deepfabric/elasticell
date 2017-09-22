@@ -16,6 +16,7 @@ package raftstore
 import (
 	"fmt"
 	"io"
+	"sync"
 	"time"
 
 	"github.com/deepfabric/elasticell/pkg/log"
@@ -40,6 +41,8 @@ const (
 )
 
 type transport struct {
+	sync.RWMutex
+
 	store *Store
 
 	server  *goetty.Server
@@ -48,8 +51,9 @@ type transport struct {
 
 	getStoreAddrFun func(storeID uint64) (string, error)
 
-	conns map[string]goetty.IOSession
-	msgs  *util.Queue
+	conns map[string]goetty.IOSessionPool
+	msgs  []*util.Queue
+	mask  uint64
 
 	addrs   map[uint64]string
 	ipAddrs map[string][]uint64
@@ -65,8 +69,9 @@ func newTransport(store *Store, client *pd.Client, handler func(interface{})) *t
 
 	t := &transport{
 		server:      goetty.NewServer(addr, decoder, encoder, goetty.NewUUIDV4IdGenerator()),
-		conns:       make(map[string]goetty.IOSession),
-		msgs:        &util.Queue{},
+		conns:       make(map[string]goetty.IOSessionPool),
+		msgs:        make([]*util.Queue, globalCfg.RaftMessageWorkerCount, globalCfg.RaftMessageWorkerCount),
+		mask:        globalCfg.RaftMessageWorkerCount - 1,
 		addrs:       make(map[uint64]string),
 		handler:     handler,
 		client:      client,
@@ -80,12 +85,19 @@ func newTransport(store *Store, client *pd.Client, handler func(interface{})) *t
 }
 
 func (t *transport) start() error {
-	t.store.runner.RunCancelableTask(t.readyToSend)
+	for i := uint64(0); i < globalCfg.RaftMessageWorkerCount; i++ {
+		t.msgs[i] = &util.Queue{}
+		go t.readyToSend(t.msgs[i])
+	}
+
 	return t.server.Start(t.doConnection)
 }
 
 func (t *transport) stop() {
-	t.msgs.Dispose()
+	for _, q := range t.msgs {
+		q.Dispose()
+	}
+
 	t.server.Stop()
 	log.Infof("stopped: transfer stopped")
 }
@@ -110,23 +122,28 @@ func (t *transport) doConnection(session goetty.IOSession) error {
 	}
 }
 
-func (t *transport) send(msg *mraft.RaftMessage) {
+func (t *transport) send(msg *mraft.RaftMessage) error {
 	storeID := msg.ToPeer.StoreID
 
 	if storeID == t.store.id {
 		t.store.notify(msg)
-		return
+		return nil
 	}
 
-	t.msgs.Put(msg)
-	queueGauge.WithLabelValues(labelQueueMsgs).Set(float64(t.msgs.Len()))
+	err := t.msgs[t.mask&msg.CellID].Put(msg)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
-func (t *transport) readyToSend(ctx context.Context) {
+func (t *transport) readyToSend(q *util.Queue) {
 	items := make([]interface{}, globalCfg.RaftMessageSendBatchLimit, globalCfg.RaftMessageSendBatchLimit)
 
 	for {
-		n, err := t.msgs.Get(globalCfg.RaftMessageSendBatchLimit, items)
+		n, err := q.Get(globalCfg.RaftMessageSendBatchLimit, items)
+
 		if err != nil {
 			log.Infof("stop: raft transfer send worker stopped")
 			return
@@ -158,11 +175,13 @@ func (t *transport) readyToSend(ctx context.Context) {
 			pool.ReleaseRaftMessage(msg)
 		}
 
-		queueGauge.WithLabelValues(labelQueueMsgs).Set(float64(t.msgs.Len()))
+		queueGauge.WithLabelValues(labelQueueMsgs).Set(float64(q.Len()))
 	}
 }
 
 func (t *transport) doSend(msg *mraft.RaftMessage) error {
+	var err error
+
 	storeID := msg.ToPeer.StoreID
 
 	addr, err := t.getStoreAddrFun(storeID)
@@ -177,61 +196,74 @@ func (t *transport) doSend(msg *mraft.RaftMessage) error {
 
 	// if we are send a snapshot raft msg, we can send sst files to the target store before.
 	if msg.Message.Type == raftpb.MsgSnap {
-		start := time.Now()
-
-		snapData := &mraft.RaftSnapshotData{}
-		util.MustUnmarshal(snapData, msg.Message.Snapshot.Data)
-
-		if t.store.snapshotManager.Register(&snapData.Key, sending) {
-			defer t.store.snapshotManager.Deregister(&snapData.Key, sending)
-
-			if !t.store.snapshotManager.Exists(&snapData.Key) {
-				return fmt.Errorf("transport: missing snapshot file, key=<%+v>",
-					snapData.Key)
-			}
-
-			err = conn.Write(&snapData.Key)
-			if err != nil {
-				conn.Close()
-				return errors.Wrapf(err, "")
-			}
-
-			size, err := t.store.snapshotManager.WriteTo(&snapData.Key, conn)
-			if err != nil {
-				conn.Close()
-				return errors.Wrapf(err, "")
-			}
-
-			if snapData.FileSize != size {
-				return fmt.Errorf("transport: snapshot file size not match, size=<%d> sent=<%d>",
-					snapData.FileSize, size)
-			}
-
-			err = conn.Write(&mraft.SnapshotDataEnd{
-				Key:      snapData.Key,
-				FileSize: snapData.FileSize,
-				CheckSum: snapData.CheckSum,
-			})
-			if err != nil {
-				conn.Close()
-				return errors.Wrapf(err, "")
-			}
-
-			t.store.sendingSnapCount++
-			log.Debugf("transport: sent snapshot file complete, key=<%+v> size=<%d>",
-				snapData.Key,
-				size)
-			observeSnapshotSending(start)
-		}
+		err = t.doSendSnap(msg, conn)
+	} else {
+		err = t.doWrite(msg, conn)
 	}
 
-	err = conn.Write(msg)
+	t.putConn(addr, conn)
+	return err
+}
+
+func (t *transport) doWrite(msg *mraft.RaftMessage, conn goetty.IOSession) error {
+	err := conn.Write(msg)
 	if err != nil {
 		conn.Close()
-		return errors.Wrapf(err, "write")
+		err = errors.Wrapf(err, "write")
 	}
 
-	return nil
+	return err
+}
+
+func (t *transport) doSendSnap(msg *mraft.RaftMessage, conn goetty.IOSession) error {
+	start := time.Now()
+
+	snapData := &mraft.RaftSnapshotData{}
+	util.MustUnmarshal(snapData, msg.Message.Snapshot.Data)
+
+	if t.store.snapshotManager.Register(&snapData.Key, sending) {
+		defer t.store.snapshotManager.Deregister(&snapData.Key, sending)
+
+		if !t.store.snapshotManager.Exists(&snapData.Key) {
+			return fmt.Errorf("transport: missing snapshot file, key=<%+v>",
+				snapData.Key)
+		}
+
+		err := conn.Write(&snapData.Key)
+		if err != nil {
+			conn.Close()
+			return errors.Wrapf(err, "")
+		}
+
+		size, err := t.store.snapshotManager.WriteTo(&snapData.Key, conn)
+		if err != nil {
+			conn.Close()
+			return errors.Wrapf(err, "")
+		}
+
+		if snapData.FileSize != size {
+			return fmt.Errorf("transport: snapshot file size not match, size=<%d> sent=<%d>",
+				snapData.FileSize, size)
+		}
+
+		err = conn.Write(&mraft.SnapshotDataEnd{
+			Key:      snapData.Key,
+			FileSize: snapData.FileSize,
+			CheckSum: snapData.CheckSum,
+		})
+		if err != nil {
+			conn.Close()
+			return errors.Wrapf(err, "")
+		}
+
+		t.store.sendingSnapCount++
+		log.Debugf("transport: sent snapshot file complete, key=<%+v> size=<%d>",
+			snapData.Key,
+			size)
+		observeSnapshotSending(start)
+	}
+
+	return t.doWrite(msg, conn)
 }
 
 func (t *transport) getStoreAddr(storeID uint64) (string, error) {
@@ -258,28 +290,47 @@ func (t *transport) getStoreAddr(storeID uint64) (string, error) {
 	return addr, nil
 }
 
+func (t *transport) putConn(addr string, conn goetty.IOSession) {
+	t.RLock()
+	pool := t.conns[addr]
+	t.RUnlock()
+
+	if pool != nil {
+		pool.Put(conn)
+	} else {
+		conn.Close()
+	}
+}
+
 func (t *transport) getConn(addr string) (goetty.IOSession, error) {
 	conn := t.getConnLocked(addr)
 	if t.checkConnect(addr, conn) {
 		return conn, nil
 	}
 
-	return conn, errConnect
+	t.putConn(addr, conn)
+	return nil, errConnect
 }
 
 func (t *transport) getConnLocked(addr string) goetty.IOSession {
-	conn := t.conns[addr]
+	t.RLock()
+	pool := t.conns[addr]
+	t.RUnlock()
 
-	if conn != nil {
-		return conn
+	if pool == nil {
+		t.Lock()
+		pool = t.conns[addr]
+		if pool == nil {
+			pool, _ = goetty.NewIOSessionPool(0, int(globalCfg.RaftMessageWorkerCount), func() (goetty.IOSession, error) {
+				return goetty.NewConnector(t.getConnectionCfg(addr), decoder, encoder), nil
+			})
+
+			t.conns[addr] = pool
+		}
+		t.Unlock()
 	}
 
-	return t.createConn(addr)
-}
-
-func (t *transport) createConn(addr string) goetty.IOSession {
-	conn := goetty.NewConnector(t.getConnectionCfg(addr), decoder, encoder)
-	t.conns[addr] = conn
+	conn, _ := pool.Get()
 	return conn
 }
 

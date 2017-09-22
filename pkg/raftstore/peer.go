@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/Workiva/go-datastructures/queue"
+
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
@@ -41,7 +42,7 @@ type PeerReplicate struct {
 
 	batch *proposeBatch
 
-	events       *util.Queue
+	events       *queue.RingBuffer
 	ticks        *util.Queue
 	steps        *util.Queue
 	reports      *util.Queue
@@ -117,7 +118,7 @@ func newPeerReplicate(store *Store, cell *metapb.Cell, peerID uint64) (*PeerRepl
 	}
 
 	pr.rn = rn
-	pr.events = &util.Queue{}
+	pr.events = queue.NewRingBuffer(2)
 	pr.ticks = &util.Queue{}
 	pr.steps = &util.Queue{}
 	pr.reports = &util.Queue{}
@@ -127,7 +128,6 @@ func newPeerReplicate(store *Store, cell *metapb.Cell, peerID uint64) (*PeerRepl
 	pr.store = store
 	pr.pendingReads = &readIndexQueue{
 		cellID:   cell.ID,
-		reads:    queue.NewRingBuffer(size1024),
 		readyCnt: 0,
 	}
 	pr.peerHeartbeatsMap = newPeerHeartbeatsMap()
@@ -180,7 +180,10 @@ func (pr *PeerReplicate) onReq(req *raftcmdpb.Request, cb func(*raftcmdpb.RaftCM
 	}
 	commandCounterVec.WithLabelValues(raftcmdpb.CMDType_name[int32(req.Type)]).Inc()
 
-	start := time.Now()
+	var start time.Time
+	if globalCfg.EnableRequestMetrics {
+		start = time.Now()
+	}
 
 	r := acquireReqCtx()
 	r.req = req
@@ -191,9 +194,11 @@ func (pr *PeerReplicate) onReq(req *raftcmdpb.Request, cb func(*raftcmdpb.RaftCM
 		observeRequestInQueue(start)
 	}
 
-	log.Debugf("req: added to cell req queue. uuid=<%d>, cell=<%d>",
-		req.UUID,
-		pr.cellID)
+	if log.DebugEnabled() {
+		log.Debugf("req: added to cell req queue. uuid=<%d>, cell=<%d>",
+			req.UUID,
+			pr.cellID)
+	}
 }
 
 func (pr *PeerReplicate) addRequest(req *reqCtx) {
@@ -205,8 +210,6 @@ func (pr *PeerReplicate) addRequest(req *reqCtx) {
 		pool.ReleaseRequest(req.req)
 		return
 	}
-
-	queueGauge.WithLabelValues(labelQueueReq).Set(float64(pr.requests.Len()))
 
 	pr.addEvent()
 }

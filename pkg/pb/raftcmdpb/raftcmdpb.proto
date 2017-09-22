@@ -208,6 +208,7 @@ message Request {
     optional uint64  epoch       = 4 [(gogoproto.nullable) = false];
     optional int64   startAt     = 5 [(gogoproto.nullable) = false];
     optional int64   lastStageAt = 6 [(gogoproto.nullable) = false];
+    optional int64   sessionID   = 7 [(gogoproto.nullable) = false];
 }
 
 message Response {
@@ -227,4 +228,5 @@ message Response {
     optional bool      hasEmptyScorePairArrayResult = 14;
     optional bool      withscores                   = 15;
     optional Request   originRequest                = 16 [(gogoproto.nullable) = true];
+    optional int64     sessionID                    = 17 [(gogoproto.nullable) = false];
 }

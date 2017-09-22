@@ -21,14 +21,11 @@ import (
 )
 
 var (
-	requestsPool sync.Pool
-	responsePool sync.Pool
-
-	raftMessagePool sync.Pool
-
-	raftCMDRequestPool  sync.Pool
-	raftCMDResponsePool sync.Pool
-
+	requestsPool           sync.Pool
+	responsePool           sync.Pool
+	raftMessagePool        sync.Pool
+	raftCMDRequestPool     sync.Pool
+	raftCMDResponsePool    sync.Pool
 	raftRequestHeaderPool  sync.Pool
 	raftResponseHeaderPool sync.Pool
 )

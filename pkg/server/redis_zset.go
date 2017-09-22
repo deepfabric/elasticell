@@ -28,7 +28,7 @@ func (s *RedisServer) onZAdd(cmdType raftcmdpb.CMDType, cmd redis.Command, sessi
 		return nil, nil
 	}
 
-	return s.store.OnRedisCommand(cmdType, cmd, s.onResp)
+	return s.store.OnRedisCommand(session.id, cmdType, cmd, s.onResp)
 }
 
 func (s *RedisServer) onZCard(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
@@ -40,7 +40,7 @@ func (s *RedisServer) onZCard(cmdType raftcmdpb.CMDType, cmd redis.Command, sess
 		return nil, nil
 	}
 
-	return s.store.OnRedisCommand(cmdType, cmd, s.onResp)
+	return s.store.OnRedisCommand(session.id, cmdType, cmd, s.onResp)
 }
 
 func (s *RedisServer) onZCount(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
@@ -52,7 +52,7 @@ func (s *RedisServer) onZCount(cmdType raftcmdpb.CMDType, cmd redis.Command, ses
 		return nil, nil
 	}
 
-	return s.store.OnRedisCommand(cmdType, cmd, s.onResp)
+	return s.store.OnRedisCommand(session.id, cmdType, cmd, s.onResp)
 }
 
 func (s *RedisServer) onZIncrBy(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
@@ -64,7 +64,7 @@ func (s *RedisServer) onZIncrBy(cmdType raftcmdpb.CMDType, cmd redis.Command, se
 		return nil, nil
 	}
 
-	return s.store.OnRedisCommand(cmdType, cmd, s.onResp)
+	return s.store.OnRedisCommand(session.id, cmdType, cmd, s.onResp)
 }
 
 func (s *RedisServer) onZLexCount(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
@@ -76,7 +76,7 @@ func (s *RedisServer) onZLexCount(cmdType raftcmdpb.CMDType, cmd redis.Command, 
 		return nil, nil
 	}
 
-	return s.store.OnRedisCommand(cmdType, cmd, s.onResp)
+	return s.store.OnRedisCommand(session.id, cmdType, cmd, s.onResp)
 }
 
 func (s *RedisServer) onZRange(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
@@ -88,7 +88,7 @@ func (s *RedisServer) onZRange(cmdType raftcmdpb.CMDType, cmd redis.Command, ses
 		return nil, nil
 	}
 
-	return s.store.OnRedisCommand(cmdType, cmd, s.onResp)
+	return s.store.OnRedisCommand(session.id, cmdType, cmd, s.onResp)
 }
 
 func (s *RedisServer) onZRangeByLex(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
@@ -100,7 +100,7 @@ func (s *RedisServer) onZRangeByLex(cmdType raftcmdpb.CMDType, cmd redis.Command
 		return nil, nil
 	}
 
-	return s.store.OnRedisCommand(cmdType, cmd, s.onResp)
+	return s.store.OnRedisCommand(session.id, cmdType, cmd, s.onResp)
 }
 
 func (s *RedisServer) onZRangeByScore(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
@@ -112,7 +112,7 @@ func (s *RedisServer) onZRangeByScore(cmdType raftcmdpb.CMDType, cmd redis.Comma
 		return nil, nil
 	}
 
-	return s.store.OnRedisCommand(cmdType, cmd, s.onResp)
+	return s.store.OnRedisCommand(session.id, cmdType, cmd, s.onResp)
 }
 
 func (s *RedisServer) onZRank(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
@@ -124,7 +124,7 @@ func (s *RedisServer) onZRank(cmdType raftcmdpb.CMDType, cmd redis.Command, sess
 		return nil, nil
 	}
 
-	return s.store.OnRedisCommand(cmdType, cmd, s.onResp)
+	return s.store.OnRedisCommand(session.id, cmdType, cmd, s.onResp)
 }
 
 func (s *RedisServer) onZRem(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
@@ -136,7 +136,7 @@ func (s *RedisServer) onZRem(cmdType raftcmdpb.CMDType, cmd redis.Command, sessi
 		return nil, nil
 	}
 
-	return s.store.OnRedisCommand(cmdType, cmd, s.onResp)
+	return s.store.OnRedisCommand(session.id, cmdType, cmd, s.onResp)
 }
 
 func (s *RedisServer) onZRemRangeByLex(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
@@ -148,7 +148,7 @@ func (s *RedisServer) onZRemRangeByLex(cmdType raftcmdpb.CMDType, cmd redis.Comm
 		return nil, nil
 	}
 
-	return s.store.OnRedisCommand(cmdType, cmd, s.onResp)
+	return s.store.OnRedisCommand(session.id, cmdType, cmd, s.onResp)
 }
 
 func (s *RedisServer) onZRemRangeByRank(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
@@ -160,7 +160,7 @@ func (s *RedisServer) onZRemRangeByRank(cmdType raftcmdpb.CMDType, cmd redis.Com
 		return nil, nil
 	}
 
-	return s.store.OnRedisCommand(cmdType, cmd, s.onResp)
+	return s.store.OnRedisCommand(session.id, cmdType, cmd, s.onResp)
 }
 
 func (s *RedisServer) onZRemRangeByScore(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
@@ -172,7 +172,7 @@ func (s *RedisServer) onZRemRangeByScore(cmdType raftcmdpb.CMDType, cmd redis.Co
 		return nil, nil
 	}
 
-	return s.store.OnRedisCommand(cmdType, cmd, s.onResp)
+	return s.store.OnRedisCommand(session.id, cmdType, cmd, s.onResp)
 }
 
 func (s *RedisServer) onZScore(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
@@ -184,5 +184,5 @@ func (s *RedisServer) onZScore(cmdType raftcmdpb.CMDType, cmd redis.Command, ses
 		return nil, nil
 	}
 
-	return s.store.OnRedisCommand(cmdType, cmd, s.onResp)
+	return s.store.OnRedisCommand(session.id, cmdType, cmd, s.onResp)
 }

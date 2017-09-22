@@ -41,6 +41,11 @@ func (rb *redisBatch) hasSetBatch() bool {
 	return len(rb.kvKeys) > 0
 }
 
+func (rb *redisBatch) reset() {
+	rb.kvKeys = make([][]byte, 0)
+	rb.kvValues = make([][]byte, 0)
+}
+
 type applyContext struct {
 	wb storage.WriteBatch
 	rb *redisBatch
@@ -59,10 +64,6 @@ func (ctx *applyContext) reset() {
 	ctx.index = 0
 	ctx.term = 0
 	ctx.metrics = emptyApplyMetrics
-
-	if globalCfg.EnableRedisBatch && nil != ctx.rb {
-		releaseRedisBatch(ctx.rb)
-	}
 }
 
 func (d *applyDelegate) checkEpoch(req *raftcmdpb.RaftCMDRequest) bool {
@@ -91,10 +92,7 @@ func (d *applyDelegate) doApplyRaftCMD(ctx *applyContext) *execResult {
 	var result *execResult
 
 	ctx.wb = d.store.engine.NewWriteBatch()
-
-	if globalCfg.EnableRedisBatch {
-		ctx.rb = acquireRedisBatch()
-	}
+	ctx.rb = acquireRedisBatch()
 
 	if !d.checkEpoch(ctx.req) {
 		resp = errorStaleEpochResp(ctx.req.Header.UUID, d.term, d.cell)
@@ -109,13 +107,16 @@ func (d *applyDelegate) doApplyRaftCMD(ctx *applyContext) *execResult {
 		}
 	}
 
-	if globalCfg.EnableRedisBatch && ctx.rb.hasSetBatch() {
+	if ctx.rb.hasSetBatch() {
 		err = d.store.getKVEngine().MSet(ctx.rb.kvKeys, ctx.rb.kvValues)
 		if err != nil {
 			log.Fatalf("raftstore-apply[cell-%d]: save apply context failed, errors:\n %+v",
 				d.cell.ID,
 				err)
 		}
+
+		releaseRedisBatch(ctx.rb)
+		ctx.rb = nil
 	}
 
 	ctx.applyState.AppliedIndex = ctx.index

@@ -28,7 +28,7 @@ func (s *RedisServer) onHSet(cmdType raftcmdpb.CMDType, cmd redis.Command, sessi
 		return nil, nil
 	}
 
-	return s.store.OnRedisCommand(cmdType, cmd, s.onResp)
+	return s.store.OnRedisCommand(session.id, cmdType, cmd, s.onResp)
 }
 
 func (s *RedisServer) onHGet(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
@@ -40,7 +40,7 @@ func (s *RedisServer) onHGet(cmdType raftcmdpb.CMDType, cmd redis.Command, sessi
 		return nil, nil
 	}
 
-	return s.store.OnRedisCommand(cmdType, cmd, s.onResp)
+	return s.store.OnRedisCommand(session.id, cmdType, cmd, s.onResp)
 }
 
 func (s *RedisServer) onHDel(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
@@ -52,7 +52,7 @@ func (s *RedisServer) onHDel(cmdType raftcmdpb.CMDType, cmd redis.Command, sessi
 		return nil, nil
 	}
 
-	return s.store.OnRedisCommand(cmdType, cmd, s.onResp)
+	return s.store.OnRedisCommand(session.id, cmdType, cmd, s.onResp)
 }
 
 func (s *RedisServer) onHExists(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
@@ -64,7 +64,7 @@ func (s *RedisServer) onHExists(cmdType raftcmdpb.CMDType, cmd redis.Command, se
 		return nil, nil
 	}
 
-	return s.store.OnRedisCommand(cmdType, cmd, s.onResp)
+	return s.store.OnRedisCommand(session.id, cmdType, cmd, s.onResp)
 }
 
 func (s *RedisServer) onHKeys(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
@@ -76,7 +76,7 @@ func (s *RedisServer) onHKeys(cmdType raftcmdpb.CMDType, cmd redis.Command, sess
 		return nil, nil
 	}
 
-	return s.store.OnRedisCommand(cmdType, cmd, s.onResp)
+	return s.store.OnRedisCommand(session.id, cmdType, cmd, s.onResp)
 }
 
 func (s *RedisServer) onHVals(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
@@ -88,7 +88,7 @@ func (s *RedisServer) onHVals(cmdType raftcmdpb.CMDType, cmd redis.Command, sess
 		return nil, nil
 	}
 
-	return s.store.OnRedisCommand(cmdType, cmd, s.onResp)
+	return s.store.OnRedisCommand(session.id, cmdType, cmd, s.onResp)
 }
 
 func (s *RedisServer) onHGetAll(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
@@ -100,7 +100,7 @@ func (s *RedisServer) onHGetAll(cmdType raftcmdpb.CMDType, cmd redis.Command, se
 		return nil, nil
 	}
 
-	return s.store.OnRedisCommand(cmdType, cmd, s.onResp)
+	return s.store.OnRedisCommand(session.id, cmdType, cmd, s.onResp)
 }
 
 func (s *RedisServer) onHLen(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
@@ -112,7 +112,7 @@ func (s *RedisServer) onHLen(cmdType raftcmdpb.CMDType, cmd redis.Command, sessi
 		return nil, nil
 	}
 
-	return s.store.OnRedisCommand(cmdType, cmd, s.onResp)
+	return s.store.OnRedisCommand(session.id, cmdType, cmd, s.onResp)
 }
 
 func (s *RedisServer) onHMGet(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
@@ -124,7 +124,7 @@ func (s *RedisServer) onHMGet(cmdType raftcmdpb.CMDType, cmd redis.Command, sess
 		return nil, nil
 	}
 
-	return s.store.OnRedisCommand(cmdType, cmd, s.onResp)
+	return s.store.OnRedisCommand(session.id, cmdType, cmd, s.onResp)
 }
 
 func (s *RedisServer) onHMSet(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
@@ -137,7 +137,7 @@ func (s *RedisServer) onHMSet(cmdType raftcmdpb.CMDType, cmd redis.Command, sess
 		return nil, nil
 	}
 
-	return s.store.OnRedisCommand(cmdType, cmd, s.onResp)
+	return s.store.OnRedisCommand(session.id, cmdType, cmd, s.onResp)
 }
 
 func (s *RedisServer) onHSetNX(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
@@ -149,7 +149,7 @@ func (s *RedisServer) onHSetNX(cmdType raftcmdpb.CMDType, cmd redis.Command, ses
 		return nil, nil
 	}
 
-	return s.store.OnRedisCommand(cmdType, cmd, s.onResp)
+	return s.store.OnRedisCommand(session.id, cmdType, cmd, s.onResp)
 }
 
 func (s *RedisServer) onHStrLen(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
@@ -161,7 +161,7 @@ func (s *RedisServer) onHStrLen(cmdType raftcmdpb.CMDType, cmd redis.Command, se
 		return nil, nil
 	}
 
-	return s.store.OnRedisCommand(cmdType, cmd, s.onResp)
+	return s.store.OnRedisCommand(session.id, cmdType, cmd, s.onResp)
 }
 
 func (s *RedisServer) onHIncrBy(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
@@ -173,5 +173,5 @@ func (s *RedisServer) onHIncrBy(cmdType raftcmdpb.CMDType, cmd redis.Command, se
 		return nil, nil
 	}
 
-	return s.store.OnRedisCommand(cmdType, cmd, s.onResp)
+	return s.store.OnRedisCommand(session.id, cmdType, cmd, s.onResp)
 }

@@ -35,6 +35,7 @@ func acquireRedisBatch() *redisBatch {
 }
 
 func releaseRedisBatch(batch *redisBatch) {
+	batch.reset()
 	redisBatchPool.Put(batch)
 }
 

@@ -14,32 +14,37 @@
 package server
 
 import (
-	"hash/crc32"
 	"sync"
-
-	"github.com/deepfabric/elasticell/pkg/util"
 )
 
 const (
-	bucketSize = 128
-	bucketM    = 127
+	bucketSize = int64(128)
+	bucketM    = int64(127)
 )
 
 type routingMap struct {
 	sync.RWMutex
-	m map[string]*session
+	m map[int64]*session
 }
 
-func (m *routingMap) put(key string, value *session) {
+func (m *routingMap) put(key int64, value *session) {
 	m.Lock()
 	m.m[key] = value
 	m.Unlock()
 }
 
-func (m *routingMap) delete(key string) *session {
+func (m *routingMap) delete(key int64) *session {
 	m.Lock()
 	value := m.m[key]
 	delete(m.m, key)
+	m.Unlock()
+
+	return value
+}
+
+func (m *routingMap) get(key int64) *session {
+	m.Lock()
+	value := m.m[key]
 	m.Unlock()
 
 	return value
@@ -54,23 +59,27 @@ func newRouting() *routing {
 		rms: make([]*routingMap, bucketSize, bucketSize),
 	}
 
-	for i := 0; i < bucketSize; i++ {
+	for i := int64(0); i < bucketSize; i++ {
 		r.rms[i] = &routingMap{
-			m: make(map[string]*session),
+			m: make(map[int64]*session),
 		}
 	}
 
 	return r
 }
 
-func (r *routing) put(uuid []byte, value *session) {
-	r.rms[getIndex(uuid)].put(util.SliceToString(uuid), value)
+func (r *routing) put(id int64, value *session) {
+	r.rms[getIndex(id)].put(id, value)
 }
 
-func (r *routing) delete(uuid []byte) *session {
-	return r.rms[getIndex(uuid)].delete(util.SliceToString(uuid))
+func (r *routing) get(id int64) *session {
+	return r.rms[getIndex(id)].get(id)
 }
 
-func getIndex(key []byte) int {
-	return int(crc32.ChecksumIEEE(key) & bucketM)
+func (r *routing) delete(id int64) *session {
+	return r.rms[getIndex(id)].delete(id)
+}
+
+func getIndex(id int64) int64 {
+	return id & bucketM
 }

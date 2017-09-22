@@ -5,6 +5,7 @@ import (
 	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
 	"github.com/deepfabric/elasticell/pkg/pool"
 	"github.com/deepfabric/elasticell/pkg/util/uuid"
+	"github.com/fagongzi/goetty"
 )
 
 const (
@@ -26,14 +27,17 @@ func (r *reqCtx) reset() {
 }
 
 type proposeBatch struct {
-	pr       *PeerReplicate
+	pr *PeerReplicate
+
+	buf      *goetty.ByteBuf
 	lastType int
 	cmds     []*cmd
 }
 
 func newBatch(pr *PeerReplicate) *proposeBatch {
 	return &proposeBatch{
-		pr: pr,
+		pr:  pr,
+		buf: goetty.NewByteBuf(512),
 	}
 }
 
@@ -83,15 +87,18 @@ func (b *proposeBatch) push(c *reqCtx) {
 
 	releaseReqCtx(c)
 
+	isAdmin := tp == admin
+
 	// use data key to store
-	if tp != admin {
+	if !isAdmin {
 		key := req.Cmd[1]
-		req.Cmd[1] = getDataKey(key)
+		req.Cmd[1] = getDataKey0(key, b.buf)
+		b.buf.Clear()
 	}
 
 	last := b.lastCmd()
 	if last == nil ||
-		tp == admin || // admin request must in a single batch
+		isAdmin || // admin request must in a single batch
 		b.lastType != tp ||
 		b.isFull(len(last.req.Requests)) {
 
@@ -104,16 +111,19 @@ func (b *proposeBatch) push(c *reqCtx) {
 		raftCMD.Header.UUID = uuid.NewV4().Bytes()
 		raftCMD.Header.CellEpoch = cell.Epoch
 
-		if tp == admin {
+		if isAdmin {
 			raftCMD.AdminRequest = adminReq
 		} else {
 			raftCMD.Requests = append(raftCMD.Requests, req)
-			log.Debugf("req: add to new batch. uuid=<%d>", req.UUID)
+			if log.DebugEnabled() {
+				log.Debugf("req: add to new batch. uuid=<%d>", req.UUID)
+			}
 		}
 
 		b.cmds = append(b.cmds, newCMD(raftCMD, cb))
+		queueGauge.WithLabelValues(labelQueueBatch).Set(float64(b.size()))
 	} else {
-		if tp == admin {
+		if isAdmin {
 			log.Fatal("bug: admin request must in a single batch")
 		}
 
@@ -126,7 +136,6 @@ func (b *proposeBatch) push(c *reqCtx) {
 	}
 
 	b.lastType = tp
-	queueGauge.WithLabelValues(labelQueueBatch).Set(float64(b.size()))
 }
 
 func (b *proposeBatch) lastCmd() *cmd {

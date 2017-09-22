@@ -40,14 +40,6 @@ const (
 	pdWorker     = "pd-worker"
 	splitWorker  = "split-worker"
 	raftGCWorker = "raft-gc-worker"
-
-	size8    = 8
-	size16   = 16
-	size32   = 32
-	size64   = 64
-	size128  = 128
-	size1024 = 1024
-	size2048 = 2048
 )
 
 var (
@@ -71,10 +63,9 @@ type Store struct {
 	delegates     *applyDelegateMap
 	pendingCells  []metapb.Cell
 
-	trans    *transport
-	engine   storage.Driver
-	runner   *util.Runner
-	messages []*util.Queue
+	trans  *transport
+	engine storage.Driver
+	runner *util.Runner
 
 	redisReadHandles  map[raftcmdpb.CMDType]func(*raftcmdpb.Request) *raftcmdpb.Response
 	redisWriteHandles map[raftcmdpb.CMDType]func(*applyContext, *raftcmdpb.Request) *raftcmdpb.Response
@@ -97,12 +88,6 @@ func NewStore(clusterID uint64, pdClient *pd.Client, meta metapb.Store, engine s
 	s.snapshotManager = newDefaultSnapshotManager(cfg, engine.GetDataEngine())
 
 	s.trans = newTransport(s, pdClient, s.notify)
-
-	s.messages = make([]*util.Queue, globalCfg.RaftMessageWorkerCount)
-	var index uint64
-	for ; index < globalCfg.RaftMessageWorkerCount; index++ {
-		s.messages[index] = &util.Queue{}
-	}
 
 	s.keyRanges = util.NewCellTree()
 	s.replicatesMap = newCellPeersMap()
@@ -205,9 +190,6 @@ func (s *Store) Start() {
 	<-s.trans.server.Started()
 	log.Infof("bootstrap: transfer started")
 
-	s.startHandleNotifyMsg()
-	log.Infof("bootstrap: ready to handle raft message")
-
 	s.startStoreHeartbeatTask()
 	log.Infof("bootstrap: ready to handle store heartbeat")
 
@@ -228,61 +210,6 @@ func (s *Store) startTransfer() {
 	err := s.trans.start()
 	if err != nil {
 		log.Fatalf("bootstrap: start transfer failed, errors:\n %+v", err)
-	}
-}
-
-func (s *Store) startHandleNotifyMsg() {
-	index := 0
-	for _, messageQ := range s.messages {
-		q := messageQ
-		id := index
-		index++
-
-		s.runner.RunCancelableTask(func(ctx context.Context) {
-			items := make([]interface{}, globalCfg.RaftMessageProcessBatchLimit, globalCfg.RaftMessageProcessBatchLimit)
-
-			for {
-				ns, err := q.Get(globalCfg.RaftMessageProcessBatchLimit, items)
-				if err != nil {
-					log.Infof("stop: store raft message handler<%d> stopped", id)
-					return
-				}
-
-				for i := int64(0); i < ns; i++ {
-					n := items[i]
-
-					if msg, ok := n.(*mraft.RaftMessage); ok {
-						s.onRaftMessage(msg)
-						pool.ReleaseRaftMessage(msg)
-					} else if msg, ok := n.(*splitCheckResult); ok {
-						s.onSplitCheckResult(msg)
-					} else if msg, ok := n.(*mraft.SnapshotData); ok {
-						err := s.snapshotManager.ReceiveSnapData(msg)
-						if err != nil {
-							log.Errorf("raftstore-snap[cell-%d]: received snap data failed, errors:\n%+v",
-								msg.Key.CellID,
-								err)
-						}
-					} else if msg, ok := n.(*mraft.SnapKey); ok {
-						err := s.snapshotManager.CleanSnap(msg)
-						if err != nil {
-							log.Errorf("raftstore-snap[cell-%d]: start received snap data failed, errors:\n%+v",
-								msg.CellID,
-								err)
-						}
-					} else if msg, ok := n.(*mraft.SnapshotDataEnd); ok {
-						err := s.snapshotManager.ReceiveSnapDataComplete(msg)
-						if err != nil {
-							log.Errorf("raftstore-snap[cell-%d]: received snap data complete failed, errors:\n%+v",
-								msg.Key.CellID,
-								err)
-						}
-					}
-				}
-
-				queueGauge.WithLabelValues(labelQueueNotify).Set(float64(q.Len()))
-			}
-		})
 	}
 }
 
@@ -389,10 +316,6 @@ func (s *Store) startCellSplitCheckTask() {
 
 // Stop returns the error when stop store
 func (s *Store) Stop() error {
-	for _, q := range s.messages {
-		q.Dispose()
-	}
-
 	s.replicatesMap.foreach(func(pr *PeerReplicate) (bool, error) {
 		pr.stopEventLoop()
 		return true, nil
@@ -445,7 +368,7 @@ func (s *Store) OnProxyReq(req *raftcmdpb.Request, cb func(*raftcmdpb.RaftCMDRes
 }
 
 // OnRedisCommand process redis command
-func (s *Store) OnRedisCommand(cmdType raftcmdpb.CMDType, cmd redis.Command, cb func(*raftcmdpb.RaftCMDResponse)) ([]byte, error) {
+func (s *Store) OnRedisCommand(sessionID int64, cmdType raftcmdpb.CMDType, cmd redis.Command, cb func(*raftcmdpb.RaftCMDResponse)) ([]byte, error) {
 	if log.DebugEnabled() {
 		log.Debugf("raftstore[store-%d]: received a redis command, cmd=<%s>", s.id, cmd.ToString())
 	}
@@ -459,6 +382,7 @@ func (s *Store) OnRedisCommand(cmdType raftcmdpb.CMDType, cmd redis.Command, cb 
 	uuid := uuid.NewV4().Bytes()
 	req := pool.AcquireRequest()
 	req.UUID = uuid
+	req.SessionID = sessionID
 	req.Type = cmdType
 	req.Cmd = cmd
 
@@ -467,28 +391,18 @@ func (s *Store) OnRedisCommand(cmdType raftcmdpb.CMDType, cmd redis.Command, cb 
 }
 
 func (s *Store) notify(n interface{}) {
-	var id uint64
-
 	if msg, ok := n.(*mraft.RaftMessage); ok {
-		id = msg.CellID
+		s.onRaftMessage(msg)
+		pool.ReleaseRaftMessage(msg)
 	} else if msg, ok := n.(*splitCheckResult); ok {
-		id = msg.cellID
-	} else if msg, ok := n.(*mraft.SnapshotData); ok {
-		id = msg.Key.CellID
+		s.onSplitCheckResult(msg)
 	} else if msg, ok := n.(*mraft.SnapKey); ok {
-		id = msg.CellID
+		s.onSnapshotKey(msg)
+	} else if msg, ok := n.(*mraft.SnapshotData); ok {
+		s.onSnapshotData(msg)
 	} else if msg, ok := n.(*mraft.SnapshotDataEnd); ok {
-		id = msg.Key.CellID
+		s.onSnapshotEnd(msg)
 	}
-
-	if id == 0 {
-		return
-	}
-
-	index := (globalCfg.RaftMessageWorkerCount - 1) & id
-	q := s.messages[index]
-	q.Put(n)
-	queueGauge.WithLabelValues(labelQueueNotify).Set(float64(q.Len()))
 }
 
 func (s *Store) onRaftMessage(msg *mraft.RaftMessage) {
@@ -556,6 +470,45 @@ func (s *Store) onSplitCheckResult(result *splitCheckResult) {
 			result.cellID,
 			err)
 	}
+}
+
+func (s *Store) onSnapshotKey(msg *mraft.SnapKey) {
+	s.addApplyJob(msg.CellID, "onSnapshotKey", func() error {
+		err := s.snapshotManager.CleanSnap(msg)
+		if err != nil {
+			log.Errorf("raftstore-snap[cell-%d]: start received snap data failed, errors:\n%+v",
+				msg.CellID,
+				err)
+		}
+
+		return err
+	}, nil)
+}
+
+func (s *Store) onSnapshotData(msg *mraft.SnapshotData) {
+	s.addApplyJob(msg.Key.CellID, "onSnapshotData", func() error {
+		err := s.snapshotManager.ReceiveSnapData(msg)
+		if err != nil {
+			log.Errorf("raftstore-snap[cell-%d]: received snap data failed, errors:\n%+v",
+				msg.Key.CellID,
+				err)
+		}
+
+		return err
+	}, nil)
+}
+
+func (s *Store) onSnapshotEnd(msg *mraft.SnapshotDataEnd) {
+	s.addApplyJob(msg.Key.CellID, "onSnapshotEnd", func() error {
+		err := s.snapshotManager.ReceiveSnapDataComplete(msg)
+		if err != nil {
+			log.Errorf("raftstore-snap[cell-%d]: received snap data complete failed, errors:\n%+v",
+				msg.Key.CellID,
+				err)
+		}
+
+		return err
+	}, nil)
 }
 
 func (s *Store) handleGCPeerMsg(msg *mraft.RaftMessage) {

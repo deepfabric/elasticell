@@ -14,6 +14,8 @@
 package server
 
 import (
+	"sync"
+
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
 	"github.com/deepfabric/elasticell/pkg/pool"
@@ -24,6 +26,10 @@ import (
 )
 
 type session struct {
+	sync.RWMutex
+
+	id int64
+
 	closed bool
 	resps  *util.Queue
 
@@ -35,6 +41,7 @@ type session struct {
 
 func newSession(conn goetty.IOSession) *session {
 	return &session{
+		id:    conn.ID().(int64),
 		resps: &util.Queue{},
 		conn:  conn,
 		addr:  conn.RemoteAddr(),
@@ -42,11 +49,13 @@ func newSession(conn goetty.IOSession) *session {
 }
 
 func (s *session) close() {
+	s.Lock()
 	resps := s.resps.Dispose()
 	for _, resp := range resps {
 		pool.ReleaseResponse(resp.(*raftcmdpb.Response))
 	}
 	log.Debugf("redis-[%s]: closed", s.addr)
+	s.Unlock()
 }
 
 func (s *session) setFromProxy() {
@@ -65,8 +74,11 @@ func (s *session) writeLoop() {
 	items := make([]interface{}, globalCfg.Redis.WriteBatchLimit, globalCfg.Redis.WriteBatchLimit)
 
 	for {
+		// If in the read goroutine, the connection is closed, so we need a lock
+		s.RLock()
 		n, err := s.resps.Get(globalCfg.Redis.WriteBatchLimit, items)
 		if nil != err {
+			s.RUnlock()
 			return
 		}
 
@@ -75,8 +87,16 @@ func (s *session) writeLoop() {
 			rsp := items[i].(*raftcmdpb.Response)
 			s.doResp(rsp, buf)
 			pool.ReleaseResponse(rsp)
+
+			if i > 0 && i%globalCfg.Redis.WriteBatchLimit == 0 {
+				s.conn.WriteOutBuf()
+			}
 		}
-		s.conn.WriteOutBuf()
+
+		if buf.Readable() > 0 {
+			s.conn.WriteOutBuf()
+		}
+		s.RUnlock()
 	}
 }
 

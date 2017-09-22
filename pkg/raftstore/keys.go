@@ -20,6 +20,7 @@ import (
 
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
+	"github.com/fagongzi/goetty"
 )
 
 // for cell meta
@@ -127,11 +128,16 @@ func getCellMetaPrefix(cellID uint64) []byte {
 
 func getDataKey(key []byte) []byte {
 	buf := acquireBuf()
+	data := getDataKey0(key, buf)
+	releaseBuf(buf)
+	return data
+}
+
+func getDataKey0(key []byte, buf *goetty.ByteBuf) []byte {
 	buf.Write(dataPrefixKey)
 	buf.Write(key)
 	_, data, _ := buf.ReadBytes(buf.Readable())
 
-	releaseBuf(buf)
 	return data
 }
 

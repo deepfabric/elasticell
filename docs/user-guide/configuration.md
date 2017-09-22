@@ -41,7 +41,6 @@
 |node:raftStore:raftLogGCSizeLimit|Max size of raft log that should be compact|
 |node:raftStore:raftProposeBatchLimit|Max number of requests in a raft proposal|
 |node:raftStore:raftMessageSendBatchLimit|Max number of read raft message from send queue|
-|node:raftStore:raftMessageProcessBatchLimit|Max number of read raft message from received queue|
 |node:raftStore:raftMessageWorkerCount|Worker count of process raft message|
 |node:raftStore:raftLogGCThreshold|Max index of raft log offset that should be compact|
 |node:raftStore:cellCheckSizeDiff|Max data size that should be check real size to split|

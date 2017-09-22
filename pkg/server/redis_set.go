@@ -28,7 +28,7 @@ func (s *RedisServer) onSAdd(cmdType raftcmdpb.CMDType, cmd redis.Command, sessi
 		return nil, nil
 	}
 
-	return s.store.OnRedisCommand(cmdType, cmd, s.onResp)
+	return s.store.OnRedisCommand(session.id, cmdType, cmd, s.onResp)
 }
 
 func (s *RedisServer) onSCard(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
@@ -40,7 +40,7 @@ func (s *RedisServer) onSCard(cmdType raftcmdpb.CMDType, cmd redis.Command, sess
 		return nil, nil
 	}
 
-	return s.store.OnRedisCommand(cmdType, cmd, s.onResp)
+	return s.store.OnRedisCommand(session.id, cmdType, cmd, s.onResp)
 }
 
 func (s *RedisServer) onSRem(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
@@ -52,7 +52,7 @@ func (s *RedisServer) onSRem(cmdType raftcmdpb.CMDType, cmd redis.Command, sessi
 		return nil, nil
 	}
 
-	return s.store.OnRedisCommand(cmdType, cmd, s.onResp)
+	return s.store.OnRedisCommand(session.id, cmdType, cmd, s.onResp)
 }
 
 func (s *RedisServer) onSMembers(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
@@ -64,7 +64,7 @@ func (s *RedisServer) onSMembers(cmdType raftcmdpb.CMDType, cmd redis.Command, s
 		return nil, nil
 	}
 
-	return s.store.OnRedisCommand(cmdType, cmd, s.onResp)
+	return s.store.OnRedisCommand(session.id, cmdType, cmd, s.onResp)
 }
 
 func (s *RedisServer) onSIsMember(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
@@ -76,7 +76,7 @@ func (s *RedisServer) onSIsMember(cmdType raftcmdpb.CMDType, cmd redis.Command, 
 		return nil, nil
 	}
 
-	return s.store.OnRedisCommand(cmdType, cmd, s.onResp)
+	return s.store.OnRedisCommand(session.id, cmdType, cmd, s.onResp)
 }
 
 func (s *RedisServer) onSPop(cmdType raftcmdpb.CMDType, cmd redis.Command, session *session) ([]byte, error) {
@@ -88,5 +88,5 @@ func (s *RedisServer) onSPop(cmdType raftcmdpb.CMDType, cmd redis.Command, sessi
 		return nil, nil
 	}
 
-	return s.store.OnRedisCommand(cmdType, cmd, s.onResp)
+	return s.store.OnRedisCommand(session.id, cmdType, cmd, s.onResp)
 }

@@ -138,8 +138,13 @@ func (s *RedisServer) doConnection(session goetty.IOSession) error {
 
 	// every client has 2 goroutines, read and write
 	rs := newSession(session)
+	s.routing.put(rs.id, rs)
+
 	go rs.writeLoop()
-	defer rs.close()
+	defer func() {
+		s.routing.delete(rs.id)
+		rs.close()
+	}()
 
 	for {
 		value, err := session.Read()
@@ -188,7 +193,7 @@ func (s *RedisServer) onResp(resp *raftcmdpb.RaftCMDResponse) {
 	hasError := resp.Header != nil
 
 	for _, rsp := range resp.Responses {
-		rs := s.routing.delete(rsp.UUID)
+		rs := s.routing.get(rsp.SessionID)
 		if rs != nil {
 			if hasError {
 				if resp.Header.Error.RaftEntryTooLarge == nil {
@@ -215,6 +220,7 @@ func (s *RedisServer) onResp(resp *raftcmdpb.RaftCMDResponse) {
 
 func (s *RedisServer) onProxyReq(req *raftcmdpb.Request, session *session) error {
 	req.Type = s.typeMapping[strings.ToLower(util.SliceToString(req.Cmd[0]))]
+	req.SessionID = session.id
 
 	if h, ok := s.localHandlers[req.Type]; ok {
 		h(req, session)
@@ -229,10 +235,8 @@ func (s *RedisServer) onProxyReq(req *raftcmdpb.Request, session *session) error
 		return nil
 	}
 
-	s.routing.put(req.UUID, session)
 	err := s.store.OnProxyReq(req, s.onResp)
 	if err != nil {
-		s.routing.delete(req.UUID)
 		return err
 	}
 
@@ -257,12 +261,11 @@ func (s *RedisServer) onRedisCommand(cmd redis.Command, session *session) error 
 		return nil
 	}
 
-	uuid, err := h(t, cmd, session)
+	_, err := h(t, cmd, session)
 	if err != nil {
 		return err
 	}
 
-	s.routing.put(uuid, session)
 	return nil
 }
 
@@ -275,7 +278,7 @@ func (s *RedisServer) onDel(cmdType raftcmdpb.CMDType, cmd redis.Command, sessio
 		return nil, nil
 	}
 
-	return s.store.OnRedisCommand(cmdType, cmd, s.onResp)
+	return s.store.OnRedisCommand(session.id, cmdType, cmd, s.onResp)
 }
 
 func (s *RedisServer) onPing(req *raftcmdpb.Request, session *session) ([]byte, error) {

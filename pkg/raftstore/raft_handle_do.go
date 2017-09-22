@@ -19,7 +19,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/Workiva/go-datastructures/queue"
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
@@ -63,35 +62,38 @@ type applySnapResult struct {
 
 type readIndexQueue struct {
 	cellID   uint64
-	reads    *queue.RingBuffer
+	reads    []*cmd
 	readyCnt int32
 }
 
-func (q *readIndexQueue) push(c *cmd) error {
-	return q.reads.Put(c)
+func (q *readIndexQueue) push(c *cmd) {
+	q.reads = append(q.reads, c)
 }
 
 func (q *readIndexQueue) pop() *cmd {
-	v, err := q.reads.Get()
-	if err != nil {
-		log.Fatalf("raftstore[cell-%d]: handle read index failed, errors:\n %+v",
-			q.cellID,
-			err)
+	if len(q.reads) == 0 {
+		return nil
 	}
 
-	return v.(*cmd)
+	value := q.reads[0]
+	q.reads[0] = nil
+	q.reads = q.reads[1:]
+
+	return value
 }
 
 func (q *readIndexQueue) incrReadyCnt() int32 {
-	return atomic.AddInt32(&q.readyCnt, 1)
+	q.readyCnt++
+	return q.readyCnt
 }
 
 func (q *readIndexQueue) decrReadyCnt() int32 {
-	return atomic.AddInt32(&q.readyCnt, -1)
+	q.readyCnt--
+	return q.readyCnt
 }
 
 func (q *readIndexQueue) resetReadyCnt() {
-	atomic.StoreInt32(&q.readyCnt, 0)
+	q.readyCnt = 0
 }
 
 func (q *readIndexQueue) getReadyCnt() int32 {
@@ -99,7 +101,7 @@ func (q *readIndexQueue) getReadyCnt() int32 {
 }
 
 func (q *readIndexQueue) size() int {
-	return int(q.reads.Len())
+	return len(q.reads)
 }
 
 // ====================== raft ready handle methods
@@ -297,10 +299,10 @@ func (pr *PeerReplicate) doPropose(c *cmd, isConfChange bool) error {
 
 	if isConfChange {
 		changeC := delegate.getPendingChangePeerCMD()
-		if nil != changeC && changeC.req != nil {
+		if nil != changeC && changeC.req != nil && changeC.req.Header != nil {
 			delegate.notifyStaleCMD(changeC)
 		}
-		delegate.setPedingChangePeerCMD(c)
+		delegate.setPendingChangePeerCMD(c)
 	} else {
 		delegate.appendPendingCmd(c)
 	}

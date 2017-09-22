@@ -49,6 +49,7 @@ func (s *Store) respStoreNotMatch(err error, req *raftcmdpb.Request, cb func(*ra
 
 	resp := pool.AcquireResponse()
 	resp.UUID = req.UUID
+	resp.SessionID = req.SessionID
 	rsp.Responses = append(rsp.Responses, resp)
 	cb(rsp)
 }
@@ -70,12 +71,14 @@ func (c *cmd) resp(resp *raftcmdpb.RaftCMDResponse) {
 				for _, req := range c.req.Requests {
 					rsp := pool.AcquireResponse()
 					rsp.UUID = req.UUID
+					rsp.SessionID = req.SessionID
 
 					resp.Responses = append(resp.Responses, rsp)
 				}
 			} else {
 				for idx, req := range c.req.Requests {
 					resp.Responses[idx].UUID = req.UUID
+					resp.Responses[idx].SessionID = req.SessionID
 				}
 			}
 		}
