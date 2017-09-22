@@ -5,7 +5,7 @@ CFG_DIR=$ELASTICELL_DIR/cfg
 LOG_DIR=$ELASTICELL_DIR/log
 
 start_elasticell() {
-    $ELASTICELL_DIR/$1 --cfg=$CFG_DIR/$1$2.json --log-file=$LOG_DIR/$1$2.log &
+    $ELASTICELL_DIR/$1 --cfg=$CFG_DIR/$1$2.json --log-file=$LOG_DIR/$1$2.log --pprof-addr="" &
 }
 
 start_elasticell_proxy() {
