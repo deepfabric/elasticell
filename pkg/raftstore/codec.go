@@ -27,10 +27,29 @@ var (
 )
 
 const (
-	typeRaft     = 1
-	typeSnap     = 2
-	typeSnapData = 3
-	typeSnapEnd  = 4
+	typeRaft      = 1
+	typeSnap      = 2
+	typeSnapData  = 3
+	typeSnapEnd   = 4
+	typeHeartbeat = 5
+)
+
+type heartbeatMsg struct{}
+
+func (h *heartbeatMsg) Size() int {
+	return 0
+}
+
+func (h *heartbeatMsg) Marshal() ([]byte, error) {
+	return nil, nil
+}
+
+func (h *heartbeatMsg) MarshalTo(data []byte) (int, error) {
+	return 0, nil
+}
+
+var (
+	heartbeat = &heartbeatMsg{}
 )
 
 type raftDecoder struct {
@@ -76,6 +95,10 @@ func (decoder raftDecoder) Decode(in *goetty.ByteBuf) (bool, interface{}, error)
 		util.MustUnmarshal(msg, data)
 		in.MarkedBytesReaded()
 		return true, msg, nil
+	case typeHeartbeat:
+		in.MarkedBytesReaded()
+		// ignore the heartbeat msg
+		return false, nil, nil
 	}
 
 	log.Fatalf("bug: not support msg type, type=<%d>", t)
@@ -98,6 +121,9 @@ func (e raftEncoder) Encode(data interface{}, out *goetty.ByteBuf) error {
 	} else if msg, ok := data.(*mraft.SnapshotDataEnd); ok {
 		t = typeSnapEnd
 		m = msg
+	} else if msg, ok := data.(*heartbeatMsg); ok {
+		t = typeHeartbeat
+		m = msg
 	} else {
 		log.Fatalf("bug: unsupport msg: %+v", msg)
 	}
@@ -106,10 +132,12 @@ func (e raftEncoder) Encode(data interface{}, out *goetty.ByteBuf) error {
 	out.WriteInt(size + 1)
 	out.WriteByte(byte(t))
 
-	index := out.GetWriteIndex()
-	out.Expansion(size)
-	util.MustMarshalTo(m, out.RawBuf()[index:index+size])
-	out.SetWriterIndex(index + size)
+	if size > 0 {
+		index := out.GetWriteIndex()
+		out.Expansion(size)
+		util.MustMarshalTo(m, out.RawBuf()[index:index+size])
+		out.SetWriterIndex(index + size)
+	}
 
 	return nil
 }

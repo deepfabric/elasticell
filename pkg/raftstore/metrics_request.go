@@ -23,6 +23,7 @@ var (
 	labelQueueApplyResult = "apply-result"
 	labelQueueStep        = "step"
 	labelQueueMsgs        = "msgs"
+	labelQueueSnaps       = "snaps"
 )
 
 var (

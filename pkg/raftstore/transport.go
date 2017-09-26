@@ -51,14 +51,17 @@ type transport struct {
 
 	getStoreAddrFun func(storeID uint64) (string, error)
 
-	conns map[string]goetty.IOSessionPool
-	msgs  []*util.Queue
-	mask  uint64
+	conns     map[uint64]goetty.IOSessionPool
+	msgs      []*util.Queue
+	snapshots *util.Queue
+	mask      uint64
 
 	addrs   map[uint64]string
 	ipAddrs map[string][]uint64
 
-	readTimeout time.Duration
+	timeWheel        *goetty.TimeoutWheel
+	readTimeout      time.Duration
+	heartbeatTimeout time.Duration
 }
 
 func newTransport(store *Store, client *pd.Client, handler func(interface{})) *transport {
@@ -68,15 +71,18 @@ func newTransport(store *Store, client *pd.Client, handler func(interface{})) *t
 	}
 
 	t := &transport{
-		server:      goetty.NewServer(addr, decoder, encoder, goetty.NewUUIDV4IdGenerator()),
-		conns:       make(map[string]goetty.IOSessionPool),
-		msgs:        make([]*util.Queue, globalCfg.RaftMessageWorkerCount, globalCfg.RaftMessageWorkerCount),
-		mask:        globalCfg.RaftMessageWorkerCount - 1,
-		addrs:       make(map[uint64]string),
-		handler:     handler,
-		client:      client,
-		store:       store,
-		readTimeout: time.Millisecond * time.Duration(globalCfg.Raft.BaseTick*globalCfg.Raft.ElectionTick),
+		server:           goetty.NewServer(addr, decoder, encoder, goetty.NewUUIDV4IdGenerator()),
+		conns:            make(map[uint64]goetty.IOSessionPool),
+		addrs:            make(map[uint64]string),
+		msgs:             make([]*util.Queue, globalCfg.RaftMessageWorkerCount, globalCfg.RaftMessageWorkerCount),
+		mask:             globalCfg.RaftMessageWorkerCount - 1,
+		handler:          handler,
+		client:           client,
+		store:            store,
+		snapshots:        &util.Queue{},
+		readTimeout:      time.Millisecond * time.Duration(globalCfg.Raft.BaseTick*globalCfg.Raft.ElectionTick) * 10,
+		heartbeatTimeout: time.Millisecond * time.Duration(globalCfg.Raft.BaseTick*globalCfg.Raft.ElectionTick),
+		timeWheel:        goetty.NewTimeoutWheel(goetty.WithTickInterval(time.Second)),
 	}
 
 	t.getStoreAddrFun = t.getStoreAddr
@@ -90,10 +96,14 @@ func (t *transport) start() error {
 		go t.readyToSend(t.msgs[i])
 	}
 
+	go t.readToSendSnapshots()
+
 	return t.server.Start(t.doConnection)
 }
 
 func (t *transport) stop() {
+	t.snapshots.Dispose()
+
 	for _, q := range t.msgs {
 		q.Dispose()
 	}
@@ -130,12 +140,14 @@ func (t *transport) send(msg *mraft.RaftMessage) error {
 		return nil
 	}
 
-	err := t.msgs[t.mask&msg.CellID].Put(msg)
-	if err != nil {
-		return err
+	var err error
+	if msg.Message.Type == raftpb.MsgSnap {
+		err = t.snapshots.Put(msg)
+	} else {
+		err = t.msgs[t.mask&storeID].Put(msg)
 	}
 
-	return nil
+	return err
 }
 
 func (t *transport) readyToSend(q *util.Queue) {
@@ -151,79 +163,84 @@ func (t *transport) readyToSend(q *util.Queue) {
 
 		for i := int64(0); i < n; i++ {
 			msg := items[i].(*mraft.RaftMessage)
-			err := t.doSend(msg)
-			if err != nil {
-				log.Errorf("raftstore[cell-%d]: send msg failure, from_peer=<%d> to_peer=<%d>, errors:\n%s",
-					msg.CellID,
-					msg.FromPeer.ID,
-					msg.ToPeer.ID,
-					err)
-
-				storeID := fmt.Sprintf("%d", msg.ToPeer.StoreID)
-
-				pr := t.store.getPeerReplicate(msg.CellID)
-				if pr != nil {
-					raftFlowFailureReportCounterVec.WithLabelValues(labelRaftFlowFailureReportUnreachable, storeID).Inc()
-					if msg.Message.Type == raftpb.MsgSnap {
-						raftFlowFailureReportCounterVec.WithLabelValues(labelRaftFlowFailureReportSnapshot, storeID).Inc()
-					}
-
-					pr.reportUnreachable(msg.Message)
-				}
-			}
-
-			pool.ReleaseRaftMessage(msg)
+			err := t.doSendRaftMessage(msg)
+			t.postSend(msg, err)
 		}
 
 		queueGauge.WithLabelValues(labelQueueMsgs).Set(float64(q.Len()))
 	}
 }
 
-func (t *transport) doSend(msg *mraft.RaftMessage) error {
-	var err error
+func (t *transport) readToSendSnapshots() {
+	snapConns := make(map[uint64]goetty.IOSession)
+	items := make([]interface{}, globalCfg.RaftMessageSendBatchLimit, globalCfg.RaftMessageSendBatchLimit)
+	for {
+		n, err := t.snapshots.Get(globalCfg.RaftMessageSendBatchLimit, items)
+		if err != nil {
+			log.Infof("stop: raft transfer send snapshot worker stopped")
+			return
+		}
 
-	storeID := msg.ToPeer.StoreID
+		for i := int64(0); i < n; i++ {
+			var id uint64
+			var msg *mraft.RaftMessage
+			var hb *heartbeatMsg
 
-	addr, err := t.getStoreAddrFun(storeID)
-	if err != nil {
-		return errors.Wrapf(err, "getStoreAddr")
+			if m, ok := items[i].(uint64); ok {
+				id = m
+				hb = heartbeat
+			} else if m, ok := items[i].(*mraft.RaftMessage); ok {
+				id = m.ToPeer.StoreID
+				msg = m
+			}
+
+			conn := snapConns[id]
+			if conn == nil {
+				conn, err = t.createConn(id)
+				if err != nil && msg != nil {
+					t.postSend(msg, err)
+					continue
+				}
+
+				snapConns[id] = conn
+			}
+
+			if hb != nil {
+				conn.Write(heartbeat)
+			} else {
+				err := t.doSendSnap(msg, conn)
+				t.postSend(msg, err)
+			}
+		}
+
+		queueGauge.WithLabelValues(labelQueueSnaps).Set(float64(t.snapshots.Len()))
 	}
+}
 
-	conn, err := t.getConn(addr)
+func (t *transport) doSendRaftMessage(msg *mraft.RaftMessage) error {
+	conn, err := t.getConn(msg.ToPeer.StoreID)
 	if err != nil {
 		return errors.Wrapf(err, "getConn")
 	}
 
-	// if we are send a snapshot raft msg, we can send sst files to the target store before.
-	if msg.Message.Type == raftpb.MsgSnap {
-		err = t.doSendSnap(msg, conn)
-	} else {
-		err = t.doWrite(msg, conn)
-	}
-
-	t.putConn(addr, conn)
-	return err
-}
-
-func (t *transport) doWrite(msg *mraft.RaftMessage, conn goetty.IOSession) error {
-	err := conn.Write(msg)
+	err = conn.Write(msg)
 	if err != nil {
 		conn.Close()
 		err = errors.Wrapf(err, "write")
 	}
 
+	t.putConn(msg.ToPeer.StoreID, conn)
 	return err
 }
 
 func (t *transport) doSendSnap(msg *mraft.RaftMessage, conn goetty.IOSession) error {
-	start := time.Now()
-
 	snapData := &mraft.RaftSnapshotData{}
 	util.MustUnmarshal(snapData, msg.Message.Snapshot.Data)
 
 	if t.store.snapshotManager.Register(&snapData.Key, sending) {
 		defer t.store.snapshotManager.Deregister(&snapData.Key, sending)
 
+		start := time.Now()
 		if !t.store.snapshotManager.Exists(&snapData.Key) {
 			return fmt.Errorf("transport: missing snapshot file, key=<%+v>",
 				snapData.Key)
@@ -256,14 +273,44 @@ func (t *transport) doSendSnap(msg *mraft.RaftMessage, conn goetty.IOSession) er
 			return errors.Wrapf(err, "")
 		}
 
+		err = conn.Write(msg)
+		if err != nil {
+			conn.Close()
+			return errors.Wrapf(err, "")
+		}
+
 		t.store.sendingSnapCount++
-		log.Debugf("transport: sent snapshot file complete, key=<%+v> size=<%d>",
+		log.Infof("transport: sent snapshot file complete, key=<%+v> size=<%d>",
 			snapData.Key,
 			size)
 		observeSnapshotSending(start)
 	}
 
-	return t.doWrite(msg, conn)
+	return nil
+}
+
+func (t *transport) postSend(msg *mraft.RaftMessage, err error) {
+	if err != nil {
+		log.Errorf("raftstore[cell-%d]: send msg failure, from_peer=<%d> to_peer=<%d>, errors:\n%s",
+			msg.CellID,
+			msg.FromPeer.ID,
+			msg.ToPeer.ID,
+			err)
+
+		storeID := fmt.Sprintf("%d", msg.ToPeer.StoreID)
+
+		pr := t.store.getPeerReplicate(msg.CellID)
+		if pr != nil {
+			raftFlowFailureReportCounterVec.WithLabelValues(labelRaftFlowFailureReportUnreachable, storeID).Inc()
+			if msg.Message.Type == raftpb.MsgSnap {
+				raftFlowFailureReportCounterVec.WithLabelValues(labelRaftFlowFailureReportSnapshot, storeID).Inc()
+			}
+
+			pr.reportUnreachable(msg.Message)
+		}
+	}
+
+	pool.ReleaseRaftMessage(msg)
 }
 
 func (t *transport) getStoreAddr(storeID uint64) (string, error) {
@@ -290,9 +337,9 @@ func (t *transport) getStoreAddr(storeID uint64) (string, error) {
 	return addr, nil
 }
 
-func (t *transport) putConn(addr string, conn goetty.IOSession) {
+func (t *transport) putConn(id uint64, conn goetty.IOSession) {
 	t.RLock()
-	pool := t.conns[addr]
+	pool := t.conns[id]
 	t.RUnlock()
 
 	if pool != nil {
@@ -302,39 +349,49 @@ func (t *transport) putConn(addr string, conn goetty.IOSession) {
 	}
 }
 
-func (t *transport) getConn(addr string) (goetty.IOSession, error) {
-	conn := t.getConnLocked(addr)
-	if t.checkConnect(addr, conn) {
+func (t *transport) getConn(storeID uint64) (goetty.IOSession, error) {
+	conn, err := t.getConnLocked(storeID)
+	if err != nil {
+		return nil, err
+	}
+
+	if t.checkConnect(storeID, conn) {
 		return conn, nil
 	}
 
-	t.putConn(addr, conn)
+	t.putConn(storeID, conn)
 	return nil, errConnect
 }
 
-func (t *transport) getConnLocked(addr string) goetty.IOSession {
+func (t *transport) getConnLocked(id uint64) (goetty.IOSession, error) {
+	var err error
+
 	t.RLock()
-	pool := t.conns[addr]
+	pool := t.conns[id]
 	t.RUnlock()
 
 	if pool == nil {
 		t.Lock()
-		pool = t.conns[addr]
+
+		pool = t.conns[id]
 		if pool == nil {
-			pool, _ = goetty.NewIOSessionPool(0, int(globalCfg.RaftMessageWorkerCount), func() (goetty.IOSession, error) {
-				return goetty.NewConnector(t.getConnectionCfg(addr), decoder, encoder), nil
+			pool, err = goetty.NewIOSessionPool(1, 1, func() (goetty.IOSession, error) {
+				return t.createConn(id)
 			})
 
-			t.conns[addr] = pool
+			if err != nil {
+				return nil, err
+			}
+
+			t.conns[id] = pool
 		}
 		t.Unlock()
 	}
 
-	conn, _ := pool.Get()
-	return conn
+	return pool.Get()
 }
 
-func (t *transport) checkConnect(addr string, conn goetty.IOSession) bool {
+func (t *transport) checkConnect(id uint64, conn goetty.IOSession) bool {
 	if nil == conn {
 		return false
 	}
@@ -345,19 +402,41 @@ func (t *transport) checkConnect(addr string, conn goetty.IOSession) bool {
 
 	ok, err := conn.Connect()
 	if err != nil {
-		log.Errorf("transport: connect to store failure, target=<%s> errors:\n %+v",
-			addr,
+		log.Errorf("transport: connect to store failure, target=<%d> errors:\n %+v",
+			id,
 			err)
 		return false
 	}
 
-	log.Infof("transport: connected to store, target=<%s>", addr)
+	log.Infof("transport: connected to store, target=<%d>", id)
 	return ok
+}
+
+func (t *transport) createConn(id uint64) (goetty.IOSession, error) {
+	addr, err := t.getStoreAddrFun(id)
+	if err != nil {
+		return nil, errors.Wrapf(err, "getStoreAddr")
+	}
+
+	conn := goetty.NewConnector(t.getConnectionCfg(addr), decoder, encoder)
+	conn.SetAttr("store", id)
+
+	_, err = conn.Connect()
+	return conn, err
 }
 
 func (t *transport) getConnectionCfg(addr string) *goetty.Conf {
 	return &goetty.Conf{
 		Addr: addr,
 		TimeoutConnectToServer: defaultConnectTimeout,
+		TimeWheel:              t.timeWheel,
+		TimeoutWrite:           t.heartbeatTimeout,
+		WriteTimeoutFn:         t.sendHeartbeat,
+	}
+}
+
+func (t *transport) sendHeartbeat(addr string, conn goetty.IOSession) {
+	if t.snapshots.Len() == 0 {
+		t.snapshots.Put(conn.GetAttr("store"))
 	}
 }
