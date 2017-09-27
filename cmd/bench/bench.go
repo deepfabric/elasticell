@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/rand"
 	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -25,7 +26,7 @@ var (
 	readTimeout    = flag.Int("rt", 30, "The timeout for read in seconds")
 	writeTimeout   = flag.Int("wt", 30, "The timeout for read in seconds")
 	connectTimeout = flag.Int("ct", 10, "The timeout for connect to server")
-	addr           = flag.String("addr", "127.0.0.1:6379", "The target address.")
+	addrs          = flag.String("addrs", "127.0.0.1:6379", "The target address.")
 )
 
 func main() {
@@ -51,6 +52,7 @@ func main() {
 	ans := newAnalysis()
 
 	var index int64
+	proxies := strings.Split(*addrs, ",")
 	for index = 0; index < gCount; index++ {
 		start := index * countPerG
 		end := (index + 1) * countPerG
@@ -60,7 +62,8 @@ func main() {
 
 		wg.Add(1)
 		complate.Add(1)
-		go startG(end-start, wg, complate, ready, ans)
+		proxy := proxies[index%int64(len(proxies))]
+		go startG(end-start, wg, complate, ready, ans, proxy)
 	}
 
 	wg.Wait()
@@ -82,7 +85,7 @@ func main() {
 	ans.print()
 }
 
-func startG(total int64, wg, complate *sync.WaitGroup, ready chan struct{}, ans *analysis) {
+func startG(total int64, wg, complate *sync.WaitGroup, ready chan struct{}, ans *analysis, proxy string) {
 	var onlyRead, onlyWrite bool
 
 	if *readWeight == 0 {
@@ -96,7 +99,7 @@ func startG(total int64, wg, complate *sync.WaitGroup, ready chan struct{}, ans 
 	}
 
 	conn := goetty.NewConnector(&goetty.Conf{
-		Addr: *addr,
+		Addr: proxy,
 		TimeoutConnectToServer: time.Second * time.Duration(*connectTimeout),
 	}, redis.NewRedisReplyDecoder(), goetty.NewEmptyEncoder())
 	_, err := conn.Connect()

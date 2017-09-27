@@ -284,6 +284,10 @@ func (t *transport) doSendSnap(msg *mraft.RaftMessage, conn goetty.IOSession) er
 			snapData.Key,
 			size)
 		observeSnapshotSending(start)
+
+		t.store.addSnapJob(func() error {
+			return t.store.snapshotManager.CleanSnap(&snapData.Key)
+		}, nil)
 	}
 
 	return nil
