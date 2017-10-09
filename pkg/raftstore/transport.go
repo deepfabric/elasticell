@@ -140,14 +140,16 @@ func (t *transport) send(msg *mraft.RaftMessage) error {
 		return nil
 	}
 
-	var err error
 	if msg.Message.Type == raftpb.MsgSnap {
-		err = t.snapshots.Put(msg)
-	} else {
-		err = t.msgs[t.mask&storeID].Put(msg)
+		m := &mraft.RaftMessage{}
+		util.MustUnmarshal(m, util.MustMarshal(msg))
+		err := t.snapshots.Put(m)
+		if err != nil {
+			return err
+		}
 	}
 
-	return err
+	return t.msgs[t.mask&storeID].Put(msg)
 }
 
 func (t *transport) readyToSend(q *util.Queue) {
@@ -197,19 +199,30 @@ func (t *transport) readToSendSnapshots() {
 			conn := snapConns[id]
 			if conn == nil {
 				conn, err = t.createConn(id)
-				if err != nil && msg != nil {
-					t.postSend(msg, err)
+				if err != nil {
+					log.Debugf("transport: create conn to %d failed, errors:\n%+v",
+						id,
+						err)
 					continue
 				}
 
 				snapConns[id] = conn
 			}
 
+			if !conn.IsConnected() {
+				_, err := conn.Connect()
+				if err != nil {
+					log.Debugf("transport: connect to %d failed, errors:\n%+v",
+						id,
+						err)
+					continue
+				}
+			}
+
 			if hb != nil {
 				conn.Write(heartbeat)
 			} else {
-				err := t.doSendSnap(msg, conn)
-				t.postSend(msg, err)
+				t.doSendSnap(msg, conn)
 			}
 		}
 
@@ -273,12 +286,6 @@ func (t *transport) doSendSnap(msg *mraft.RaftMessage, conn goetty.IOSession) er
 			return errors.Wrapf(err, "")
 		}
 
-		err = conn.Write(msg)
-		if err != nil {
-			conn.Close()
-			return errors.Wrapf(err, "")
-		}
-
 		t.store.sendingSnapCount++
 		log.Infof("transport: sent snapshot file complete, key=<%+v> size=<%d>",
 			snapData.Key,
@@ -310,7 +317,14 @@ func (t *transport) postSend(msg *mraft.RaftMessage, err error) {
 				raftFlowFailureReportCounterVec.WithLabelValues(labelRaftFlowFailureReportSnapshot, storeID).Inc()
 			}
 
-			pr.reportUnreachable(msg.Message)
+			pr.report(msg.Message)
+		}
+	} else {
+		if msg.Message.Type == raftpb.MsgSnap {
+			pr := t.store.getPeerReplicate(msg.CellID)
+			if pr != nil {
+				pr.report(msg.ToPeer.ID)
+			}
 		}
 	}
 

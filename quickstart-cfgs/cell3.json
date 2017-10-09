@@ -39,6 +39,7 @@
             "raftMessageSendBatchLimit": 64,
             "raftMessageWorkerCount": 16,
             "raftLogGCThreshold": 50,
+            "raftLogGCLagThreshold": 1024,
             "cellCheckSizeDiff": 8388608,
             "cellMaxSize": 83886080,
             "cellSplitSize": 67108864,

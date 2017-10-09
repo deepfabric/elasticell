@@ -422,9 +422,6 @@ func (s *Store) onRaftMessage(msg *mraft.RaftMessage) {
 	}
 
 	if !s.tryToCreatePeerReplicate(msg.CellID, msg) {
-		log.Warnf("raftstore[store-%d]: try to create peer failed. cell=<%d>",
-			s.id,
-			msg.CellID)
 		return
 	}
 
@@ -633,7 +630,9 @@ func (s *Store) tryToCreatePeerReplicate(cellID uint64, msg *mraft.RaftMessage) 
 			var state string
 			p := s.getPeerReplicate(item.ID)
 			if p != nil {
-				state = fmt.Sprintf("local=<%s> apply=<%s>", p.ps.raftState.String(),
+				state = fmt.Sprintf("overlappedCell=<%d> local=<%s> apply=<%s>",
+					p.cellID,
+					p.ps.raftState.String(),
 					p.ps.applyState.String())
 			}
 
@@ -1008,14 +1007,16 @@ func (s *Store) handleRaftGCLog() {
 		appliedIdx := pr.ps.getAppliedIndex()
 		firstIdx, _ := pr.ps.FirstIndex()
 
+		if replicatedIdx < firstIdx ||
+			replicatedIdx-firstIdx <= globalCfg.RaftLogGCThreshold {
+			return true, nil
+		}
+
 		if appliedIdx > firstIdx &&
 			appliedIdx-firstIdx >= globalCfg.RaftLogGCCountLimit {
 			compactIdx = appliedIdx
-		} else if pr.sizeDiffHint >= globalCfg.RaftLogGCSizeLimit {
+		} else if pr.raftLogSizeHint >= globalCfg.RaftLogGCSizeLimit {
 			compactIdx = appliedIdx
-		} else if replicatedIdx < firstIdx ||
-			replicatedIdx-firstIdx <= globalCfg.RaftLogGCThreshold {
-			return true, nil
 		} else {
 			compactIdx = replicatedIdx
 		}
@@ -1023,6 +1024,11 @@ func (s *Store) handleRaftGCLog() {
 		// Have no idea why subtract 1 here, but original code did this by magic.
 		if compactIdx == 0 {
 			log.Fatal("raft-log-gc: unexpect compactIdx")
+		}
+
+		// avoid leader send snapshot to the a little lag peer.
+		if compactIdx > replicatedIdx && (compactIdx-replicatedIdx) <= globalCfg.RaftLogGCLagThreshold {
+			compactIdx = replicatedIdx
 		}
 
 		compactIdx--

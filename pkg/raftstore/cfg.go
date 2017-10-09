@@ -30,9 +30,10 @@ type Cfg struct {
 	RaftGCLogIntervalMs      int    `json:"raftGCLogIntervalMs"`
 	ReportCellIntervalMs     int    `json:"reportCellIntervalMs"`
 
-	RaftLogGCCountLimit uint64 `json:"raftLogGCCountLimit"`
-	RaftLogGCSizeLimit  int64  `json:"raftLogGCSizeLimit"`
-	RaftLogGCThreshold  uint64 `json:"raftLogGCThreshold"`
+	RaftLogGCCountLimit   uint64 `json:"raftLogGCCountLimit"`
+	RaftLogGCSizeLimit    uint64 `json:"raftLogGCSizeLimit"`
+	RaftLogGCThreshold    uint64 `json:"raftLogGCThreshold"`
+	RaftLogGCLagThreshold uint64 `json:"raftLogGCLagThreshold"`
 
 	RaftProposeBatchLimit     int    `json:"raftProposeBatchLimit"`
 	RaftMessageSendBatchLimit int64  `json:"raftMessageSendBatchLimit"`

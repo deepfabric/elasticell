@@ -31,7 +31,7 @@ var (
 	creating = 1
 	sending  = 2
 
-	writeBuff = 1024 * 1024 // 1mb
+	writeBuff = 1024 * 1024 * 8 // 8mb
 )
 
 // SnapshotManager manager snapshot
@@ -128,33 +128,22 @@ func (m *defaultSnapshotManager) inRegistry(key *mraft.SnapKey, step int) bool {
 
 func (m *defaultSnapshotManager) Create(snap *mraft.RaftSnapshotData) error {
 	path := m.getPathOfSnapKey(&snap.Key)
+	gzPath := m.getPathOfSnapKeyGZ(&snap.Key)
 	start := encStartKey(&snap.Cell)
 	end := encEndKey(&snap.Cell)
 
-	if exist(path) {
-		if !m.inRegistry(&snap.Key, sending) {
-			err := os.RemoveAll(path)
+	if !exist(gzPath) {
+		if !exist(path) {
+			err := m.db.CreateSnapshot(path, start, end)
 			if err != nil {
-				return errors.Wrapf(err, "remove exists snap dir: %s", path)
+				return errors.Wrapf(err, "")
 			}
-
-			log.Debugf("raftstore-snap[cell-%d]: remove exists old snap data, key=<%+v> path=<%s>",
-				snap.Key.CellID,
-				snap,
-				path)
-		} else {
-			return fmt.Errorf("create snapshot file path=<%s> already exists", path)
 		}
-	}
 
-	err := m.db.CreateSnapshot(path, start, end)
-	if err != nil {
-		return errors.Wrapf(err, "")
-	}
-
-	err = util.GZIP(path)
-	if err != nil {
-		return errors.Wrapf(err, "")
+		err := util.GZIP(path)
+		if err != nil {
+			return errors.Wrapf(err, "")
+		}
 	}
 
 	info, err := os.Stat(fmt.Sprintf("%s.gz", path))
@@ -313,11 +302,11 @@ func (m *defaultSnapshotManager) ReceiveSnapData(data *mraft.SnapshotData) error
 
 func (m *defaultSnapshotManager) Apply(key *mraft.SnapKey) error {
 	file := m.getPathOfSnapKeyGZ(key)
-	defer m.CleanSnap(key)
-
 	if !m.Exists(key) {
 		return fmt.Errorf("missing snapshot file, path=%s", file)
 	}
+
+	defer m.CleanSnap(key)
 
 	err := util.UnGZIP(file, m.dir)
 	if err != nil {

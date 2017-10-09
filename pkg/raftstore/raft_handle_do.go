@@ -536,10 +536,12 @@ func (s *Store) doApplySplit(cellID uint64, result *splitResult) {
 	}
 
 	if pr.isLeader() {
-		log.Infof("raftstore-apply[cell-%d]: notify pd with split, left=<%+v> right=<%+v>",
+		log.Infof("raftstore-apply[cell-%d]: notify pd with split, left=<%+v> right=<%+v>, state=<%s>, apply=<%s>",
 			cellID,
 			left,
-			right)
+			right,
+			pr.ps.raftState.String(),
+			pr.ps.applyState.String())
 
 		pr.doHeartbeat()
 		newPR.doHeartbeat()

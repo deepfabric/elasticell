@@ -20,6 +20,7 @@ import (
 
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
+	"github.com/deepfabric/elasticell/pkg/pb/mraft"
 	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
 	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
 	"github.com/deepfabric/elasticell/pkg/pd"
@@ -204,10 +205,13 @@ func (pr *PeerReplicate) handleReport(items []interface{}) {
 	}
 
 	for i := int64(0); i < n; i++ {
-		msg := items[i].(raftpb.Message)
-		pr.rn.ReportUnreachable(msg.To)
-		if msg.Type == raftpb.MsgSnap {
-			pr.rn.ReportSnapshot(msg.To, raft.SnapshotFailure)
+		if msg, ok := items[i].(raftpb.Message); ok {
+			pr.rn.ReportUnreachable(msg.To)
+			if msg.Type == raftpb.MsgSnap {
+				pr.rn.ReportSnapshot(msg.To, raft.SnapshotFailure)
+			}
+		} else if peerID, ok := items[i].(uint64); ok {
+			pr.rn.ReportSnapshot(peerID, raft.SnapshotFinish)
 		}
 	}
 
@@ -220,51 +224,44 @@ func (pr *PeerReplicate) handleReport(items []interface{}) {
 }
 
 func (pr *PeerReplicate) handleApplyResult(items []interface{}) {
-	size := pr.applyResults.Len()
-	if size == 0 {
-		return
-	}
-
-	n, err := pr.applyResults.Get(batch, items)
-	if err != nil {
-		return
-	}
-
-	for i := int64(0); i < n; i++ {
-		result := items[i].(*asyncApplyResult)
-		pr.doPollApply(result)
-		releaseAsyncApplyResult(result)
-	}
-
-	size = pr.applyResults.Len()
-	queueGauge.WithLabelValues(labelQueueApplyResult).Set(float64(size))
-
-	if size > 0 {
-		pr.addEvent()
-	}
-}
-
-func (pr *PeerReplicate) handleRequest(items []interface{}) {
 	for {
-		size := pr.requests.Len()
+		size := pr.applyResults.Len()
 		if size == 0 {
-			queueGauge.WithLabelValues(labelQueueReq).Set(float64(0))
+			queueGauge.WithLabelValues(labelQueueApplyResult).Set(float64(0))
 			break
 		}
 
-		n, err := pr.requests.Get(batch, items)
+		n, err := pr.applyResults.Get(batch, items)
 		if err != nil {
 			return
 		}
 
 		for i := int64(0); i < n; i++ {
-			req := items[i].(*reqCtx)
-			pr.batch.push(req)
+			result := items[i].(*asyncApplyResult)
+			pr.doPollApply(result)
+			releaseAsyncApplyResult(result)
 		}
 
 		if n < batch {
 			break
 		}
+	}
+}
+
+func (pr *PeerReplicate) handleRequest(items []interface{}) {
+	size := pr.requests.Len()
+	if size == 0 {
+		return
+	}
+
+	n, err := pr.requests.Get(batch, items)
+	if err != nil {
+		return
+	}
+
+	for i := int64(0); i < n; i++ {
+		req := items[i].(*reqCtx)
+		pr.batch.push(req)
 	}
 
 	for {
@@ -273,6 +270,13 @@ func (pr *PeerReplicate) handleRequest(items []interface{}) {
 		}
 
 		pr.propose(pr.batch.pop())
+	}
+
+	size = pr.requests.Len()
+	queueGauge.WithLabelValues(labelQueueReq).Set(float64(0))
+
+	if size > 0 {
+		pr.addEvent()
 	}
 }
 
@@ -298,28 +302,35 @@ func (pr *PeerReplicate) handleReady() {
 		return
 	}
 
-	if pr.rn.HasReadySince(pr.ps.lastReadyIndex) {
-		rd := pr.rn.ReadySince(pr.ps.lastReadyIndex)
+	rd := pr.rn.ReadySince(pr.ps.lastReadyIndex)
 
-		log.Debugf("raftstore[cell-%d]: raft ready after %d",
-			pr.cellID,
-			pr.ps.lastReadyIndex)
+	log.Debugf("raftstore[cell-%d]: raft ready after %d",
+		pr.cellID,
+		pr.ps.lastReadyIndex)
 
-		ctx := acquireReadyContext()
-
-		ctx.raftState = pr.ps.raftState
-		ctx.applyState = pr.ps.applyState
-		ctx.lastTerm = pr.ps.lastTerm
-
-		start := time.Now()
-
-		pr.handleRaftReadyAppend(ctx, &rd)
-		pr.handleRaftReadyApply(ctx, &rd)
-
-		releaseReadyContext(ctx)
-
-		observeRaftFlowProcessReady(start)
+	// If snapshot is received, further handling
+	if !raft.IsEmptySnap(rd.Snapshot) {
+		d := &mraft.RaftSnapshotData{}
+		util.MustUnmarshal(d, rd.Snapshot.Data)
+		if !pr.store.snapshotManager.Exists(&d.Key) {
+			return
+		}
 	}
+
+	ctx := acquireReadyContext()
+
+	ctx.raftState = pr.ps.raftState
+	ctx.applyState = pr.ps.applyState
+	ctx.lastTerm = pr.ps.lastTerm
+
+	start := time.Now()
+
+	pr.handleRaftReadyAppend(ctx, &rd)
+	pr.handleRaftReadyApply(ctx, &rd)
+
+	releaseReadyContext(ctx)
+
+	observeRaftFlowProcessReady(start)
 }
 
 func (pr *PeerReplicate) addApplyResult(result *asyncApplyResult) {
@@ -822,7 +833,6 @@ func (pr *PeerReplicate) sendRaftMsg(msg raftpb.Message) error {
 		pr.metrics.message.voteResp++
 	case raftpb.MsgSnap:
 		pr.metrics.message.snapshot++
-		pr.rn.ReportSnapshot(sendMsg.ToPeer.ID, raft.SnapshotFinish)
 	case raftpb.MsgHeartbeat:
 		pr.metrics.message.heartbeat++
 	case raftpb.MsgHeartbeatResp:
@@ -894,8 +904,8 @@ func (pr *PeerReplicate) step(msg raftpb.Message) {
 	pr.addEvent()
 }
 
-func (pr *PeerReplicate) reportUnreachable(msg raftpb.Message) {
-	err := pr.reports.Put(msg)
+func (pr *PeerReplicate) report(report interface{}) {
+	err := pr.reports.Put(report)
 	if err != nil {
 		log.Infof("raftstore[cell-%d]: raft report stopped",
 			pr.ps.getCell().ID)

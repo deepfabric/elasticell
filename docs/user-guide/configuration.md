@@ -43,6 +43,7 @@
 |node:raftStore:raftMessageSendBatchLimit|Max number of read raft message from send queue|
 |node:raftStore:raftMessageWorkerCount|Worker count of process raft message|
 |node:raftStore:raftLogGCThreshold|Max index of raft log offset that should be compact|
+|node:raftStore:raftLogGCLagThreshold|Max lag of peer|
 |node:raftStore:cellCheckSizeDiff|Max data size that should be check real size to split|
 |node:raftStore:cellMaxSize|Max data size of a cell|
 |node:raftStore:cellSplitSize|Max data size that should split|
