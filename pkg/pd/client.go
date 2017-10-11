@@ -14,16 +14,14 @@
 package pd
 
 import (
-	"time"
-
-	"golang.org/x/net/context"
-
 	"sync"
+	"time"
 
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb"
 	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
 	"github.com/pkg/errors"
+	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 )
@@ -193,6 +191,24 @@ func (c *Client) GetClusterID(ctx context.Context, req *pdpb.GetClusterIDReq) (*
 	}
 
 	return rsp.(*pdpb.GetClusterIDRsp), nil
+}
+
+// GetInitParams returns cluster init params
+func (c *Client) GetInitParams(ctx context.Context, req *pdpb.GetInitParamsReq) (*pdpb.GetInitParamsRsp, error) {
+	rsp, err := c.proxyRPC(ctx,
+		req,
+		func() {
+			req.From = c.name
+			req.ID = c.seq
+		},
+		func() (interface{}, error) {
+			return c.pd.GetInitParams(ctx, req, grpc.FailFast(true))
+		})
+	if err != nil {
+		return nil, err
+	}
+
+	return rsp.(*pdpb.GetInitParamsRsp), nil
 }
 
 // IsClusterBootstrapped returns cluster is bootstrapped response

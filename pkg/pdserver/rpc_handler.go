@@ -59,6 +59,31 @@ func (h *RPCHandler) GetClusterID(c context.Context, req *pdpb.GetClusterIDReq) 
 	return rsp.(*pdpb.GetClusterIDRsp), nil
 }
 
+// GetInitParams returns cluster init params
+func (h *RPCHandler) GetInitParams(c context.Context, req *pdpb.GetInitParamsReq) (*pdpb.GetInitParamsRsp, error) {
+	doFun := func() (interface{}, error) {
+		params, err := h.server.GetInitParamsValue()
+		if err != nil {
+			return nil, err
+		}
+
+		return &pdpb.GetInitParamsRsp{
+			Params: params,
+		}, nil
+	}
+
+	forwardFun := func(proxy *pd.Client) (interface{}, error) {
+		return proxy.GetInitParams(c, req)
+	}
+
+	rsp, err := h.doHandle("GetInitParams", req, forwardFun, doFun)
+	if err != nil {
+		return nil, err
+	}
+
+	return rsp.(*pdpb.GetInitParamsRsp), nil
+}
+
 // AllocID returns alloc id for kv node
 func (h *RPCHandler) AllocID(c context.Context, req *pdpb.AllocIDReq) (*pdpb.AllocIDRsp, error) {
 	doFun := func() (interface{}, error) {

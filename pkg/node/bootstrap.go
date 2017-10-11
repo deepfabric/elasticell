@@ -14,6 +14,7 @@
 package node
 
 import (
+	"math"
 	"time"
 
 	"github.com/deepfabric/elasticell/pkg/log"
@@ -103,13 +104,47 @@ func (n *Node) bootstrapStore() uint64 {
 	return storeID
 }
 
-func (n *Node) bootstrapFirstCell() metapb.Cell {
-	cellID, err := n.getAllocID()
+func (n *Node) bootstrapCells() []metapb.Cell {
+	params, err := n.getInitParam()
 	if err != nil {
-		log.Fatalf("bootstrap: bootstrap first cell failed, errors:\n %+v", err)
+		log.Fatalf("bootstrap: bootstrap cells failed, errors:\n %+v", err)
 	}
 
-	log.Infof("bootstrap: alloc id for first cell succ, id=<%d>", cellID)
+	if params.InitCellCount < 1 {
+		log.Fatalf("bootstrap: bootstrap cells failed, error bootstrap cell count: %d",
+			params.InitCellCount)
+	}
+
+	var cells []metapb.Cell
+	if params.InitCellCount == 1 {
+		cells = append(cells, n.createCell(nil, nil))
+		return cells
+	}
+
+	step := uint64(math.MaxUint64 / params.InitCellCount)
+	start := uint64(0)
+	end := start + step
+
+	for i := uint64(0); i < params.InitCellCount; i++ {
+		if params.InitCellCount-i == 1 {
+			end = math.MaxUint64
+		}
+
+		cells = append(cells, n.createCell(util.Uint64ToBytes(start), util.Uint64ToBytes(end)))
+		start = end
+		end = start + step
+	}
+
+	return cells
+}
+
+func (n *Node) createCell(start, end []byte) metapb.Cell {
+	cellID, err := n.getAllocID()
+	if err != nil {
+		log.Fatalf("bootstrap: bootstrap cells failed, errors:\n %+v", err)
+	}
+
+	log.Infof("bootstrap: alloc id for cells succ, id=<%d>", cellID)
 
 	peerID, err := n.getAllocID()
 	if err != nil {
@@ -121,6 +156,9 @@ func (n *Node) bootstrapFirstCell() metapb.Cell {
 		cellID)
 
 	cell := pb.NewCell(cellID, peerID, n.storeMeta.ID)
+	cell.Start = start
+	cell.End = end
+
 	err = raftstore.SaveFirstCell(n.driver, cell)
 	if err != nil {
 		log.Fatalf("bootstrap: bootstrap first cell failed, errors:\n %+v", err)
@@ -131,20 +169,19 @@ func (n *Node) bootstrapFirstCell() metapb.Cell {
 	return cell
 }
 
-func (n *Node) bootstrapCluster(cell metapb.Cell) {
+func (n *Node) bootstrapCluster(cells []metapb.Cell) {
 	req := &pdpb.BootstrapClusterReq{
 		Store: n.storeMeta,
-		Cell:  cell,
+		Cells: cells,
 	}
 
 	// If more than one node try to bootstrap the cluster at the same time,
 	// Only one can succeed, others will get the `AlreadyBootstrapped` flag.
-	// If we get any error, we will delete local cell
+	// If we get any error, we will delete local cells
 	rsp, err := n.pdClient.BootstrapCluster(context.TODO(), req)
 	if err != nil {
 		if err != nil {
-			log.Errorf("bootstrap: cell delete failure, cell=<%d>, errors:\n %+v",
-				cell.ID,
+			log.Errorf("bootstrap: cell delete failure, errors:\n %+v",
 				err)
 		}
 
@@ -159,6 +196,15 @@ func (n *Node) bootstrapCluster(cell metapb.Cell) {
 func (n *Node) startStore() {
 	log.Infof("bootstrap: begin to start store, storeID=<%d>", n.storeMeta.ID)
 	n.store = raftstore.NewStore(n.clusterID, n.pdClient, n.storeMeta, n.driver, n.cfg.RaftStore)
+
+	params, err := n.getInitParam()
+	if err != nil {
+		log.Fatalf("bootstrap: bootstrap cells failed, errors:\n %+v", err)
+	}
+
+	if params.InitCellCount > 1 {
+		n.store.SetKeyConvertFun(util.Uint64Convert)
+	}
 
 	n.runner.RunCancelableTask(func(c context.Context) {
 		n.store.Start()

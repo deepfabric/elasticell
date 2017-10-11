@@ -14,6 +14,7 @@
 package pdserver
 
 import (
+	"encoding/json"
 	"fmt"
 	"sort"
 
@@ -21,17 +22,42 @@ import (
 	"github.com/deepfabric/elasticell/pkg/pdapi"
 )
 
-// GetSystem returns the summary of elasticell cluster
-func (s *Server) GetSystem() (*pdapi.System, error) {
-	cluster := s.GetCellCluster()
-	if nil == cluster {
-		return nil, errNotBootstrapped
+func (s *Server) getInitParams() (*pdapi.InitParams, error) {
+	value, err := s.GetInitParamsValue()
+	if err != nil {
+		return nil, err
 	}
 
-	system := &pdapi.System{
-		MaxReplicas:   s.cfg.Schedule.MaxReplicas,
-		OperatorCount: cluster.coordinator.getOperatorCount(),
+	if len(value) == 0 {
+		return nil, nil
 	}
+
+	params := &pdapi.InitParams{}
+	err = json.Unmarshal(value, params)
+	return params, err
+}
+
+// GetSystem returns the summary of elasticell cluster
+func (s *Server) GetSystem() (*pdapi.System, error) {
+	system := &pdapi.System{
+		AlreadyBootstrapped: false,
+	}
+
+	params, err := s.getInitParams()
+	if err != nil {
+		return nil, err
+	}
+
+	cluster := s.GetCellCluster()
+	if nil == cluster {
+		system.InitParams = params
+		return system, nil
+	}
+
+	system.AlreadyBootstrapped = true
+	system.MaxReplicas = s.cfg.Schedule.MaxReplicas
+	system.OperatorCount = cluster.coordinator.getOperatorCount()
+	system.InitParams = params
 
 	cluster.cache.getStoreCache().foreach(func(store *StoreInfo) (bool, error) {
 		system.StoreCount++
@@ -59,6 +85,21 @@ func (s *Server) GetSystem() (*pdapi.System, error) {
 	})
 
 	return system, nil
+}
+
+// InitCluster init cluster
+func (s *Server) InitCluster(params *pdapi.InitParams) error {
+	cluster := s.GetCellCluster()
+	if nil != cluster {
+		return errAlreadyBootstrapped
+	}
+
+	paramsStr, err := params.Marshal()
+	if err != nil {
+		return err
+	}
+
+	return s.store.SetInitParams(s.clusterID, paramsStr)
 }
 
 // ListCellInStore returns all cells info in the store
@@ -160,6 +201,7 @@ func (s *Server) DeleteStore(id uint64, force bool) error {
 	return nil
 }
 
+// SetStoreLogLevel set store log level
 func (s *Server) SetStoreLogLevel(set *pdapi.SetLogLevel) error {
 	cluster := s.GetCellCluster()
 	if nil == cluster {

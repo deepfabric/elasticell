@@ -34,12 +34,12 @@ func (s *Server) bootstrapCluster(req *pdpb.BootstrapClusterReq) (*pdpb.Bootstra
 		}, nil
 	}
 
-	store, cell, err := s.checkForBootstrap(req)
+	store, err := s.checkForBootstrap(req)
 	if err != nil {
 		return nil, err
 	}
 
-	rsp, err := s.cluster.doBootstrap(store, cell)
+	rsp, err := s.cluster.doBootstrap(store, req.Cells)
 	if err != nil {
 		return nil, err
 	}
@@ -160,31 +160,37 @@ func (s *Server) GetClusterID() uint64 {
 	return s.clusterID
 }
 
-func (s *Server) checkForBootstrap(req *pdpb.BootstrapClusterReq) (metapb.Store, metapb.Cell, error) {
+// GetInitParamsValue returns cluster init params bytes
+func (s *Server) GetInitParamsValue() ([]byte, error) {
+	return s.store.GetInitParams(s.clusterID)
+}
+
+func (s *Server) checkForBootstrap(req *pdpb.BootstrapClusterReq) (metapb.Store, error) {
 	clusterID := s.GetClusterID()
 
 	store := req.GetStore()
 	if store.ID == pd.ZeroID {
-		return metapb.Store{}, metapb.Cell{}, errors.New("invalid zero store id for bootstrap cluster")
+		return metapb.Store{}, errors.New("invalid zero store id for bootstrap cluster")
 	}
 
-	cell := req.GetCell()
-	if cell.ID == pd.ZeroID {
-		return metapb.Store{}, metapb.Cell{}, errors.New("invalid zero cell id for bootstrap cluster")
-	} else if len(cell.Peers) == 0 || len(cell.Peers) != 1 {
-		return metapb.Store{}, metapb.Cell{}, errors.Errorf("invalid first cell peer count must be 1, count=<%d> clusterID=<%d>",
-			len(cell.Peers),
-			clusterID)
-	} else if cell.Peers[0].ID == pd.ZeroID {
-		return metapb.Store{}, metapb.Cell{}, errors.New("invalid zero peer id for bootstrap cluster")
-	} else if cell.Peers[0].StoreID != store.ID {
-		return metapb.Store{}, metapb.Cell{}, errors.Errorf("invalid cell store id for bootstrap cluster, cell=<%d> expect=<%d> clusterID=<%d>",
-			cell.Peers[0].StoreID,
-			store.ID,
-			clusterID)
+	for _, cell := range req.Cells {
+		if cell.ID == pd.ZeroID {
+			return metapb.Store{}, errors.New("invalid zero cell id for bootstrap cluster")
+		} else if len(cell.Peers) == 0 || len(cell.Peers) != 1 {
+			return metapb.Store{}, errors.Errorf("invalid first cell peer count must be 1, count=<%d> clusterID=<%d>",
+				len(cell.Peers),
+				clusterID)
+		} else if cell.Peers[0].ID == pd.ZeroID {
+			return metapb.Store{}, errors.New("invalid zero peer id for bootstrap cluster")
+		} else if cell.Peers[0].StoreID != store.ID {
+			return metapb.Store{}, errors.Errorf("invalid cell store id for bootstrap cluster, cell=<%d> expect=<%d> clusterID=<%d>",
+				cell.Peers[0].StoreID,
+				store.ID,
+				clusterID)
+		}
 	}
 
-	return store, cell, nil
+	return store, nil
 }
 
 // checkStore returns an error response if the store exists and is in tombstone state.
@@ -221,13 +227,13 @@ func newCellCluster(s *Server) *CellCluster {
 	return c
 }
 
-func (c *CellCluster) doBootstrap(store metapb.Store, cell metapb.Cell) (*pdpb.BootstrapClusterRsp, error) {
+func (c *CellCluster) doBootstrap(store metapb.Store, cells []metapb.Cell) (*pdpb.BootstrapClusterRsp, error) {
 	cluster := metapb.Cluster{
 		ID:          c.s.GetClusterID(),
 		MaxReplicas: c.s.cfg.Schedule.MaxReplicas,
 	}
 
-	ok, err := c.s.store.SetClusterBootstrapped(c.s.GetClusterID(), cluster, store, cell)
+	ok, err := c.s.store.SetClusterBootstrapped(c.s.GetClusterID(), cluster, store, cells)
 	if err != nil {
 		return nil, err
 	}

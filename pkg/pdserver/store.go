@@ -43,10 +43,12 @@ const (
 
 // ClusterStore is the store interface for cluster info
 type ClusterStore interface {
+	SetInitParams(clusterID uint64, params string) error
+	GetInitParams(clusterID uint64) ([]byte, error)
 	GetCurrentClusterMembers() (*clientv3.MemberListResponse, error)
 	GetClusterID() (uint64, error)
 	CreateFirstClusterID() (uint64, error)
-	SetClusterBootstrapped(clusterID uint64, cluster metapb.Cluster, store metapb.Store, cell metapb.Cell) (bool, error)
+	SetClusterBootstrapped(clusterID uint64, cluster metapb.Cluster, store metapb.Store, cells []metapb.Cell) (bool, error)
 	LoadClusterMeta(clusterID uint64) (*metapb.Cluster, error)
 	LoadStoreMeta(clusterID uint64, limit int64, do func(metapb.Store)) error
 	LoadCellMeta(clusterID uint64, limit int64, do func(metapb.Cell)) error

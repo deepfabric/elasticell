@@ -30,6 +30,7 @@ var (
 	errRPCReq                     = errors.New("invalid rpc req")
 	errStaleCell                  = errors.New("stale cell epoch")
 	errNotBootstrapped            = errors.New("cluster not bootstrapped")
+	errAlreadyBootstrapped        = errors.New("cluster is already bootstrapped")
 	errTombstoneStore             = errors.New("store is tombstone")
 	errStoreNotFound              = errors.New("store is not found")
 )

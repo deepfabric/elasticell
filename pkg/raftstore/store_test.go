@@ -21,6 +21,7 @@ func (s *storeTestSuite) TearDownSuite(c *C) {
 func (s *storeTestSuite) TestGetTargetCell(c *C) {
 	store := new(Store)
 	store.keyRanges = util.NewCellTree()
+	store.keyConvertFun = util.NoConvert
 	store.replicatesMap = newCellPeersMap()
 
 	store.keyRanges.Update(metapb.Cell{

@@ -13,6 +13,7 @@ service PDService {
     rpc GetLeader (LeaderReq) returns (LeaderRsp) {}
     rpc AllocID (AllocIDReq) returns (AllocIDRsp) {}
     rpc GetClusterID(GetClusterIDReq) returns (GetClusterIDRsp) {}
+    rpc GetInitParams(GetInitParamsReq) returns (GetInitParamsRsp) {}
     rpc IsClusterBootstrap (IsClusterBootstrapReq) returns (IsClusterBootstrapRsp) {}
     rpc BootstrapCluster (BootstrapClusterReq) returns (BootstrapClusterRsp) {}
     rpc PutStore(PutStoreReq) returns (PutStoreRsp) {}
@@ -130,6 +131,15 @@ message GetClusterIDRsp {
     optional uint64 id = 1 [(gogoproto.nullable) = false, (gogoproto.customname) = "ID"];
 }
 
+message GetInitParamsReq {
+    optional string from = 1 [(gogoproto.nullable) = false];
+    optional uint64 id   = 2 [(gogoproto.nullable) = false, (gogoproto.customname) = "ID"];
+}
+
+message GetInitParamsRsp {
+    optional bytes params = 1 [(gogoproto.nullable) = false];
+}
+
 message AllocIDReq {
     optional string from = 1 [(gogoproto.nullable) = false];
     optional uint64 id   = 2 [(gogoproto.nullable) = false, (gogoproto.customname) = "ID"];
@@ -152,7 +162,7 @@ message BootstrapClusterReq {
     optional string from         = 1 [(gogoproto.nullable) = false];
     optional uint64 id           = 2 [(gogoproto.nullable) = false, (gogoproto.customname) = "ID"];
     optional metapb.Store store  = 3 [(gogoproto.nullable) = false];
-    optional metapb.Cell  cell   = 4 [(gogoproto.nullable) = false];
+    repeated metapb.Cell  cells  = 4 [(gogoproto.nullable) = false];
 }
 
 message BootstrapClusterRsp {

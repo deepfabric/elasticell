@@ -14,7 +14,10 @@
 package node
 
 import (
+	"encoding/json"
 	"sync"
+
+	"github.com/deepfabric/elasticell/pkg/pdapi"
 
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
@@ -78,8 +81,8 @@ func (n *Node) Start() *raftstore.Store {
 	n.storeMeta.ID = storeID
 
 	if !bootstrapped {
-		cell := n.bootstrapFirstCell()
-		n.bootstrapCluster(cell)
+		cells := n.bootstrapCells()
+		n.bootstrapCluster(cells)
 	}
 
 	n.startStore()
@@ -136,6 +139,26 @@ func (n *Node) getAllocID() (uint64, error) {
 	}
 
 	return rsp.GetID(), nil
+}
+
+func (n *Node) getInitParam() (*pdapi.InitParams, error) {
+	rsp, err := n.pdClient.GetInitParams(context.TODO(), new(pdpb.GetInitParamsReq))
+	if err != nil {
+		return nil, err
+	}
+
+	params := &pdapi.InitParams{
+		InitCellCount: 1,
+	}
+
+	if len(rsp.Params) > 0 {
+		err = json.Unmarshal(rsp.Params, params)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return params, nil
 }
 
 func newStore(clientAddr string, cfg *Cfg) metapb.Store {

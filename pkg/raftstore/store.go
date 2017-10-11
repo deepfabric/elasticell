@@ -57,6 +57,7 @@ type Store struct {
 
 	pdClient *pd.Client
 
+	keyConvertFun func([]byte, func([]byte) metapb.Cell) metapb.Cell
 	replicatesMap *cellPeersMap // cellid -> peer replicate
 	keyRanges     *util.CellTree
 	peerCache     *peerCacheMap
@@ -86,13 +87,12 @@ func NewStore(clusterID uint64, pdClient *pd.Client, meta metapb.Store, engine s
 	s.engine = engine
 	s.pdClient = pdClient
 	s.snapshotManager = newDefaultSnapshotManager(cfg, engine.GetDataEngine())
-
 	s.trans = newTransport(s, pdClient, s.notify)
-
 	s.keyRanges = util.NewCellTree()
 	s.replicatesMap = newCellPeersMap()
 	s.peerCache = newPeerCacheMap()
 	s.delegates = newApplyDelegateMap()
+	s.keyConvertFun = util.NoConvert
 
 	s.runner = util.NewRunner()
 	for i := 0; i < int(globalCfg.ApplyWorkerCount); i++ {
@@ -337,7 +337,7 @@ func (s *Store) GetMeta() metapb.Store {
 }
 
 func (s *Store) getTargetCell(key []byte) (*PeerReplicate, error) {
-	cell := s.keyRanges.Search(key)
+	cell := s.keyConvertFun(key, s.searchCell)
 	if cell.ID == pd.ZeroID {
 		return nil, errStoreNotMatch
 	}
@@ -348,6 +348,10 @@ func (s *Store) getTargetCell(key []byte) (*PeerReplicate, error) {
 	}
 
 	return pr, nil
+}
+
+func (s *Store) searchCell(value []byte) metapb.Cell {
+	return s.keyRanges.Search(value)
 }
 
 // OnProxyReq process proxy req
@@ -1049,6 +1053,11 @@ func (s *Store) handleRaftGCLog() {
 	if gcLogCount > 0 {
 		raftLogCompactCounter.Add(float64(gcLogCount))
 	}
+}
+
+// SetKeyConvertFun set key convert function
+func (s *Store) SetKeyConvertFun(fn func([]byte, func([]byte) metapb.Cell) metapb.Cell) {
+	s.keyConvertFun = fn
 }
 
 func (s *Store) getMetaEngine() storage.Engine {

@@ -136,14 +136,15 @@ func (s *testServerSuite) bootstrapCluster() (*pdpb.BootstrapClusterRsp, error) 
 		return nil, err
 	}
 
-	cell := metapb.Cell{
+	var cells []metapb.Cell
+	cells = append(cells, metapb.Cell{
 		ID:    rsp.ID,
 		Peers: []*metapb.Peer{&peer},
-	}
+	})
 
 	return s.client.BootstrapCluster(context.TODO(), &pdpb.BootstrapClusterReq{
 		Store: store,
-		Cell:  cell,
+		Cells: cells,
 	})
 }
 

@@ -52,19 +52,37 @@ type CellInfo struct {
 
 // System The system info of the elasticell cluster
 type System struct {
-	MaxReplicas uint32 `json:"maxReplicas"`
+	AlreadyBootstrapped bool        `json:"alreadyBootstrapped"`
+	InitParams          *InitParams `json:"initParams, omitempty"`
 
-	StoreCount          int `json:"storeCount"`
-	OfflineStoreCount   int `json:"offlineStoreCount"`
-	TombStoneStoreCount int `json:"tombStoneStoreCount"`
+	MaxReplicas uint32 `json:"maxReplicas, omitempty"`
 
-	CellCount                int `json:"cellCount"`
-	ReplicasNotFullCellCount int `json:"replicasNotFullCellCount"`
+	StoreCount          int `json:"storeCount, omitempty"`
+	OfflineStoreCount   int `json:"offlineStoreCount, omitempty"`
+	TombStoneStoreCount int `json:"tombStoneStoreCount, omitempty"`
 
-	StorageCapacity  uint64 `json:"storageCapacity"`
-	StorageAvailable uint64 `json:"storageAvailable"`
+	CellCount                int `json:"cellCount, omitempty"`
+	ReplicasNotFullCellCount int `json:"replicasNotFullCellCount, omitempty"`
 
-	OperatorCount int `json:"operatorCount"`
+	StorageCapacity  uint64 `json:"storageCapacity, omitempty"`
+	StorageAvailable uint64 `json:"storageAvailable, omitempty"`
+
+	OperatorCount int `json:"operatorCount, omitempty"`
+}
+
+// InitParams initialize the elasticell cluster
+type InitParams struct {
+	InitCellCount uint64 `json:"initCellCount"`
+}
+
+// Marshal marshal
+func (p *InitParams) Marshal() (string, error) {
+	v, err := json.Marshal(p)
+	if err != nil {
+		return "", err
+	}
+
+	return string(v), nil
 }
 
 // Service service interface
@@ -74,6 +92,7 @@ type Service interface {
 	GetLeader() (*pdpb.Leader, error)
 
 	GetSystem() (*System, error)
+	InitCluster(params *InitParams) error
 
 	ListStore() ([]*StoreInfo, error)
 	GetStore(id uint64) (*StoreInfo, error)
@@ -102,6 +121,11 @@ func readTransferLeader(r io.ReadCloser) (*TransferLeader, error) {
 
 func readSetLogLevel(r io.ReadCloser) (*SetLogLevel, error) {
 	value := &SetLogLevel{}
+	return value, readJSON(r, value)
+}
+
+func readInitParams(r io.ReadCloser) (*InitParams, error) {
+	value := &InitParams{}
 	return value, readJSON(r, value)
 }
 

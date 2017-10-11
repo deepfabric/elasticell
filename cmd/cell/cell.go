@@ -27,7 +27,7 @@ import (
 )
 
 var (
-	pprof = flag.String("pprof-addr", ":9999", "pprof http server address")
+	pprof = flag.String("pprof-addr", "", "pprof http server address")
 )
 
 func main() {

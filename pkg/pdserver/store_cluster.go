@@ -41,6 +41,11 @@ func (s *pdStore) GetCurrentClusterMembers() (*clientv3.MemberListResponse, erro
 	return members, errors.Wrap(err, "")
 }
 
+// GetInitParams returns init params
+func (s *pdStore) GetInitParams(clusterID uint64) ([]byte, error) {
+	return s.getValue(s.getInitParamsKey(clusterID))
+}
+
 // GetClusterID returns current cluster id
 // if cluster is not init, return 0
 func (s *pdStore) GetClusterID() (uint64, error) {
@@ -107,14 +112,19 @@ func (s *pdStore) CreateFirstClusterID() (uint64, error) {
 	return util.BytesToUint64(response.Kvs[0].Value)
 }
 
+// SetInitParams store the init cluster params
+func (s *pdStore) SetInitParams(clusterID uint64, params string) error {
+	key := s.getInitParamsKey(clusterID)
+	return s.save(key, params)
+}
+
 // SetClusterBootstrapped set cluster bootstrapped flag, only one can succ.
-func (s *pdStore) SetClusterBootstrapped(clusterID uint64, cluster metapb.Cluster, store metapb.Store, cell metapb.Cell) (bool, error) {
+func (s *pdStore) SetClusterBootstrapped(clusterID uint64, cluster metapb.Cluster, store metapb.Store, cells []metapb.Cell) (bool, error) {
 	ctx, cancel := context.WithTimeout(s.client.Ctx(), DefaultTimeout)
 	defer cancel()
 
 	clusterBaseKey := s.getClusterMetaKey(clusterID)
 	storeKey := s.getStoreMetaKey(clusterID, store.ID)
-	cellKey := s.getCellMetaKey(clusterID, cell.ID)
 
 	// build operations
 	var ops []clientv3.Op
@@ -131,11 +141,14 @@ func (s *pdStore) SetClusterBootstrapped(clusterID uint64, cluster metapb.Cluste
 	}
 	ops = append(ops, clientv3.OpPut(storeKey, string(meta)))
 
-	meta, err = cell.Marshal()
-	if err != nil {
-		return false, errors.Wrap(err, "")
+	for _, cell := range cells {
+		cellKey := s.getCellMetaKey(clusterID, cell.ID)
+		meta, err = cell.Marshal()
+		if err != nil {
+			return false, errors.Wrap(err, "")
+		}
+		ops = append(ops, clientv3.OpPut(cellKey, string(meta)))
 	}
-	ops = append(ops, clientv3.OpPut(cellKey, string(meta)))
 
 	// txn
 	resp, err := s.client.Txn(ctx).
@@ -273,6 +286,11 @@ func (s *pdStore) getClusterMetaKey(clusterID uint64) string {
 func (s *pdStore) getStoreMetaKey(clusterID, storeID uint64) string {
 	baseKey := s.getClusterMetaKey(clusterID)
 	return fmt.Sprintf("%s/stores/%020d", baseKey, storeID)
+}
+
+func (s *pdStore) getInitParamsKey(clusterID uint64) string {
+	baseKey := s.getClusterMetaKey(clusterID)
+	return fmt.Sprintf("%s/initparams", baseKey)
 }
 
 func (s *pdStore) getCellMetaKey(clusterID, cellID uint64) string {
