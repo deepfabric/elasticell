@@ -873,6 +873,7 @@ func (s *Store) handleStoreHeartbeat() error {
 		log.Errorf("heartbeat-store[%d]: handle store heartbeat failed, errors:\n %+v",
 			s.GetID(),
 			err)
+		return err
 	}
 
 	if rsp.SetLogLevel != nil {
@@ -882,7 +883,7 @@ func (s *Store) handleStoreHeartbeat() error {
 		log.SetLevel(log.Level(rsp.SetLogLevel.NewLevel))
 	}
 
-	return err
+	return nil
 }
 
 func (s *Store) getApplySnapshotCount() (uint32, error) {
