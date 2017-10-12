@@ -181,6 +181,7 @@ func (s *RedisServer) doConnection(session goetty.IOSession) error {
 			if err != nil {
 				rsp := pool.AcquireResponse()
 				rsp.ErrorResult = util.StringToSlice(err.Error())
+				rsp.UUID = req.UUID
 				rs.onResp(rsp)
 				pool.ReleaseRequest(req)
 			}
