@@ -28,6 +28,7 @@ import (
 
 var (
 	defaultConnectTimeout = 5 * time.Second
+	defaultTimeout        = 10 * time.Second
 )
 
 // Client pd client
@@ -147,8 +148,8 @@ func (c *Client) GetLeader(ctx context.Context, req *pdpb.LeaderReq) (*pdpb.Lead
 			req.From = c.name
 			req.ID = c.seq
 		},
-		func() (interface{}, error) {
-			return c.pd.GetLeader(ctx, req, grpc.FailFast(true))
+		func(cc context.Context) (interface{}, error) {
+			return c.pd.GetLeader(cc, req, grpc.FailFast(true))
 		})
 	if err != nil {
 		return nil, err
@@ -165,8 +166,8 @@ func (c *Client) AllocID(ctx context.Context, req *pdpb.AllocIDReq) (*pdpb.Alloc
 			req.From = c.name
 			req.ID = c.seq
 		},
-		func() (interface{}, error) {
-			return c.pd.AllocID(ctx, req, grpc.FailFast(true))
+		func(cc context.Context) (interface{}, error) {
+			return c.pd.AllocID(cc, req, grpc.FailFast(true))
 		})
 	if err != nil {
 		return nil, err
@@ -183,8 +184,8 @@ func (c *Client) GetClusterID(ctx context.Context, req *pdpb.GetClusterIDReq) (*
 			req.From = c.name
 			req.ID = c.seq
 		},
-		func() (interface{}, error) {
-			return c.pd.GetClusterID(ctx, req, grpc.FailFast(true))
+		func(cc context.Context) (interface{}, error) {
+			return c.pd.GetClusterID(cc, req, grpc.FailFast(true))
 		})
 	if err != nil {
 		return nil, err
@@ -201,8 +202,8 @@ func (c *Client) GetInitParams(ctx context.Context, req *pdpb.GetInitParamsReq) 
 			req.From = c.name
 			req.ID = c.seq
 		},
-		func() (interface{}, error) {
-			return c.pd.GetInitParams(ctx, req, grpc.FailFast(true))
+		func(cc context.Context) (interface{}, error) {
+			return c.pd.GetInitParams(cc, req, grpc.FailFast(true))
 		})
 	if err != nil {
 		return nil, err
@@ -219,8 +220,8 @@ func (c *Client) IsClusterBootstrapped(ctx context.Context, req *pdpb.IsClusterB
 			req.From = c.name
 			req.ID = c.seq
 		},
-		func() (interface{}, error) {
-			return c.pd.IsClusterBootstrap(ctx, req, grpc.FailFast(true))
+		func(cc context.Context) (interface{}, error) {
+			return c.pd.IsClusterBootstrap(cc, req, grpc.FailFast(true))
 		})
 	if err != nil {
 		return nil, err
@@ -237,8 +238,8 @@ func (c *Client) BootstrapCluster(ctx context.Context, req *pdpb.BootstrapCluste
 			req.From = c.name
 			req.ID = c.seq
 		},
-		func() (interface{}, error) {
-			return c.pd.BootstrapCluster(ctx, req, grpc.FailFast(true))
+		func(cc context.Context) (interface{}, error) {
+			return c.pd.BootstrapCluster(cc, req, grpc.FailFast(true))
 		})
 	if err != nil {
 		return nil, err
@@ -255,8 +256,8 @@ func (c *Client) PutStore(ctx context.Context, req *pdpb.PutStoreReq) (*pdpb.Put
 			req.From = c.name
 			req.ID = c.seq
 		},
-		func() (interface{}, error) {
-			return c.pd.PutStore(ctx, req, grpc.FailFast(true))
+		func(cc context.Context) (interface{}, error) {
+			return c.pd.PutStore(cc, req, grpc.FailFast(true))
 		})
 	if err != nil {
 		return nil, err
@@ -273,8 +274,8 @@ func (c *Client) GetStore(ctx context.Context, req *pdpb.GetStoreReq) (*pdpb.Get
 			req.From = c.name
 			req.ID = c.seq
 		},
-		func() (interface{}, error) {
-			return c.pd.GetStore(ctx, req, grpc.FailFast(true))
+		func(cc context.Context) (interface{}, error) {
+			return c.pd.GetStore(cc, req, grpc.FailFast(true))
 		})
 	if err != nil {
 		return nil, err
@@ -291,8 +292,8 @@ func (c *Client) CellHeartbeat(ctx context.Context, req *pdpb.CellHeartbeatReq) 
 			req.From = c.name
 			req.ID = c.seq
 		},
-		func() (interface{}, error) {
-			return c.pd.CellHeartbeat(ctx, req, grpc.FailFast(true))
+		func(cc context.Context) (interface{}, error) {
+			return c.pd.CellHeartbeat(cc, req, grpc.FailFast(true))
 		})
 	if err != nil {
 		return nil, err
@@ -309,8 +310,8 @@ func (c *Client) StoreHeartbeat(ctx context.Context, req *pdpb.StoreHeartbeatReq
 			req.From = c.name
 			req.ID = c.seq
 		},
-		func() (interface{}, error) {
-			return c.pd.StoreHeartbeat(ctx, req, grpc.FailFast(true))
+		func(cc context.Context) (interface{}, error) {
+			return c.pd.StoreHeartbeat(cc, req, grpc.FailFast(true))
 		})
 	if err != nil {
 		return nil, err
@@ -327,8 +328,8 @@ func (c *Client) AskSplit(ctx context.Context, req *pdpb.AskSplitReq) (*pdpb.Ask
 			req.From = c.name
 			req.ID = c.seq
 		},
-		func() (interface{}, error) {
-			return c.pd.AskSplit(ctx, req, grpc.FailFast(true))
+		func(cc context.Context) (interface{}, error) {
+			return c.pd.AskSplit(cc, req, grpc.FailFast(true))
 		})
 	if err != nil {
 		return nil, err
@@ -345,8 +346,8 @@ func (c *Client) ReportSplit(ctx context.Context, req *pdpb.ReportSplitReq) (*pd
 			req.From = c.name
 			req.ID = c.seq
 		},
-		func() (interface{}, error) {
-			return c.pd.ReportSplit(ctx, req, grpc.FailFast(true))
+		func(cc context.Context) (interface{}, error) {
+			return c.pd.ReportSplit(cc, req, grpc.FailFast(true))
 		})
 	if err != nil {
 		return nil, err
@@ -363,8 +364,8 @@ func (c *Client) GetLastRanges(ctx context.Context, req *pdpb.GetLastRangesReq) 
 			req.From = c.name
 			req.ID = c.seq
 		},
-		func() (interface{}, error) {
-			return c.pd.GetLastRanges(ctx, req, grpc.FailFast(true))
+		func(cc context.Context) (interface{}, error) {
+			return c.pd.GetLastRanges(cc, req, grpc.FailFast(true))
 		})
 	if err != nil {
 		return nil, err
@@ -373,7 +374,7 @@ func (c *Client) GetLastRanges(ctx context.Context, req *pdpb.GetLastRangesReq) 
 	return rsp.(*pdpb.GetLastRangesRsp), nil
 }
 
-func (c *Client) proxyRPC(ctx context.Context, req pb.BaseReq, setFromFun func(), doRPC func() (interface{}, error)) (interface{}, error) {
+func (c *Client) proxyRPC(ctx context.Context, req pb.BaseReq, setFromFun func(), doRPC func(context.Context) (interface{}, error)) (interface{}, error) {
 	c.mut.RLock()
 
 	if req.GetFrom() == "" && req.GetID() == 0 {
@@ -386,7 +387,10 @@ func (c *Client) proxyRPC(ctx context.Context, req pb.BaseReq, setFromFun func()
 		req.GetID(),
 		req)
 
-	rsp, err := doRPC()
+	cc, cancel := context.WithTimeout(ctx, defaultTimeout)
+	defer cancel()
+
+	rsp, err := doRPC(cc)
 	if err != nil {
 		c.mut.RUnlock()
 		if needRetry(err) {
