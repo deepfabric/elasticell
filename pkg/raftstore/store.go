@@ -798,13 +798,9 @@ func (s *Store) addPeerToCache(peer metapb.Peer) {
 	s.peerCache.put(peer.ID, peer)
 }
 
-func (s *Store) getPeer(id uint64) *metapb.Peer {
-	p, ok := s.peerCache.get(id)
-	if !ok {
-		return nil
-	}
-
-	return &p
+func (s *Store) getPeer(id uint64) metapb.Peer {
+	p, _ := s.peerCache.get(id)
+	return p
 }
 
 func (s *Store) addPDJob(task func() error, cb func(*util.Job)) error {

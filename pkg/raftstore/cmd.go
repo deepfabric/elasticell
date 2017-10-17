@@ -140,13 +140,10 @@ func (c *cmd) respOtherError(err error) {
 	c.resp(rsp)
 }
 
-func (c *cmd) respNotLeader(cellID uint64, leader *metapb.Peer) {
+func (c *cmd) respNotLeader(cellID uint64, leader metapb.Peer) {
 	err := &errorpb.NotLeader{
 		CellID: cellID,
-	}
-
-	if leader != nil {
-		err.Leader = *leader
+		Leader: leader,
 	}
 
 	rsp := errorPbResp(&errorpb.Error{
@@ -168,7 +165,7 @@ func (pr *PeerReplicate) execReadLocal(c *cmd) {
 
 func (pr *PeerReplicate) execReadIndex(c *cmd) {
 	if !pr.isLeader() {
-		c.respNotLeader(pr.cellID, pr.store.getPeer(pr.rn.Status().Lead))
+		c.respNotLeader(pr.cellID, pr.store.getPeer(pr.getLeaderPeerID()))
 		return
 	}
 
@@ -185,7 +182,7 @@ func (pr *PeerReplicate) execReadIndex(c *cmd) {
 
 	if pendingReadCount == lastPendingReadCount &&
 		readyReadCount == lastReadyReadCount {
-		c.respNotLeader(pr.cellID, pr.store.getPeer(pr.rn.Status().Lead))
+		c.respNotLeader(pr.cellID, pr.store.getPeer(pr.getLeaderPeerID()))
 		return
 	}
 

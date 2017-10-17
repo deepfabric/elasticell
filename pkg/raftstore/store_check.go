@@ -255,7 +255,7 @@ func (s *Store) validateCell(req *raftcmdpb.RaftCMDRequest) *errorpb.Error {
 	if !pr.isLeader() {
 		err := new(errorpb.NotLeader)
 		err.CellID = cellID
-		err.Leader, _ = s.peerCache.get(pr.rn.Status().Lead)
+		err.Leader = s.getPeer(pr.getLeaderPeerID())
 
 		return &errorpb.Error{
 			Message:   errNotLeader.Error(),

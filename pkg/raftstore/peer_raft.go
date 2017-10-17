@@ -16,6 +16,7 @@ package raftstore
 import (
 	"errors"
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	"github.com/deepfabric/elasticell/pkg/log"
@@ -566,7 +567,7 @@ func (pr *PeerReplicate) propose(c *cmd) {
 
 func (pr *PeerReplicate) proposeNormal(c *cmd) bool {
 	if !pr.isLeader() {
-		c.respNotLeader(pr.cellID, pr.store.getPeer(pr.rn.Status().Lead))
+		c.respNotLeader(pr.cellID, pr.store.getPeer(pr.getLeaderPeerID()))
 		return false
 	}
 
@@ -588,7 +589,7 @@ func (pr *PeerReplicate) proposeNormal(c *cmd) bool {
 	}
 	idx2 := pr.nextProposalIndex()
 	if idx == idx2 {
-		c.respNotLeader(pr.cellID, pr.store.getPeer(pr.rn.Status().Lead))
+		c.respNotLeader(pr.cellID, pr.store.getPeer(pr.getLeaderPeerID()))
 		return false
 	}
 
@@ -628,7 +629,7 @@ func (pr *PeerReplicate) proposeConfChange(c *cmd) bool {
 	}
 	idx2 := pr.nextProposalIndex()
 	if idx == idx2 {
-		c.respNotLeader(pr.cellID, pr.store.getPeer(pr.rn.Status().Lead))
+		c.respNotLeader(pr.cellID, pr.store.getPeer(pr.getLeaderPeerID()))
 		return false
 	}
 
@@ -775,6 +776,10 @@ func (pr *PeerReplicate) readyReadCount() int {
 
 func (pr *PeerReplicate) isLeader() bool {
 	return pr.rn.Status().RaftState == raft.StateLeader
+}
+
+func (pr *PeerReplicate) getLeaderPeerID() uint64 {
+	return atomic.LoadUint64(&pr.rn.Status().Lead)
 }
 
 func (pr *PeerReplicate) send(msgs []raftpb.Message) {
