@@ -81,6 +81,12 @@ func (c *cmd) resp(resp *raftcmdpb.RaftCMDResponse) {
 					resp.Responses[idx].SessionID = req.SessionID
 				}
 			}
+
+			if resp.Header != nil {
+				for _, rsp := range resp.Responses {
+					rsp.Error = resp.Header.Error
+				}
+			}
 		}
 
 		log.Debugf("raftstore[cell-%d]: after response to client, resp=<%+v>",
@@ -162,7 +168,7 @@ func (pr *PeerReplicate) execReadLocal(c *cmd) {
 
 func (pr *PeerReplicate) execReadIndex(c *cmd) {
 	if !pr.isLeader() {
-		c.respNotLeader(pr.cellID, nil)
+		c.respNotLeader(pr.cellID, pr.store.getPeer(pr.rn.Status().Lead))
 		return
 	}
 
@@ -179,8 +185,7 @@ func (pr *PeerReplicate) execReadIndex(c *cmd) {
 
 	if pendingReadCount == lastPendingReadCount &&
 		readyReadCount == lastReadyReadCount {
-		// The message gets dropped silently, can't be handled anymore.
-		c.respNotLeader(pr.cellID, nil)
+		c.respNotLeader(pr.cellID, pr.store.getPeer(pr.rn.Status().Lead))
 		return
 	}
 

@@ -212,21 +212,22 @@ message Request {
 }
 
 message Response {
-    optional bytes     uuid                         = 1 [(gogoproto.customname) = "UUID"];
-    optional CMDType   type                         = 2 [(gogoproto.nullable) = false];
-    optional bytes     errorResult                  = 3;
-    repeated bytes     errorResults                 = 4;
-    optional bytes     statusResult                 = 5;
-    optional int64     integerResult                = 6;
-    optional bytes     bulkResult                   = 7;
-    optional bool      hasEmptyBulkResult           = 8;
-    repeated bytes     sliceArrayResult             = 9;
-    optional bool      hasEmptySliceArrayResult     = 10;
-    repeated FVPair    fvPairArrayResult            = 11;
-    optional bool      hasEmptyFVPairArrayResult    = 12;
-    repeated ScorePair scorePairArrayResult         = 13;
-    optional bool      hasEmptyScorePairArrayResult = 14;
-    optional bool      withscores                   = 15;
-    optional Request   originRequest                = 16 [(gogoproto.nullable) = true];
-    optional int64     sessionID                    = 17 [(gogoproto.nullable) = false];
+    optional bytes         uuid                         = 1 [(gogoproto.customname) = "UUID"];
+    optional CMDType       type                         = 2 [(gogoproto.nullable) = false];
+    optional bytes         errorResult                  = 3;
+    repeated bytes         errorResults                 = 4;
+    optional bytes         statusResult                 = 5;
+    optional int64         integerResult                = 6;
+    optional bytes         bulkResult                   = 7;
+    optional bool          hasEmptyBulkResult           = 8;
+    repeated bytes         sliceArrayResult             = 9;
+    optional bool          hasEmptySliceArrayResult     = 10;
+    repeated FVPair        fvPairArrayResult            = 11;
+    optional bool          hasEmptyFVPairArrayResult    = 12;
+    repeated ScorePair     scorePairArrayResult         = 13;
+    optional bool          hasEmptyScorePairArrayResult = 14;
+    optional bool          withscores                   = 15;
+    optional Request       originRequest                = 16 [(gogoproto.nullable) = true];
+    optional int64         sessionID                    = 17 [(gogoproto.nullable) = false];
+    optional errorpb.Error error                        = 18 [(gogoproto.nullable) = false];
 }

@@ -566,7 +566,7 @@ func (pr *PeerReplicate) propose(c *cmd) {
 
 func (pr *PeerReplicate) proposeNormal(c *cmd) bool {
 	if !pr.isLeader() {
-		c.respNotLeader(pr.cellID, nil)
+		c.respNotLeader(pr.cellID, pr.store.getPeer(pr.rn.Status().Lead))
 		return false
 	}
 
@@ -588,7 +588,7 @@ func (pr *PeerReplicate) proposeNormal(c *cmd) bool {
 	}
 	idx2 := pr.nextProposalIndex()
 	if idx == idx2 {
-		c.respNotLeader(pr.cellID, nil)
+		c.respNotLeader(pr.cellID, pr.store.getPeer(pr.rn.Status().Lead))
 		return false
 	}
 
@@ -628,7 +628,7 @@ func (pr *PeerReplicate) proposeConfChange(c *cmd) bool {
 	}
 	idx2 := pr.nextProposalIndex()
 	if idx == idx2 {
-		c.respNotLeader(pr.cellID, nil)
+		c.respNotLeader(pr.cellID, pr.store.getPeer(pr.rn.Status().Lead))
 		return false
 	}
 

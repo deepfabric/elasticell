@@ -170,14 +170,14 @@ func (d *applyDelegate) getPendingChangePeerCMD() *cmd {
 	return c
 }
 
-func (d *applyDelegate) popPendingCMD(staleTerm uint64) *cmd {
+func (d *applyDelegate) popPendingCMD(raftLogEntryTerm uint64) *cmd {
 	d.Lock()
 	if len(d.pendingCMDs) == 0 {
 		d.Unlock()
 		return nil
 	}
 
-	if d.pendingCMDs[0].term > staleTerm {
+	if d.pendingCMDs[0].term > raftLogEntryTerm {
 		d.Unlock()
 		return nil
 	}
