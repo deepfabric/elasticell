@@ -18,16 +18,18 @@ start_elasticell_proxy() {
 
 echo "begin to start pd cluster"
 start_elasticell_pd 1
+sleep 1
 start_elasticell_pd 2
 start_elasticell_pd 3
-sleep 3
 echo "pd cluster is started"
 
 echo "begin to start cell cluster"
 start_elasticell_cell 1
+sleep 1
 start_elasticell_cell 2
 start_elasticell_cell 3
 echo "cell cluster is started"
 
+sleep 5
 echo "begin to start redis proxy"
 start_elasticell_proxy
