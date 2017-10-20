@@ -95,7 +95,7 @@ func NewStore(clusterID uint64, pdClient *pd.Client, meta metapb.Store, engine s
 	s.keyConvertFun = util.NoConvert
 
 	s.runner = util.NewRunner()
-	for i := 0; i < int(globalCfg.ApplyWorkerCount); i++ {
+	for i := 0; i < int(globalCfg.WorkerCountApply); i++ {
 		s.runner.AddNamedWorker(fmt.Sprintf(applyWorker, i))
 	}
 	s.runner.AddNamedWorker(snapWorker)
@@ -215,7 +215,7 @@ func (s *Store) startTransfer() {
 
 func (s *Store) startStoreHeartbeatTask() {
 	s.runner.RunCancelableTask(func(ctx context.Context) {
-		ticker := time.NewTicker(globalCfg.getStoreHeartbeatDuration())
+		ticker := time.NewTicker(globalCfg.DurationHeartbeatStore)
 		defer ticker.Stop()
 
 		var err error
@@ -248,7 +248,7 @@ func (s *Store) startStoreHeartbeatTask() {
 
 func (s *Store) startCellHeartbeatTask() {
 	s.runner.RunCancelableTask(func(ctx context.Context) {
-		ticker := time.NewTicker(globalCfg.getCellHeartbeatDuration())
+		ticker := time.NewTicker(globalCfg.DurationHeartbeatCell)
 		defer ticker.Stop()
 
 		for {
@@ -265,7 +265,7 @@ func (s *Store) startCellHeartbeatTask() {
 
 func (s *Store) startGCTask() {
 	s.runner.RunCancelableTask(func(ctx context.Context) {
-		ticker := time.NewTicker(globalCfg.getRaftGCLogDuration())
+		ticker := time.NewTicker(globalCfg.DurationCompact)
 		defer ticker.Stop()
 
 		for {
@@ -282,7 +282,7 @@ func (s *Store) startGCTask() {
 
 func (s *Store) startCellReportTask() {
 	s.runner.RunCancelableTask(func(ctx context.Context) {
-		ticker := time.NewTicker(globalCfg.getReportCellDuration())
+		ticker := time.NewTicker(globalCfg.DurationReportMetric)
 		defer ticker.Stop()
 
 		for {
@@ -299,7 +299,7 @@ func (s *Store) startCellReportTask() {
 
 func (s *Store) startCellSplitCheckTask() {
 	s.runner.RunCancelableTask(func(ctx context.Context) {
-		ticker := time.NewTicker(globalCfg.getSplitCellCheckDuration())
+		ticker := time.NewTicker(globalCfg.DurationSplitCheck)
 		defer ticker.Stop()
 
 		for {
@@ -816,7 +816,7 @@ func (s *Store) addSnapJob(task func() error, cb func(*util.Job)) error {
 }
 
 func (s *Store) addApplyJob(cellID uint64, desc string, task func() error, cb func(*util.Job)) error {
-	index := (globalCfg.ApplyWorkerCount - 1) & cellID
+	index := (globalCfg.WorkerCountApply - 1) & cellID
 	return s.addNamedJobWithCB(desc, fmt.Sprintf(applyWorker, index), task, cb)
 }
 
@@ -833,7 +833,7 @@ func (s *Store) addNamedJobWithCB(desc, worker string, task func() error, cb fun
 }
 
 func (s *Store) handleStoreHeartbeat() error {
-	stats, err := util.DiskStats(globalCfg.StoreDataPath)
+	stats, err := util.DiskStats(globalCfg.DataPath)
 	if err != nil {
 		log.Errorf("heartbeat-store[%d]: handle store heartbeat failed, errors:\n %+v",
 			s.GetID(),
@@ -930,14 +930,14 @@ func (s *Store) handleCellSplitCheck() {
 			return true, nil
 		}
 
-		if pr.sizeDiffHint < globalCfg.CellCheckSizeDiff {
+		if pr.sizeDiffHint < globalCfg.ThresholdSplitCheck {
 			return true, nil
 		}
 
-		log.Debugf("raftstore-split[cell-%d]: cell need to check whether should split, diff=<%d> max=<%d>",
+		log.Debugf("raftstore-split[cell-%d]: cell need to check whether should split, threshold=<%d> max=<%d>",
 			pr.cellID,
 			pr.sizeDiffHint,
-			globalCfg.CellCheckSizeDiff)
+			globalCfg.ThresholdSplitCheck)
 
 		err := pr.startSplitCheckJob()
 		if err != nil {
@@ -1018,14 +1018,14 @@ func (s *Store) handleRaftGCLog() {
 		firstIdx, _ := pr.ps.FirstIndex()
 
 		if replicatedIdx < firstIdx ||
-			replicatedIdx-firstIdx <= globalCfg.RaftLogGCThreshold {
+			replicatedIdx-firstIdx <= globalCfg.ThresholdCompact {
 			return true, nil
 		}
 
 		if appliedIdx > firstIdx &&
-			appliedIdx-firstIdx >= globalCfg.RaftLogGCCountLimit {
+			appliedIdx-firstIdx >= globalCfg.LimitCompactCount {
 			compactIdx = appliedIdx
-		} else if pr.raftLogSizeHint >= globalCfg.RaftLogGCSizeLimit {
+		} else if pr.raftLogSizeHint >= globalCfg.LimitCompactBytes {
 			compactIdx = appliedIdx
 		} else {
 			compactIdx = replicatedIdx
@@ -1037,7 +1037,7 @@ func (s *Store) handleRaftGCLog() {
 		}
 
 		// avoid leader send snapshot to the a little lag peer.
-		if compactIdx > replicatedIdx && (compactIdx-replicatedIdx) <= globalCfg.RaftLogGCLagThreshold {
+		if compactIdx > replicatedIdx && (compactIdx-replicatedIdx) <= globalCfg.LimitCompactLag {
 			compactIdx = replicatedIdx
 		}
 

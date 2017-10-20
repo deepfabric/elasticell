@@ -32,7 +32,8 @@ func newNemoMetaEngine(db *gonemo.NEMO) Engine {
 }
 
 func (e *nemoMetaEngine) Set(key []byte, value []byte) error {
-	return e.db.PutWithHandle(e.handler, key, value)
+	// TODO: cfg
+	return e.db.PutWithHandle(e.handler, key, value, false)
 }
 
 func (e *nemoMetaEngine) Get(key []byte) ([]byte, error) {
@@ -40,7 +41,8 @@ func (e *nemoMetaEngine) Get(key []byte) ([]byte, error) {
 }
 
 func (e *nemoMetaEngine) Delete(key []byte) error {
-	return e.db.DeleteWithHandle(e.handler, key)
+	// TODO: cfg
+	return e.db.DeleteWithHandle(e.handler, key, false)
 }
 
 func (e *nemoMetaEngine) RangeDelete(start, end []byte) error {

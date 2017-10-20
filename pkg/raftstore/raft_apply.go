@@ -29,10 +29,10 @@ import (
 
 type applyMetrics struct {
 	// an inaccurate difference in cell size since last reset.
-	sizeDiffHint int64
+	sizeDiffHint uint64
 	// delete keys' count since last reset.
 	deleteKeysHint uint64
-	writtenBytes   int64
+	writtenBytes   uint64
 	writtenKeys    uint64
 
 	admin raftAdminMetrics

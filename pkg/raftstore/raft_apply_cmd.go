@@ -78,7 +78,7 @@ func (d *applyDelegate) doApplyRaftCMD(ctx *applyContext) *execResult {
 
 	c := d.findCB(ctx)
 
-	if c != nil && globalCfg.EnableRequestMetrics {
+	if c != nil && globalCfg.EnableMetricsRequest {
 		observeRequestRaft(c)
 	}
 
@@ -146,7 +146,7 @@ func (d *applyDelegate) doApplyRaftCMD(ctx *applyContext) *execResult {
 		d.applyState)
 
 	if c != nil {
-		if globalCfg.EnableRequestMetrics {
+		if globalCfg.EnableMetricsRequest {
 			observeRequestStored(c)
 		}
 

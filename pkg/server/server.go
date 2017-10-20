@@ -131,11 +131,11 @@ func (s *Server) stopNode() {
 
 func (s *Server) initRedis() {
 	rs := new(RedisServer)
-	rs.s = goetty.NewServerSize(globalCfg.Redis.Listen,
+	rs.s = goetty.NewServerSize(globalCfg.AddrCli,
 		redis.Decoder,
 		redis.Encoder,
-		globalCfg.Redis.ReadBufferSize,
-		globalCfg.Redis.WriteBufferSize,
+		globalCfg.BufferCliRead,
+		globalCfg.BufferCliWrite,
 		goetty.NewInt64IDGenerator())
 
 	s.redisServer = rs
@@ -149,7 +149,7 @@ func (s *Server) initNode() {
 		return
 	}
 
-	n, err := node.NewNode(globalCfg.Redis.Listen, globalCfg.Node, driver)
+	n, err := node.NewNode(globalCfg.AddrCli, globalCfg.Node, driver)
 	if err != nil {
 		log.Fatalf("bootstrap: create node failure, errors:\n %+v", err)
 		return
@@ -158,5 +158,5 @@ func (s *Server) initNode() {
 }
 
 func (s *Server) initDriver() (storage.Driver, error) {
-	return storage.NewNemoDriver(globalCfg.Node.RaftStore.StoreDataPath)
+	return storage.NewNemoDriver(globalCfg.Node.RaftStore.DataPath)
 }

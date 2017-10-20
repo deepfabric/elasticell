@@ -20,9 +20,16 @@ import (
 
 // Cfg node cfg
 type Cfg struct {
-	ClusterID   uint64         `json:"clusterID"`
-	StoreLables []metapb.Label `json:"labels, omitempty"`
+	ClusterID   uint64
+	StoreLables []metapb.Label
+	PDEndpoints []string
 
-	PDEndpoints []string       `json:"pdRPCAddr"`
-	RaftStore   *raftstore.Cfg `json:"raftStore"`
+	RaftStore *raftstore.Cfg
+}
+
+// NewCfg returns default cfg
+func NewCfg() *Cfg {
+	return &Cfg{
+		RaftStore: raftstore.NewCfg(),
+	}
 }

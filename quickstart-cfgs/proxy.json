@@ -5,7 +5,7 @@
         "127.0.0.1:20802",
         "127.0.0.1:20803"
     ],
-    "maxRetries": 3,
+    "maxRetries": 100,
     "retryDuration": 2000,
     "workerCount": 2,
     "supportCMDs": [

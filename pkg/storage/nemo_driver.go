@@ -89,5 +89,6 @@ func (n *nemoDrvier) NewWriteBatch() WriteBatch {
 
 func (n *nemoDrvier) Write(wb WriteBatch) error {
 	nwb := wb.(*nemoWriteBatch)
-	return n.db.BatchWrite(n.db.GetMetaHandle(), nwb.wb)
+	// TODO: cfg
+	return n.db.BatchWrite(n.db.GetMetaHandle(), nwb.wb, false)
 }

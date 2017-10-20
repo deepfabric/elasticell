@@ -33,15 +33,15 @@ func (s *Store) execZAdd(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.R
 	}
 
 	if value > 0 {
-		var size int64
+		var size uint64
 
 		if value == 1 {
 			ctx.metrics.writtenKeys++
-			size += int64(len(args[0]))
+			size += uint64(len(args[0]))
 		}
 
-		size += int64(len(args[2]))
-		size += int64(len(args[1]))
+		size += uint64(len(args[2]))
+		size += uint64(len(args[1]))
 
 		ctx.metrics.writtenBytes += size
 		ctx.metrics.sizeDiffHint += size
@@ -293,10 +293,10 @@ func (s *Store) execZRem(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.R
 	}
 
 	if value > 0 {
-		var size int64
+		var size uint64
 
 		for _, arg := range args[1:] {
-			size += int64(len(arg))
+			size += uint64(len(arg))
 		}
 
 		ctx.metrics.sizeDiffHint -= size

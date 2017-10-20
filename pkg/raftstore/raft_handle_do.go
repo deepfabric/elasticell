@@ -314,7 +314,7 @@ func (pr *PeerReplicate) doSplitCheck(epoch metapb.CellEpoch, startKey, endKey [
 	var size uint64
 	var splitKey []byte
 
-	size, splitKey, err := pr.store.getDataEngine().GetTargetSizeKey(startKey, endKey, globalCfg.CellSplitSize)
+	size, splitKey, err := pr.store.getDataEngine().GetTargetSizeKey(startKey, endKey, globalCfg.CellCapacity)
 
 	if err != nil {
 		log.Errorf("raftstore-split[cell-%d]: failed to scan split key, errors:\n %+v",
@@ -324,13 +324,13 @@ func (pr *PeerReplicate) doSplitCheck(epoch metapb.CellEpoch, startKey, endKey [
 	}
 
 	if len(splitKey) == 0 {
-		log.Debugf("raftstore-split[cell-%d]: no need to split, size=<%d> split=<%d> start=<%v> end=<%v>",
+		log.Debugf("raftstore-split[cell-%d]: no need to split, size=<%d> capacity=<%d> start=<%v> end=<%v>",
 			pr.cellID,
 			size,
-			globalCfg.CellSplitSize,
+			globalCfg.CellCapacity,
 			startKey,
 			endKey)
-		pr.sizeDiffHint = int64(size)
+		pr.sizeDiffHint = size
 		return nil
 	}
 
@@ -557,7 +557,7 @@ func (s *Store) doApplySplit(cellID uint64, result *splitResult) {
 	s.keyRanges.Update(left)
 	s.keyRanges.Update(right)
 
-	newPR.sizeDiffHint = globalCfg.CellCheckSizeDiff
+	newPR.sizeDiffHint = globalCfg.ThresholdSplitCheck
 	newPR.startRegistrationJob()
 	s.replicatesMap.put(newPR.cellID, newPR)
 

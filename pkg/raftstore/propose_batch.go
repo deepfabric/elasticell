@@ -61,8 +61,8 @@ func (b *proposeBatch) isEmpty() bool {
 	return 0 == b.size()
 }
 
-func (b *proposeBatch) isFull(lastSize int) bool {
-	return globalCfg.RaftProposeBatchLimit == lastSize
+func (b *proposeBatch) isFull(lastSize uint64) bool {
+	return globalCfg.BatchSizeProposal == lastSize
 }
 
 func (b *proposeBatch) pop() *cmd {
@@ -100,7 +100,7 @@ func (b *proposeBatch) push(c *reqCtx) {
 	if last == nil ||
 		isAdmin || // admin request must in a single batch
 		b.lastType != tp ||
-		b.isFull(len(last.req.Requests)) {
+		b.isFull(uint64(len(last.req.Requests))) {
 
 		cell := b.pr.getCell()
 		raftCMD := pool.AcquireRaftCMDRequest()

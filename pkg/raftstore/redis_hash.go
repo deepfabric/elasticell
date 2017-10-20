@@ -40,7 +40,7 @@ func (s *Store) execHSet(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.R
 	}
 
 	if n > 0 {
-		size := int64(len(args[1]) + len(args[2]))
+		size := uint64(len(args[1]) + len(args[2]))
 		ctx.metrics.writtenKeys++
 		ctx.metrics.writtenBytes += size
 		ctx.metrics.sizeDiffHint += size
@@ -71,10 +71,10 @@ func (s *Store) execHDel(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.R
 	}
 
 	if n > 0 {
-		var size int64
+		var size uint64
 
 		for _, arg := range args[1:] {
-			size += int64(len(arg))
+			size += uint64(len(arg))
 		}
 
 		ctx.metrics.sizeDiffHint -= size
@@ -88,7 +88,7 @@ func (s *Store) execHDel(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.R
 func (s *Store) execHMSet(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
-	var size int64
+	var size uint64
 
 	l := len(args)
 	if l < 3 || l%2 == 0 {
@@ -108,8 +108,8 @@ func (s *Store) execHMSet(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.
 		fields[i] = kvs[2*i]
 		values[i] = kvs[2*i+1]
 
-		size += int64(len(fields[i]))
-		size += int64(len(values[i]))
+		size += uint64(len(fields[i]))
+		size += uint64(len(values[i]))
 	}
 
 	err := s.getHashEngine().HMSet(key, fields, values)
@@ -150,7 +150,7 @@ func (s *Store) execHSetNX(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb
 	}
 
 	if value > 0 {
-		size := int64(len(args[1]) + len(args[2]))
+		size := uint64(len(args[1]) + len(args[2]))
 		ctx.metrics.writtenBytes += size
 		ctx.metrics.sizeDiffHint += size
 	}

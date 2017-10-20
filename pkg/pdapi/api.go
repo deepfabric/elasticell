@@ -73,6 +73,7 @@ type System struct {
 // InitParams initialize the elasticell cluster
 type InitParams struct {
 	InitCellCount uint64 `json:"initCellCount"`
+	CellCapacity  uint64 `json:"cellCapacity"`
 }
 
 // Marshal marshal

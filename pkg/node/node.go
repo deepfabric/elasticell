@@ -17,16 +17,14 @@ import (
 	"encoding/json"
 	"sync"
 
-	"github.com/deepfabric/elasticell/pkg/pdapi"
-
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
 	"github.com/deepfabric/elasticell/pkg/pd"
+	"github.com/deepfabric/elasticell/pkg/pdapi"
 	"github.com/deepfabric/elasticell/pkg/raftstore"
 	"github.com/deepfabric/elasticell/pkg/storage"
 	"github.com/deepfabric/elasticell/pkg/util"
-
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 )
@@ -112,7 +110,7 @@ func (n *Node) closePDClient() {
 }
 
 func (n *Node) initPDClient() error {
-	c, err := pd.NewClient(n.cfg.RaftStore.StoreAddr, n.cfg.PDEndpoints...)
+	c, err := pd.NewClient(n.cfg.RaftStore.Addr, n.cfg.PDEndpoints...)
 	if err != nil {
 		return errors.Wrap(err, "")
 	}
@@ -162,13 +160,8 @@ func (n *Node) getInitParam() (*pdapi.InitParams, error) {
 }
 
 func newStore(clientAddr string, cfg *Cfg) metapb.Store {
-	addr := cfg.RaftStore.StoreAddr
-	if cfg.RaftStore.StoreAdvertiseAddr != "" {
-		addr = cfg.RaftStore.StoreAdvertiseAddr
-	}
-
 	return metapb.Store{
-		Address:       addr,
+		Address:       cfg.RaftStore.Addr,
 		ClientAddress: clientAddr,
 		Lables:        cfg.StoreLables,
 		State:         metapb.UP,

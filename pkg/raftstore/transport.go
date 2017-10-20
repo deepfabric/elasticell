@@ -65,23 +65,18 @@ type transport struct {
 }
 
 func newTransport(store *Store, client *pd.Client, handler func(interface{})) *transport {
-	addr := globalCfg.StoreAddr
-	if globalCfg.StoreAdvertiseAddr != "" {
-		addr = globalCfg.StoreAdvertiseAddr
-	}
-
 	t := &transport{
-		server:           goetty.NewServer(addr, decoder, encoder, goetty.NewUUIDV4IdGenerator()),
+		server:           goetty.NewServer(globalCfg.Addr, decoder, encoder, goetty.NewUUIDV4IdGenerator()),
 		conns:            make(map[uint64]goetty.IOSessionPool),
 		addrs:            make(map[uint64]string),
-		msgs:             make([]*util.Queue, globalCfg.RaftMessageWorkerCount, globalCfg.RaftMessageWorkerCount),
-		mask:             globalCfg.RaftMessageWorkerCount - 1,
+		msgs:             make([]*util.Queue, globalCfg.WorkerCountSent, globalCfg.WorkerCountSent),
+		mask:             globalCfg.WorkerCountSent - 1,
 		handler:          handler,
 		client:           client,
 		store:            store,
 		snapshots:        &util.Queue{},
-		readTimeout:      time.Millisecond * time.Duration(globalCfg.Raft.BaseTick*globalCfg.Raft.ElectionTick) * 10,
-		heartbeatTimeout: time.Millisecond * time.Duration(globalCfg.Raft.BaseTick*globalCfg.Raft.ElectionTick),
+		readTimeout:      time.Duration(globalCfg.ThresholdRaftElection) * globalCfg.DurationRaftTick * 10,
+		heartbeatTimeout: time.Duration(globalCfg.ThresholdRaftHeartbeat) * globalCfg.DurationRaftTick,
 		timeWheel:        goetty.NewTimeoutWheel(goetty.WithTickInterval(time.Second)),
 	}
 
@@ -91,7 +86,7 @@ func newTransport(store *Store, client *pd.Client, handler func(interface{})) *t
 }
 
 func (t *transport) start() error {
-	for i := uint64(0); i < globalCfg.RaftMessageWorkerCount; i++ {
+	for i := uint64(0); i < globalCfg.WorkerCountSent; i++ {
 		t.msgs[i] = &util.Queue{}
 		go t.readyToSend(t.msgs[i])
 	}
@@ -153,11 +148,10 @@ func (t *transport) send(msg *mraft.RaftMessage) error {
 }
 
 func (t *transport) readyToSend(q *util.Queue) {
-	items := make([]interface{}, globalCfg.RaftMessageSendBatchLimit, globalCfg.RaftMessageSendBatchLimit)
+	items := make([]interface{}, globalCfg.BatchSizeSent, globalCfg.BatchSizeSent)
 
 	for {
-		n, err := q.Get(globalCfg.RaftMessageSendBatchLimit, items)
-
+		n, err := q.Get(int64(globalCfg.BatchSizeSent), items)
 		if err != nil {
 			log.Infof("stop: raft transfer send worker stopped")
 			return
@@ -175,9 +169,9 @@ func (t *transport) readyToSend(q *util.Queue) {
 
 func (t *transport) readToSendSnapshots() {
 	snapConns := make(map[uint64]goetty.IOSession)
-	items := make([]interface{}, globalCfg.RaftMessageSendBatchLimit, globalCfg.RaftMessageSendBatchLimit)
+	items := make([]interface{}, globalCfg.BatchSizeSent, globalCfg.BatchSizeSent)
 	for {
-		n, err := t.snapshots.Get(globalCfg.RaftMessageSendBatchLimit, items)
+		n, err := t.snapshots.Get(int64(globalCfg.BatchSizeSent), items)
 		if err != nil {
 			log.Infof("stop: raft transfer send snapshot worker stopped")
 			return

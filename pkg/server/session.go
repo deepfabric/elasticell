@@ -71,12 +71,12 @@ func (s *session) onResp(resp *raftcmdpb.Response) {
 }
 
 func (s *session) writeLoop() {
-	items := make([]interface{}, globalCfg.Redis.WriteBatchLimit, globalCfg.Redis.WriteBatchLimit)
+	items := make([]interface{}, globalCfg.BatchCliResps, globalCfg.BatchCliResps)
 
 	for {
 		// If in the read goroutine, the connection is closed, so we need a lock
 		s.RLock()
-		n, err := s.resps.Get(globalCfg.Redis.WriteBatchLimit, items)
+		n, err := s.resps.Get(globalCfg.BatchCliResps, items)
 		if nil != err {
 			s.RUnlock()
 			return
@@ -88,7 +88,7 @@ func (s *session) writeLoop() {
 			s.doResp(rsp, buf)
 			pool.ReleaseResponse(rsp)
 
-			if i > 0 && i%globalCfg.Redis.WriteBatchLimit == 0 {
+			if i > 0 && i%globalCfg.BatchCliResps == 0 {
 				s.conn.WriteOutBuf()
 			}
 		}

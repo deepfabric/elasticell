@@ -20,73 +20,38 @@ import (
 
 // Cfg for raftstore
 type Cfg struct {
-	StoreAddr                string `json:"storeAddr"`
-	StoreAdvertiseAddr       string `json:"storeAdvertiseAddr"`
-	StoreDataPath            string `json:"storeDataPath"`
-	StoreHeartbeatIntervalMs int    `json:"storeHeartbeatIntervalMs"`
-	CellHeartbeatIntervalMs  int    `json:"cellHeartbeatIntervalMs"`
-	MaxPeerDownSec           int    `json:"maxPeerDownSec"`
-	SplitCellCheckIntervalMs int    `json:"splitCellCheckIntervalMs"`
-	RaftGCLogIntervalMs      int    `json:"raftGCLogIntervalMs"`
-	ReportCellIntervalMs     int    `json:"reportCellIntervalMs"`
+	Addr                   string
+	DataPath               string
+	CellCapacity           uint64
+	DurationHeartbeatStore time.Duration
+	DurationHeartbeatCell  time.Duration
+	DurationSplitCheck     time.Duration
+	DurationCompact        time.Duration
+	DurationReportMetric   time.Duration
+	DurationRaftTick       time.Duration
+	LimitPeerDownDuration  time.Duration
+	LimitCompactCount      uint64
+	LimitCompactBytes      uint64
+	LimitCompactLag        uint64
+	LimitRaftMsgCount      int
+	LimitRaftMsgBytes      uint64
+	LimitRaftEntryBytes    uint64
+	ThresholdCompact       uint64
+	ThresholdSplitCheck    uint64
+	ThresholdRaftElection  int
+	ThresholdRaftHeartbeat int
+	BatchSizeProposal      uint64
+	BatchSizeSent          uint64
+	WorkerCountSent        uint64
+	WorkerCountApply       uint64
+	EnableMetricsRequest   bool
+}
 
-	RaftLogGCCountLimit   uint64 `json:"raftLogGCCountLimit"`
-	RaftLogGCSizeLimit    uint64 `json:"raftLogGCSizeLimit"`
-	RaftLogGCThreshold    uint64 `json:"raftLogGCThreshold"`
-	RaftLogGCLagThreshold uint64 `json:"raftLogGCLagThreshold"`
-
-	RaftProposeBatchLimit     int    `json:"raftProposeBatchLimit"`
-	RaftMessageSendBatchLimit int64  `json:"raftMessageSendBatchLimit"`
-	RaftMessageWorkerCount    uint64 `json:"raftMessageWorkerCount"`
-	ApplyWorkerCount          uint64 `json:"applyWorkerCount"`
-
-	CellCheckSizeDiff int64  `json:"cellCheckSizeDiff"`
-	CellMaxSize       uint64 `json:"cellMaxSize"`
-	CellSplitSize     uint64 `json:"cellSplitSize"`
-
-	Raft *RaftCfg `json:"raft"`
-
-	EnableRequestMetrics bool `json:"enableRequestMetrics"`
+// NewCfg return default cfg
+func NewCfg() *Cfg {
+	return &Cfg{}
 }
 
 func (c *Cfg) getSnapDir() string {
-	return fmt.Sprintf("%s/snap", c.StoreDataPath)
-}
-
-func (c *Cfg) getRaftGCLogDuration() time.Duration {
-	return time.Duration(c.RaftGCLogIntervalMs) * time.Millisecond
-}
-
-func (c *Cfg) getStoreHeartbeatDuration() time.Duration {
-	return time.Duration(c.StoreHeartbeatIntervalMs) * time.Millisecond
-}
-
-func (c *Cfg) getCellHeartbeatDuration() time.Duration {
-	return time.Duration(c.CellHeartbeatIntervalMs) * time.Millisecond
-}
-
-func (c *Cfg) getReportCellDuration() time.Duration {
-	return time.Duration(c.ReportCellIntervalMs) * time.Millisecond
-}
-
-func (c *Cfg) getMaxPeerDownSecDuration() time.Duration {
-	return time.Duration(c.MaxPeerDownSec) * time.Second
-}
-
-func (c *Cfg) getSplitCellCheckDuration() time.Duration {
-	return time.Duration(c.SplitCellCheckIntervalMs) * time.Millisecond
-}
-
-func (c *Cfg) getRaftBaseTickDuration() time.Duration {
-	return time.Duration(c.Raft.BaseTick) * time.Millisecond
-}
-
-// RaftCfg is the cfg for raft
-type RaftCfg struct {
-	ElectionTick    int    `json:"electionTick"`
-	HeartbeatTick   int    `json:"heartbeatTick"`
-	MaxSizePerMsg   uint64 `json:"maxSizePerMsg"`
-	MaxSizePerEntry uint64 `json:"maxSizePerEntry"`
-	MaxInflightMsgs int    `json:"maxInflightMsgs"`
-	BaseTick        int    `json:"baseTick"`
+	return fmt.Sprintf("%s/snap", c.DataPath)
 }

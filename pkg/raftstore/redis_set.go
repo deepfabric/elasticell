@@ -26,13 +26,13 @@ func (s *Store) execSAdd(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.R
 	}
 
 	if value > 0 {
-		var size int64
+		var size uint64
 		for _, arg := range args[1:] {
-			size += int64(len(arg))
+			size += uint64(len(arg))
 		}
 
 		if value == 1 {
-			size += int64(len(args[0]))
+			size += uint64(len(args[0]))
 			ctx.metrics.writtenKeys++
 		}
 
@@ -67,9 +67,9 @@ func (s *Store) execSRem(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.R
 		ctx.metrics.deleteKeysHint++
 	}
 
-	var size int64
+	var size uint64
 	for _, arg := range args[1:] {
-		size += int64(len(arg))
+		size += uint64(len(arg))
 	}
 
 	ctx.metrics.sizeDiffHint -= size

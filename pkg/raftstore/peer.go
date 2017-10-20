@@ -56,7 +56,7 @@ type PeerReplicate struct {
 
 	writtenKeys     uint64
 	writtenBytes    uint64
-	sizeDiffHint    int64
+	sizeDiffHint    uint64
 	raftLogSizeHint uint64
 	deleteKeysHint  uint64
 
@@ -173,7 +173,7 @@ func (pr *PeerReplicate) onAdminRequest(adminReq *raftcmdpb.AdminRequest) {
 }
 
 func (pr *PeerReplicate) onReq(req *raftcmdpb.Request, cb func(*raftcmdpb.RaftCMDResponse)) {
-	if globalCfg.EnableRequestMetrics {
+	if globalCfg.EnableMetricsRequest {
 		now := time.Now().UnixNano()
 		req.StartAt = now
 		req.LastStageAt = now
@@ -181,7 +181,7 @@ func (pr *PeerReplicate) onReq(req *raftcmdpb.Request, cb func(*raftcmdpb.RaftCM
 	commandCounterVec.WithLabelValues(raftcmdpb.CMDType_name[int32(req.Type)]).Inc()
 
 	var start time.Time
-	if globalCfg.EnableRequestMetrics {
+	if globalCfg.EnableMetricsRequest {
 		start = time.Now()
 	}
 
@@ -190,7 +190,7 @@ func (pr *PeerReplicate) onReq(req *raftcmdpb.Request, cb func(*raftcmdpb.RaftCM
 	r.cb = cb
 	pr.addRequest(r)
 
-	if globalCfg.EnableRequestMetrics {
+	if globalCfg.EnableMetricsRequest {
 		observeRequestInQueue(start)
 	}
 
@@ -244,7 +244,7 @@ func (pr *PeerReplicate) doHeartbeat() error {
 	req := new(pdpb.CellHeartbeatReq)
 	req.Cell = pr.getCell()
 	req.Leader = &pr.peer
-	req.DownPeers = pr.collectDownPeers(globalCfg.getMaxPeerDownSecDuration())
+	req.DownPeers = pr.collectDownPeers(globalCfg.LimitPeerDownDuration)
 	req.PendingPeers = pr.collectPendingPeers()
 
 	rsp, err := pr.store.pdClient.CellHeartbeat(context.TODO(), req)

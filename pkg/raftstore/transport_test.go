@@ -82,16 +82,14 @@ func (s *transportTestSuite) parse(storeID uint64) (string, error) {
 
 func newTestStoreCfg(addr string) *Cfg {
 	c := new(Cfg)
-	c.StoreAddr = addr
-	c.StoreAdvertiseAddr = c.StoreAddr
-	c.Raft = new(RaftCfg)
-	c.Raft.ElectionTick = 2
-	c.Raft.BaseTick = 1000
-	c.Raft.HeartbeatTick = 1
-	c.Raft.MaxSizePerMsg = 1024 * 1024
-	c.Raft.MaxSizePerEntry = 8 * 1024 * 1024
-	c.Raft.MaxInflightMsgs = 256
-	c.RaftMessageSendBatchLimit = 10
-	c.RaftMessageWorkerCount = 1
+	c.Addr = addr
+	c.ThresholdRaftElection = 2
+	c.DurationRaftTick = time.Second
+	c.ThresholdRaftHeartbeat = 1
+	c.LimitRaftMsgBytes = 1024 * 1024
+	c.LimitRaftEntryBytes = 8 * 1024 * 1024
+	c.LimitRaftMsgCount = 256
+	c.BatchSizeSent = 10
+	c.WorkerCountSent = 1
 	return c
 }

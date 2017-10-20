@@ -19,43 +19,44 @@
 |schedule:replicaScheduleLimit|The max operator count of create cell replica at every store|
 
 ### Cell
-|field|comments|
+|command args|comments|
 |--|--|
-|redis:listen|The address to serve redis|
-|redis:readBufferSize|The buffer size for read redis command|
-|redis:writeBufferSize|The buffer size for write redis command|
-|redis:writeBatchLimit|Max number of responses for flush|
-|node:clusterID|The Elasticell cluster id, 0 means not join the cluster|
-|node:labels|Key-value label of this node, these infomation is used for PD schedule|
-|node:pdRPCAddr|GRPC address for PD cluster|
-|node:raftStore:storeAddr|GRPC address for multi-raft|
-|node:raftStore:storeAdvertiseAddr|GRPC address for multi-raft|
-|node:raftStore:storeDataPath|Data store dir|
-|node:raftStore:storeHeartbeatIntervalMs|Store heartbeat interval|
-|node:raftStore:cellHeartbeatIntervalMs|Cell heartbeat interval|
-|node:raftStore:maxPeerDownSec|The max time of peer down time. PD will schedule cell remove this peer from raft group|
-|node:raftStore:splitCellCheckIntervalMs|Check interval of if cell should split|
-|node:raftStore:reportCellIntervalMs|Interval of report cell metrics|
-|node:raftStore:raftGCLogIntervalMs|Check interval of if cell raft log should compact|
-|node:raftStore:raftLogGCCountLimit|Max count of raft log that should be compact|
-|node:raftStore:raftLogGCSizeLimit|Max size of raft log that should be compact|
-|node:raftStore:raftProposeBatchLimit|Max number of requests in a raft proposal|
-|node:raftStore:raftMessageSendBatchLimit|Max number of read raft message from send queue|
-|node:raftStore:raftMessageWorkerCount|Worker count of process raft message|
-|node:raftStore:raftLogGCThreshold|Max index of raft log offset that should be compact|
-|node:raftStore:raftLogGCLagThreshold|Max lag of peer|
-|node:raftStore:cellCheckSizeDiff|Max data size that should be check real size to split|
-|node:raftStore:cellMaxSize|Max data size of a cell|
-|node:raftStore:cellSplitSize|Max data size that should split|
-|node:raftStore:raft:electionTick|Tick count that timeout to election new leader|
-|node:raftStore:raft:maxSizePerMsg|Max size per raft message|
-|node:raftStore:raft:maxInflightMsgs|Max message count per raft rpc|
-|node:raftStore:raft:maxSizePerEntry|Max size count per raft entry|
-|node:raftStore:raft:baseTick|Time of a raft tick|
-|node:raftStore:applyWorkerCount|Worker count of apply raft log|
-|metric:job|The job name of prometheus|
-|metric:address|The address of prometheus pushgateway, not push if empty|
-|metric:intervalSec|The interval of push metrics in seconds, not push if empty|
+|clusterid|The Elasticell cluster id, 0 means not join the cluster|
+|pd|PD addresses|
+|addr|Internal address|
+|addr-cli|KV client address|
+|data|The data dir|
+|zone|Zone label|
+|rack|Rack label|
+|buffer-cli-read|Buffer(bytes): bytes of KV client read|
+|buffer-cli-write|Buffer(bytes): bytes of KV client write|
+|batch-cli-resps|Batch: Max count of responses in a write operation|
+|capacity-cell|Capacity(MB): cell|
+|interval-heartbeat-store|Interval(sec): Store heartbeat|
+|interval-heartbeat-cell|Interval(sec): Cell heartbeat|
+|interval-split-check|Interval(sec): Split check|
+|interval-compact|Interval(sec): Compact raft log|
+|interval-report-metric|Interval(sec): Report cell metric|
+|interval-raft-tick|Interval(ms): Raft tick|
+|limit-peer-down|Limit(sec): Max peer downtime|
+|limit-compact-count|Limit: Count of raft logs, if reach this limit, leader will compact [first,applied], otherwise [first, minimum replicated]|
+|limit-compact-bytes|Limit(MB): Total bytes of raft logs, if reach this limit, leader will compact [first,applied], otherwise [first, minimum replicated]|
+|limit-compact-lag|Limit: Max count of lag log, leader will compact [first, compact - lag], avoid send snapshot file to a little lag peer|
+|limit-raft-msg-count|Limit: Max count of in-flight raft append messages|
+|limit-raft-msg-bytes|Limit(MB): Max bytes per raft msg|
+|limit-raft-entry-bytes|Limit(MB): Max bytes of raft log entry|
+|threshold-compact|Threshold: Raft Log compact, count of [first, replicated]|
+|threshold-split-check|Threshold(bytes): Start split check, bytes that the cell has bean stored|
+|threshold-raft-election|Threshold: Raft election, after this ticks|
+|threshold-raft-heartbeat|Threshold: Raft heartbeat, after this ticks|
+|batch-size-proposal|Batch: Max commands in a proposal|
+|batch-size-sent|Batch: Max size of send msgs|
+|worker-count-sent|Worker count: sent internal messages|
+|worker-count-apply|Worker count: apply raft log|
+|enable-metrics-request|Enable: request metrics|
+|metric-job|prometheus job name|
+|metric-address|prometheus proxy address|
+|interval-metric-sync|Interval(sec): metric sync|
 
 ### Redis-Proxy
 |field|comments|

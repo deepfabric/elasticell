@@ -140,10 +140,10 @@ func (s *Store) execLInsert(ctx *applyContext, req *raftcmdpb.Request) *raftcmdp
 	}
 
 	if value > 0 {
-		size := int64(len(args[3]))
+		size := uint64(len(args[3]))
 
 		if value == 0 {
-			size += int64(len(args[0]))
+			size += uint64(len(args[0]))
 			ctx.metrics.writtenKeys++
 		}
 
@@ -174,7 +174,7 @@ func (s *Store) execLPop(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.R
 		return rsp
 	}
 
-	size := int64(len(value))
+	size := uint64(len(value))
 	ctx.metrics.sizeDiffHint -= size
 
 	has := true
@@ -203,13 +203,13 @@ func (s *Store) execLPush(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.
 	}
 
 	if value > 0 {
-		var size int64
+		var size uint64
 		for _, arg := range args[1:] {
-			size += int64(len(arg))
+			size += uint64(len(arg))
 		}
 
 		if value == 1 {
-			size += int64(len(args[0]))
+			size += uint64(len(args[0]))
 			ctx.metrics.writtenKeys++
 		}
 
@@ -241,11 +241,11 @@ func (s *Store) execLPushX(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb
 	}
 
 	if value > 0 {
-		var size int64
+		var size uint64
 
-		size += int64(len(args[1]))
+		size += uint64(len(args[1]))
 		if value == 1 {
-			size += int64(len(args[0]))
+			size += uint64(len(args[0]))
 			ctx.metrics.writtenKeys++
 		}
 
@@ -284,7 +284,7 @@ func (s *Store) execLRem(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.R
 	}
 
 	if value > 0 {
-		size := int64(len(args[2])) * value
+		size := uint64(len(args[2])) * uint64(value)
 		ctx.metrics.sizeDiffHint += size
 	}
 
@@ -380,7 +380,7 @@ func (s *Store) execRPop(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.R
 		return rsp
 	}
 
-	size := int64(len(value))
+	size := uint64(len(value))
 	ctx.metrics.sizeDiffHint -= size
 
 	has := true
@@ -409,13 +409,13 @@ func (s *Store) execRPush(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.
 	}
 
 	if value > 0 {
-		var size int64
+		var size uint64
 		for _, arg := range args[1:] {
-			size += int64(len(arg))
+			size += uint64(len(arg))
 		}
 
 		if value == 1 {
-			size += int64(len(args[0]))
+			size += uint64(len(args[0]))
 			ctx.metrics.writtenKeys++
 		}
 
@@ -447,11 +447,11 @@ func (s *Store) execRPushX(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb
 	}
 
 	if value > 0 {
-		var size int64
+		var size uint64
 
-		size += int64(len(args[1]))
+		size += uint64(len(args[1]))
 		if value == 1 {
-			size += int64(len(args[0]))
+			size += uint64(len(args[0]))
 			ctx.metrics.writtenKeys++
 		}
 

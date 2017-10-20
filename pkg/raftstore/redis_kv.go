@@ -33,7 +33,7 @@ func (s *Store) execKVSet(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.
 
 	ctx.rb.set(args[0], args[1])
 
-	size := int64(len(args[0]) + len(args[1]))
+	size := uint64(len(args[0]) + len(args[1]))
 	ctx.metrics.writtenKeys++
 	ctx.metrics.writtenBytes += size
 	ctx.metrics.sizeDiffHint += size
@@ -242,7 +242,7 @@ func (s *Store) execKVAppend(ctx *applyContext, req *raftcmdpb.Request) *raftcmd
 		return rsp
 	}
 
-	size := int64(len(args[1]))
+	size := uint64(len(args[1]))
 	ctx.metrics.writtenBytes += size
 	ctx.metrics.sizeDiffHint += size
 
@@ -270,7 +270,7 @@ func (s *Store) execKVSetNX(ctx *applyContext, req *raftcmdpb.Request) *raftcmdp
 	}
 
 	if n > 0 {
-		size := int64(len(args[0]) + len(args[1]))
+		size := uint64(len(args[0]) + len(args[1]))
 		ctx.metrics.writtenKeys++
 		ctx.metrics.writtenBytes += size
 		ctx.metrics.sizeDiffHint += size

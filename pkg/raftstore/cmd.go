@@ -94,7 +94,7 @@ func (c *cmd) resp(resp *raftcmdpb.RaftCMDResponse) {
 			resp)
 		c.cb(resp)
 
-		if globalCfg.EnableRequestMetrics {
+		if globalCfg.EnableMetricsRequest {
 			observeRequestResponse(c)
 		}
 	} else {

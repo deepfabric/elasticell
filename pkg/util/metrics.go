@@ -34,14 +34,23 @@ const contentTypeHeader = "Content-Type"
 
 // MetricCfg is the metric configuration.
 type MetricCfg struct {
-	Job         string `json:"job"`
-	Address     string `json:"address"`
-	IntervalSec int    `json:"intervalSec"`
+	Job          string
+	Address      string
+	DurationSync time.Duration
+}
+
+// NewMetricCfg returns metric cfg
+func NewMetricCfg(job string, address string, durationSync time.Duration) *MetricCfg {
+	return &MetricCfg{
+		Job:          job,
+		Address:      address,
+		DurationSync: durationSync,
+	}
 }
 
 // InitMetric init the metric
 func InitMetric(runner *Runner, cfg *MetricCfg) {
-	if cfg.IntervalSec == 0 || len(cfg.Address) == 0 {
+	if nil == cfg || cfg.DurationSync == 0 || len(cfg.Address) == 0 {
 		log.Info("metric: disable prometheus push client")
 		return
 	}
@@ -49,7 +58,7 @@ func InitMetric(runner *Runner, cfg *MetricCfg) {
 	log.Info("metric: start prometheus push client")
 
 	runner.RunCancelableTask(func(ctx context.Context) {
-		t := time.NewTicker(time.Duration(cfg.IntervalSec) * time.Second)
+		t := time.NewTicker(cfg.DurationSync)
 		defer t.Stop()
 
 		for {

@@ -14,6 +14,7 @@ On each node, use `/apps/deepfabric` as base folder, and create configuration fi
 
 #### PD
 ##### Node: 192.168.1.101
+###### Configuration
 ```json
 {
     "name": "pd1",
@@ -38,7 +39,13 @@ On each node, use `/apps/deepfabric` as base folder, and create configuration fi
 }
 ```
 
+###### Run
+```bash
+pd --cfg=pd.json --log-level=info
+```
+
 ##### Node: 192.168.1.102
+###### Configuration
 ```json
 {
     "name": "pd2",
@@ -63,7 +70,13 @@ On each node, use `/apps/deepfabric` as base folder, and create configuration fi
 }
 ```
 
+###### Run
+```bash
+pd --cfg=pd.json --log-level=info
+```
+
 ##### Node: 192.168.1.103
+###### Configuration
 ```json
 {
     "name": "pd3",
@@ -88,212 +101,25 @@ On each node, use `/apps/deepfabric` as base folder, and create configuration fi
 }
 ```
 
+###### Run
+```bash
+pd --cfg=pd.json --log-level=info
+```
+
 #### Cell
 ##### Node: 192.168.1.201
-```json
-{
-    "redis": {
-        "listen": "192.168.1.201:6379",
-        "readBufferSize": 512,
-        "writeBufferSize": 512,
-        "writeBatchLimit": 64
-    },
-
-    "node": {
-        "clusterID": 0,
-        "labels": [
-            {
-                "key": "zone",
-                "value": "zone-1"
-            },
-            {
-                "key": "rack",
-                "value": "rack-1"
-            }
-        ],
-        "pdRPCAddr": [
-            "192.168.1.101:20800",
-            "192.168.1.102:20800",
-            "192.168.1.103:20800"
-        ],
-        "raftStore": {
-            "storeAddr": "192.168.1.201:10800",
-            "storeAdvertiseAddr": "192.168.1.201:10800",
-            "storeDataPath": "/apps/deepfabric/data",
-            "storeHeartbeatIntervalMs": 2000,
-            "cellHeartbeatIntervalMs": 1000,
-            "maxPeerDownSec": 300,
-            "splitCellCheckIntervalMs": 10000,
-            "reportCellIntervalMs": 1000,
-            "raftGCLogIntervalMs": 10000,
-            "raftLogGCCountLimit": 49152,
-            "raftLogGCSizeLimit": 50331648,
-            "raftProposeBatchLimit": 256,
-            "raftMessageSendBatchLimit": 64,
-            "raftMessageWorkerCount": 16,
-            "raftLogGCThreshold": 50,
-            "raftLogGCLagThreshold": 1024,
-            "cellCheckSizeDiff": 8388608,
-            "cellMaxSize": 83886080,
-            "cellSplitSize": 67108864,
-            
-            "raft": {
-                "electionTick": 10,
-                "heartbeatTick": 2,
-                "maxSizePerMsg": 1048576,
-                "maxInflightMsgs": 256,
-                "maxSizePerEntry": 8388608,
-                "baseTick": 1000
-            },
-            "applyWorkerCount": 8,
-            "enableRequestMetrics": true
-        }
-    },
-
-    "metric": {
-        "job": "cluster-0",
-        "address": "xxx.xxx.xxx:9091",
-        "intervalSec": 1
-    }
-}
+```bash
+cell --log-level=info --pd=192.168.1.101:20800,192.168.1.102:20800,192.168.1.103:20800 --addr=192.168.1.201:10800 --addr-cli=192.168.1.201:6379 --zone=zone-1 --rack=rack-1 --data=/apps/deepfabric/data
 ```
 
 ##### Node: 192.168.1.202
-```json
-{
-    "redis": {
-        "listen": "192.168.1.202:6379",
-        "readBufferSize": 512,
-        "writeBufferSize": 512,
-        "writeBatchLimit": 64
-    },
-
-    "node": {
-        "clusterID": 0,
-        "labels": [
-            {
-                "key": "zone",
-                "value": "zone-1"
-            },
-            {
-                "key": "rack",
-                "value": "rack-1"
-            }
-        ],
-        "pdRPCAddr": [
-            "192.168.1.101:20800",
-            "192.168.1.102:20800",
-            "192.168.1.103:20800"
-        ],
-        "raftStore": {
-            "storeAddr": "192.168.1.202:10800",
-            "storeAdvertiseAddr": "192.168.1.202:10800",
-            "storeDataPath": "/apps/deepfabric/data",
-            "storeHeartbeatIntervalMs": 2000,
-            "cellHeartbeatIntervalMs": 1000,
-            "maxPeerDownSec": 300,
-            "splitCellCheckIntervalMs": 10000,
-            "reportCellIntervalMs": 1000,
-            "raftGCLogIntervalMs": 10000,
-            "raftLogGCCountLimit": 49152,
-            "raftLogGCSizeLimit": 50331648,
-            "raftProposeBatchLimit": 256,
-            "raftMessageSendBatchLimit": 64,
-            "raftMessageWorkerCount": 16,
-            "raftLogGCThreshold": 50,
-            "raftLogGCLagThreshold": 1024,
-            "cellCheckSizeDiff": 8388608,
-            "cellMaxSize": 83886080,
-            "cellSplitSize": 67108864,
-            
-            "raft": {
-                "electionTick": 10,
-                "heartbeatTick": 2,
-                "maxSizePerMsg": 1048576,
-                "maxInflightMsgs": 256,
-                "maxSizePerEntry": 8388608,
-                "baseTick": 1000
-            },
-            "applyWorkerCount": 8,
-            "enableRequestMetrics": true
-        }
-    },
-
-    "metric": {
-        "job": "cluster-0",
-        "address": "xxx.xxx.xxx:9091",
-        "intervalSec": 1
-    }
-}
+```bash
+cell --log-level=info --pd=192.168.1.101:20800,192.168.1.102:20800,192.168.1.103:20800 --addr=192.168.1.202:10800 --addr-cli=192.168.1.202:6379 --zone=zone-2 --rack=rack-2 --data=/apps/deepfabric/data
 ```
 
 ##### Node: 192.168.1.203
-```json
-{
-    "redis": {
-        "listen": "192.168.1.203:6379",
-        "readBufferSize": 512,
-        "writeBufferSize": 512,
-        "writeBatchLimit": 64
-    },
-
-    "node": {
-        "clusterID": 0,
-        "labels": [
-            {
-                "key": "zone",
-                "value": "zone-1"
-            },
-            {
-                "key": "rack",
-                "value": "rack-1"
-            }
-        ],
-        "pdRPCAddr": [
-            "192.168.1.101:20800",
-            "192.168.1.102:20800",
-            "192.168.1.103:20800"
-        ],
-        "raftStore": {
-            "storeAddr": "192.168.1.203:10800",
-            "storeAdvertiseAddr": "192.168.1.203:10800",
-            "storeDataPath": "/apps/deepfabric/data",
-            "storeHeartbeatIntervalMs": 2000,
-            "cellHeartbeatIntervalMs": 1000,
-            "maxPeerDownSec": 300,
-            "splitCellCheckIntervalMs": 10000,
-            "reportCellIntervalMs": 1000,
-            "raftGCLogIntervalMs": 10000,
-            "raftLogGCCountLimit": 49152,
-            "raftLogGCSizeLimit": 50331648,
-            "raftProposeBatchLimit": 256,
-            "raftMessageSendBatchLimit": 64,
-            "raftMessageWorkerCount": 16,
-            "raftLogGCThreshold": 50,
-            "raftLogGCLagThreshold": 1024,
-            "cellCheckSizeDiff": 8388608,
-            "cellMaxSize": 83886080,
-            "cellSplitSize": 67108864,
-            
-            "raft": {
-                "electionTick": 10,
-                "heartbeatTick": 2,
-                "maxSizePerMsg": 1048576,
-                "maxInflightMsgs": 256,
-                "maxSizePerEntry": 8388608,
-                "baseTick": 1000
-            },
-            "applyWorkerCount": 8,
-            "enableRequestMetrics": true
-        }
-    },
-
-    "metric": {
-        "job": "cluster-0",
-        "address": "xxx.xxx.xxx:9091",
-        "intervalSec": 1
-    }
-}
+```bash
+cell --log-level=info --pd=192.168.1.101:20800,192.168.1.102:20800,192.168.1.103:20800 --addr=192.168.1.203:10800 --addr-cli=192.168.1.203:6379 --zone=zone-3 --rack=rack-3 --data=/apps/deepfabric/data
 ```
 
 #### Redis-Proxy

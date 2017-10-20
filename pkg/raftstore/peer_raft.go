@@ -59,7 +59,7 @@ func (pr *PeerReplicate) onRaftTick(arg interface{}) {
 	}
 
 	queueGauge.WithLabelValues(labelQueueTick).Set(float64(pr.ticks.Len()))
-	util.DefaultTimeoutWheel().Schedule(globalCfg.getRaftBaseTickDuration(), pr.onRaftTick, nil)
+	util.DefaultTimeoutWheel().Schedule(globalCfg.DurationRaftTick, pr.onRaftTick, nil)
 
 	pr.addEvent()
 }
@@ -521,7 +521,7 @@ func (pr *PeerReplicate) propose(c *cmd) {
 		return
 	}
 
-	if globalCfg.EnableRequestMetrics {
+	if globalCfg.EnableMetricsRequest {
 		observeRequestWaitting(c)
 	}
 
@@ -576,7 +576,7 @@ func (pr *PeerReplicate) proposeNormal(c *cmd) bool {
 
 	raftFlowProposalSizeHistogram.Observe(float64(size))
 
-	if size > globalCfg.Raft.MaxSizePerEntry {
+	if size > globalCfg.LimitRaftEntryBytes {
 		c.respLargeRaftEntrySize(pr.cellID, size)
 		return false
 	}
@@ -593,7 +593,7 @@ func (pr *PeerReplicate) proposeNormal(c *cmd) bool {
 		return false
 	}
 
-	if globalCfg.EnableRequestMetrics {
+	if globalCfg.EnableMetricsRequest {
 		observeRequestProposal(c)
 	}
 
@@ -926,10 +926,10 @@ func getRaftConfig(id, appliedIndex uint64, store raft.Storage) *raft.Config {
 	return &raft.Config{
 		ID:              id,
 		Applied:         appliedIndex,
-		ElectionTick:    globalCfg.Raft.ElectionTick,
-		HeartbeatTick:   globalCfg.Raft.HeartbeatTick,
-		MaxSizePerMsg:   globalCfg.Raft.MaxSizePerMsg,
-		MaxInflightMsgs: globalCfg.Raft.MaxInflightMsgs,
+		ElectionTick:    globalCfg.ThresholdRaftElection,
+		HeartbeatTick:   globalCfg.ThresholdRaftHeartbeat,
+		MaxSizePerMsg:   globalCfg.LimitRaftMsgBytes,
+		MaxInflightMsgs: globalCfg.LimitRaftMsgCount,
 		Storage:         store,
 		CheckQuorum:     true,
 		PreVote:         false,
