@@ -176,7 +176,7 @@ func parseCfg() *server.Cfg {
 	cfg.Node.RaftStore.LimitRaftMsgBytes = *limitRaftMsgBytesMB * mb
 	cfg.Node.RaftStore.LimitRaftEntryBytes = *limitRaftEntryBytesMB * mb
 	cfg.Node.RaftStore.ThresholdCompact = *thresholdCompact
-	cfg.Node.RaftStore.ThresholdSplitCheck = *thresholdSplitCheckMB * mb
+	cfg.Node.RaftStore.ThresholdSplitCheckBytes = *thresholdSplitCheckMB * mb
 	cfg.Node.RaftStore.ThresholdRaftElection = *thresholdRaftElection
 	cfg.Node.RaftStore.ThresholdRaftHeartbeat = *thresholdRaftHeartbeat
 	cfg.Node.RaftStore.BatchSizeProposal = *batchSizeProposal
