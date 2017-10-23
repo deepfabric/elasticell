@@ -930,14 +930,14 @@ func (s *Store) handleCellSplitCheck() {
 			return true, nil
 		}
 
-		if pr.sizeDiffHint < globalCfg.ThresholdSplitCheck {
+		if pr.sizeDiffHint < globalCfg.ThresholdSplitCheckBytes {
 			return true, nil
 		}
 
 		log.Debugf("raftstore-split[cell-%d]: cell need to check whether should split, threshold=<%d> max=<%d>",
 			pr.cellID,
-			pr.sizeDiffHint,
-			globalCfg.ThresholdSplitCheck)
+			globalCfg.ThresholdSplitCheckBytes,
+			pr.sizeDiffHint)
 
 		err := pr.startSplitCheckJob()
 		if err != nil {

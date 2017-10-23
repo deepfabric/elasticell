@@ -20,31 +20,31 @@ import (
 
 // Cfg for raftstore
 type Cfg struct {
-	Addr                   string
-	DataPath               string
-	CellCapacity           uint64
-	DurationHeartbeatStore time.Duration
-	DurationHeartbeatCell  time.Duration
-	DurationSplitCheck     time.Duration
-	DurationCompact        time.Duration
-	DurationReportMetric   time.Duration
-	DurationRaftTick       time.Duration
-	LimitPeerDownDuration  time.Duration
-	LimitCompactCount      uint64
-	LimitCompactBytes      uint64
-	LimitCompactLag        uint64
-	LimitRaftMsgCount      int
-	LimitRaftMsgBytes      uint64
-	LimitRaftEntryBytes    uint64
-	ThresholdCompact       uint64
-	ThresholdSplitCheck    uint64
-	ThresholdRaftElection  int
-	ThresholdRaftHeartbeat int
-	BatchSizeProposal      uint64
-	BatchSizeSent          uint64
-	WorkerCountSent        uint64
-	WorkerCountApply       uint64
-	EnableMetricsRequest   bool
+	Addr                     string
+	DataPath                 string
+	CellCapacity             uint64
+	DurationHeartbeatStore   time.Duration
+	DurationHeartbeatCell    time.Duration
+	DurationSplitCheck       time.Duration
+	DurationCompact          time.Duration
+	DurationReportMetric     time.Duration
+	DurationRaftTick         time.Duration
+	LimitPeerDownDuration    time.Duration
+	LimitCompactCount        uint64
+	LimitCompactBytes        uint64
+	LimitCompactLag          uint64
+	LimitRaftMsgCount        int
+	LimitRaftMsgBytes        uint64
+	LimitRaftEntryBytes      uint64
+	ThresholdCompact         uint64
+	ThresholdSplitCheckBytes uint64
+	ThresholdRaftElection    int
+	ThresholdRaftHeartbeat   int
+	BatchSizeProposal        uint64
+	BatchSizeSent            uint64
+	WorkerCountSent          uint64
+	WorkerCountApply         uint64
+	EnableMetricsRequest     bool
 }
 
 // NewCfg return default cfg

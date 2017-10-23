@@ -557,7 +557,7 @@ func (s *Store) doApplySplit(cellID uint64, result *splitResult) {
 	s.keyRanges.Update(left)
 	s.keyRanges.Update(right)
 
-	newPR.sizeDiffHint = globalCfg.ThresholdSplitCheck
+	newPR.sizeDiffHint = globalCfg.ThresholdSplitCheckBytes
 	newPR.startRegistrationJob()
 	s.replicatesMap.put(newPR.cellID, newPR)
 
