@@ -384,14 +384,16 @@ func (c *CellCluster) doGetLastRanges(req *pdpb.GetLastRangesReq) (*pdpb.GetLast
 	defer c.mux.RUnlock()
 
 	var ranges []*pdpb.Range
-	for _, cr := range c.cache.cc.cells {
+	c.cache.cc.foreach(func(cr *CellInfo) (bool, error) {
 		if cr.LeaderPeer != nil {
 			ranges = append(ranges, &pdpb.Range{
 				Cell:        cr.Meta,
 				LeaderStore: c.cache.getStoreCache().getStore(cr.LeaderPeer.StoreID).Meta,
 			})
 		}
-	}
+
+		return true, nil
+	})
 
 	return &pdpb.GetLastRangesRsp{
 		Ranges: ranges,

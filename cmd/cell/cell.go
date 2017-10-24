@@ -123,22 +123,22 @@ func main() {
 
 func parseCfg() *server.Cfg {
 	if *pd == "" {
-		fmt.Println("PD muest be set")
+		fmt.Println("PD must be set")
 		os.Exit(-1)
 	}
 
 	if *dataDir == "" {
-		fmt.Println("Data dir muest be set")
+		fmt.Println("Data dir must be set")
 		os.Exit(-1)
 	}
 
 	if *rack == "" {
-		fmt.Println("location rack must be set")
+		fmt.Println("Location rack must be set")
 		os.Exit(-1)
 	}
 
 	if *zone == "" {
-		fmt.Println("location zone must be set")
+		fmt.Println("Location zone must be set")
 		os.Exit(-1)
 	}
 

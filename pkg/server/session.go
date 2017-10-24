@@ -71,6 +71,12 @@ func (s *session) onResp(resp *raftcmdpb.Response) {
 }
 
 func (s *session) writeLoop() {
+	defer func() {
+		if err := recover(); err != nil {
+			log.Errorf("painc: %+v", err)
+		}
+	}()
+
 	items := make([]interface{}, globalCfg.BatchCliResps, globalCfg.BatchCliResps)
 
 	for {
