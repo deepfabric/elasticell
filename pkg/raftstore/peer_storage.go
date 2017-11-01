@@ -251,7 +251,7 @@ func (ps *peerStorage) validateSnap(snap *raftpb.Snapshot) bool {
 		return false
 	}
 
-	snapData := &mraft.RaftSnapshotData{}
+	snapData := &mraft.SnapshotMessage{}
 	err := snapData.Unmarshal(snap.Data)
 	if err != nil {
 		log.Errorf("raftstore[cell-%d]: decode snapshot fail, errors:\n %+v",
@@ -260,7 +260,7 @@ func (ps *peerStorage) validateSnap(snap *raftpb.Snapshot) bool {
 		return false
 	}
 
-	snapEpoch := snapData.Cell.Epoch
+	snapEpoch := snapData.Header.Cell.Epoch
 	lastEpoch := ps.getCell().Epoch
 
 	if snapEpoch.ConfVer < lastEpoch.ConfVer {
@@ -349,13 +349,14 @@ func (ps *peerStorage) applySnapshot(job *util.Job) error {
 		return util.ErrJobCancelled
 	}
 
-	key := &mraft.SnapKey{
-		CellID: ps.getCell().ID,
-		Term:   ps.applyState.TruncatedState.Term,
-		Index:  ps.applyState.TruncatedState.Index,
+	snap := &mraft.SnapshotMessage{}
+	snap.Header = mraft.SnapshotMessageHeader{
+		Cell:  ps.getCell(),
+		Term:  ps.applyState.TruncatedState.Term,
+		Index: ps.applyState.TruncatedState.Index,
 	}
 
-	return ps.store.snapshotManager.Apply(key)
+	return ps.store.snapshotManager.Apply(snap)
 }
 
 func (ps *peerStorage) loadApplyState() (*mraft.RaftApplyState, error) {

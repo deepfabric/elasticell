@@ -69,8 +69,10 @@ func initMetricsForSnapshot() {
 	prometheus.MustRegister(snapshotSendingDurationHistogram)
 }
 
-func observeSnapshotBuild(start time.Time) {
-	snapshotBuildingDurationHistogram.Observe(time.Now().Sub(start).Seconds())
+func observeSnapshotBuild(start time.Time) time.Duration {
+	value := time.Now().Sub(start)
+	snapshotBuildingDurationHistogram.Observe(value.Seconds())
+	return value
 }
 
 func observeSnapshotSending(start time.Time) {

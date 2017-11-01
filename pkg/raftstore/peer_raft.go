@@ -51,17 +51,19 @@ const (
 )
 
 func (pr *PeerReplicate) onRaftTick(arg interface{}) {
-	err := pr.ticks.Put(emptyStruct)
-	if err != nil {
-		log.Infof("raftstore[cell-%d]: raft tick stopped",
-			pr.ps.getCell().ID)
-		return
+	if !pr.stopRaftTick {
+		err := pr.ticks.Put(emptyStruct)
+		if err != nil {
+			log.Infof("raftstore[cell-%d]: raft tick stopped",
+				pr.ps.getCell().ID)
+			return
+		}
+
+		queueGauge.WithLabelValues(labelQueueTick).Set(float64(pr.ticks.Len()))
+		pr.addEvent()
 	}
 
-	queueGauge.WithLabelValues(labelQueueTick).Set(float64(pr.ticks.Len()))
 	util.DefaultTimeoutWheel().Schedule(globalCfg.DurationRaftTick, pr.onRaftTick, nil)
-
-	pr.addEvent()
 }
 
 func (pr *PeerReplicate) addEvent() (bool, error) {
@@ -142,7 +144,9 @@ func (pr *PeerReplicate) handleTick(items []interface{}) {
 	}
 
 	for i := int64(0); i < n; i++ {
-		pr.rn.Tick()
+		if !pr.stopRaftTick {
+			pr.rn.Tick()
+		}
 	}
 
 	pr.metrics.flush()
@@ -211,8 +215,6 @@ func (pr *PeerReplicate) handleReport(items []interface{}) {
 			if msg.Type == raftpb.MsgSnap {
 				pr.rn.ReportSnapshot(msg.To, raft.SnapshotFailure)
 			}
-		} else if peerID, ok := items[i].(uint64); ok {
-			pr.rn.ReportSnapshot(peerID, raft.SnapshotFinish)
 		}
 	}
 
@@ -304,21 +306,28 @@ func (pr *PeerReplicate) handleReady() {
 	}
 
 	rd := pr.rn.ReadySince(pr.ps.lastReadyIndex)
-
 	log.Debugf("raftstore[cell-%d]: raft ready after %d",
 		pr.cellID,
 		pr.ps.lastReadyIndex)
 
+	ctx := acquireReadyContext()
+
 	// If snapshot is received, further handling
 	if !raft.IsEmptySnap(rd.Snapshot) {
-		d := &mraft.RaftSnapshotData{}
-		util.MustUnmarshal(d, rd.Snapshot.Data)
-		if !pr.store.snapshotManager.Exists(&d.Key) {
+		ctx.snap = &mraft.SnapshotMessage{}
+		util.MustUnmarshal(ctx.snap, rd.Snapshot.Data)
+
+		if !pr.stopRaftTick {
+			// When we apply snapshot, stop raft tick and resume until the snapshot applied
+			pr.stopRaftTick = true
+		}
+
+		if !pr.store.snapshotManager.Exists(ctx.snap) {
+			log.Infof("raftstore[cell-%d]: receiving snapshot, skip further handling",
+				pr.cellID)
 			return
 		}
 	}
-
-	ctx := acquireReadyContext()
 
 	ctx.raftState = pr.ps.raftState
 	ctx.applyState = pr.ps.applyState
@@ -396,7 +405,7 @@ func (pr *PeerReplicate) handleRaftReadyAppend(ctx *readyContext, rd *raft.Ready
 }
 
 func (pr *PeerReplicate) handleRaftReadyApply(ctx *readyContext, rd *raft.Ready) {
-	if ctx.snapCell != nil {
+	if ctx.snap != nil {
 		// When apply snapshot, there is no log applied and not compacted yet.
 		pr.raftLogSizeHint = 0
 	}
@@ -825,7 +834,7 @@ func (pr *PeerReplicate) sendRaftMsg(msg raftpb.Message) error {
 	}
 
 	sendMsg.Message = msg
-	pr.store.trans.send(sendMsg)
+	pr.store.trans.sendRaftMessage(sendMsg)
 
 	switch msg.Type {
 	case raftpb.MsgApp:
@@ -837,6 +846,7 @@ func (pr *PeerReplicate) sendRaftMsg(msg raftpb.Message) error {
 	case raftpb.MsgVoteResp:
 		pr.metrics.message.voteResp++
 	case raftpb.MsgSnap:
+		pr.rn.ReportSnapshot(msg.To, raft.SnapshotFinish)
 		pr.metrics.message.snapshot++
 	case raftpb.MsgHeartbeat:
 		pr.metrics.message.heartbeat++

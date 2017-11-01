@@ -159,7 +159,7 @@ func (n *Node) createCell(start, end []byte) metapb.Cell {
 	cell.Start = start
 	cell.End = end
 
-	err = raftstore.SaveFirstCell(n.driver, cell)
+	err = raftstore.SaveCell(n.driver, cell)
 	if err != nil {
 		log.Fatalf("bootstrap: bootstrap first cell failed, errors:\n %+v", err)
 	}

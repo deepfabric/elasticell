@@ -55,7 +55,7 @@ func (s *transportTestSuite) TestSend(c *C) {
 
 	msg := &mraft.RaftMessage{}
 	msg.ToPeer.StoreID = s.toID
-	s.from.send(msg)
+	s.from.sendRaftMessage(msg)
 
 	s.to.handler = func(msg interface{}) {
 		ch <- msg

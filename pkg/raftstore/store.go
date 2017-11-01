@@ -16,6 +16,7 @@ package raftstore
 import (
 	"bytes"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/deepfabric/elasticell/pkg/log"
@@ -62,7 +63,9 @@ type Store struct {
 	keyRanges     *util.CellTree
 	peerCache     *peerCacheMap
 	delegates     *applyDelegateMap
-	pendingCells  []metapb.Cell
+
+	pendingLock      sync.RWMutex
+	pendingSnapshots map[uint64]mraft.SnapshotMessageHeader
 
 	trans  *transport
 	engine storage.Driver
@@ -87,6 +90,7 @@ func NewStore(clusterID uint64, pdClient *pd.Client, meta metapb.Store, engine s
 	s.engine = engine
 	s.pdClient = pdClient
 	s.snapshotManager = newDefaultSnapshotManager(cfg, engine.GetDataEngine())
+	s.pendingSnapshots = make(map[uint64]mraft.SnapshotMessageHeader)
 	s.trans = newTransport(s, pdClient, s.notify)
 	s.keyRanges = util.NewCellTree()
 	s.replicatesMap = newCellPeersMap()
@@ -400,12 +404,8 @@ func (s *Store) notify(n interface{}) {
 		pool.ReleaseRaftMessage(msg)
 	} else if msg, ok := n.(*splitCheckResult); ok {
 		s.onSplitCheckResult(msg)
-	} else if msg, ok := n.(*mraft.SnapKey); ok {
-		s.onSnapshotKey(msg)
-	} else if msg, ok := n.(*mraft.SnapshotData); ok {
-		s.onSnapshotData(msg)
-	} else if msg, ok := n.(*mraft.SnapshotDataEnd); ok {
-		s.onSnapshotEnd(msg)
+	} else if msg, ok := n.(*mraft.SnapshotMessage); ok {
+		s.onSnapshotMessage(msg)
 	}
 }
 
@@ -473,42 +473,99 @@ func (s *Store) onSplitCheckResult(result *splitCheckResult) {
 	}
 }
 
-func (s *Store) onSnapshotKey(msg *mraft.SnapKey) {
-	s.addApplyJob(msg.CellID, "onSnapshotKey", func() error {
-		err := s.snapshotManager.CleanSnap(msg)
-		if err != nil {
-			log.Errorf("raftstore-snap[cell-%d]: start received snap data failed, errors:\n%+v",
-				msg.CellID,
-				err)
-		}
-
-		return err
-	}, nil)
+func (s *Store) onSnapshotMessage(msg *mraft.SnapshotMessage) {
+	if msg.Chunk != nil {
+		s.onSnapshotChunk(msg)
+	} else if msg.Ack != nil {
+		s.onSnapshotMessageAck(msg)
+	} else if msg.Ask != nil {
+		s.onSnapshotMessageAsk(msg)
+	}
 }
 
-func (s *Store) onSnapshotData(msg *mraft.SnapshotData) {
-	s.addApplyJob(msg.Key.CellID, "onSnapshotData", func() error {
+func (s *Store) onSnapshotMessageAsk(msg *mraft.SnapshotMessage) {
+	reply := &mraft.SnapshotMessage{}
+	util.MustUnmarshal(reply, util.MustMarshal(msg))
+	reply.Header.FromPeer = msg.Header.ToPeer
+	reply.Header.ToPeer = msg.Header.FromPeer
+	reply.Ask = nil
+	reply.Ack = &mraft.SnapshotAckMessage{}
+	reply.Ack.Ack = mraft.Accept
+
+	pr := s.getPeerReplicate(msg.Header.Cell.ID)
+	pending := s.getPendingSnapshot(msg.Header.Cell.ID)
+
+	if nil == pr || isEpochStale(msg.Header.Cell.Epoch, pr.getCell().Epoch) {
+		// reject a stale snap with current pr
+		reply.Ack.Ack = mraft.Reject
+	} else if isEpochStale(msg.Header.Cell.Epoch, pending.Cell.Epoch) {
+		// reject a stale snap with pending
+		reply.Ack.Ack = mraft.Reject
+	} else if msg.Header.Term < pending.Term || msg.Header.Index < pending.Index {
+		// reject a stale snap
+		reply.Ack.Ack = mraft.Reject
+	}
+
+	log.Infof("raftstore-snap[cell-%d]: ack=<%s>, epoch=<%s> term=<%d> index=<%d>",
+		msg.Header.Cell.ID,
+		reply.Ack.Ack.String(),
+		msg.Header.Cell.Epoch.String(),
+		msg.Header.Term,
+		msg.Header.Index)
+	s.trans.sendSnapshotMessage(reply)
+}
+
+func (s *Store) onSnapshotMessageAck(msg *mraft.SnapshotMessage) {
+	log.Infof("raftstore-snap[cell-%d]: received snap ack=<%s>, epoch=<%s> term=<%d> index=<%d>",
+		msg.Header.Cell.ID,
+		msg.Ack.Ack.String(),
+		msg.Header.Cell.Epoch.String(),
+		msg.Header.Term,
+		msg.Header.Index)
+
+	ack := msg.Ack.Ack
+	switch ack {
+	case mraft.Reject:
+		s.trans.removePendingSnapshot(msg.Header.FromPeer.ID, msg.Header)
+		s.addSnapJob(func() error {
+			return s.snapshotManager.CleanSnap(msg)
+		}, nil)
+	case mraft.Accept:
+		from := msg.Header.FromPeer
+		to := msg.Header.ToPeer
+		msg.Header.ToPeer = from
+		msg.Header.FromPeer = to
+		msg.Ack = nil
+		s.trans.sendSnapshotMessage(msg)
+	case mraft.Received:
+		s.addSnapJob(func() error {
+			return s.snapshotManager.CleanSnap(msg)
+		}, nil)
+	}
+}
+
+func (s *Store) onSnapshotChunk(msg *mraft.SnapshotMessage) {
+	s.addApplyJob(msg.Header.Cell.ID, "onSnapshotData", func() error {
 		err := s.snapshotManager.ReceiveSnapData(msg)
 		if err != nil {
-			log.Errorf("raftstore-snap[cell-%d]: received snap data failed, errors:\n%+v",
-				msg.Key.CellID,
+			log.Fatalf("raftstore-snap[cell-%d]: received snap data failed, errors:\n%+v",
+				msg.Header.Cell.ID,
 				err)
 		}
 
-		return err
-	}, nil)
-}
-
-func (s *Store) onSnapshotEnd(msg *mraft.SnapshotDataEnd) {
-	s.addApplyJob(msg.Key.CellID, "onSnapshotEnd", func() error {
-		err := s.snapshotManager.ReceiveSnapDataComplete(msg)
-		if err != nil {
-			log.Errorf("raftstore-snap[cell-%d]: received snap data complete failed, errors:\n%+v",
-				msg.Key.CellID,
-				err)
+		if msg.Chunk.Last {
+			msg.Chunk = nil
+			reply := &mraft.SnapshotMessage{}
+			util.MustUnmarshal(reply, util.MustMarshal(msg))
+			reply.Header.FromPeer = msg.Header.ToPeer
+			reply.Header.ToPeer = msg.Header.FromPeer
+			reply.Ack = &mraft.SnapshotAckMessage{
+				Ack: mraft.Received,
+			}
+			s.trans.sendSnapshotMessage(reply)
 		}
 
-		return err
+		return nil
 	}, nil)
 }
 
@@ -560,7 +617,7 @@ func (s *Store) handleStaleMsg(msg *mraft.RaftMessage, currEpoch metapb.CellEpoc
 	gc.CellEpoch = currEpoch
 	gc.IsTombstone = true
 
-	s.trans.send(gc)
+	s.trans.sendRaftMessage(gc)
 }
 
 // If target peer doesn't exist, create it.

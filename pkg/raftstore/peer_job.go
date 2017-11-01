@@ -184,12 +184,15 @@ func (pr *PeerReplicate) doApplyingSnapshotJob() error {
 	log.Infof("raftstore[cell-%d]: begin apply snap data", pr.cellID)
 	localState, err := pr.ps.loadCellLocalState(pr.ps.applySnapJob)
 	if err != nil {
+		log.Fatalf("raftstore[cell-%d]: apply snap load local state failed, errors:\n %+v",
+			pr.cellID,
+			err)
 		return err
 	}
 
 	err = pr.ps.deleteAllInRange(encStartKey(&localState.Cell), encEndKey(&localState.Cell), pr.ps.applySnapJob)
 	if err != nil {
-		log.Errorf("raftstore[cell-%d]: apply snap delete range data failed, errors:\n %+v",
+		log.Fatalf("raftstore[cell-%d]: apply snap delete range data failed, errors:\n %+v",
 			pr.cellID,
 			err)
 		return err
@@ -197,7 +200,7 @@ func (pr *PeerReplicate) doApplyingSnapshotJob() error {
 
 	err = pr.ps.applySnapshot(pr.ps.applySnapJob)
 	if err != nil {
-		log.Errorf("raftstore[cell-%d]: apply snap snapshot failed, errors:\n %+v",
+		log.Fatalf("raftstore[cell-%d]: apply snap snapshot failed, errors:\n %+v",
 			pr.cellID,
 			err)
 		return err
@@ -205,11 +208,14 @@ func (pr *PeerReplicate) doApplyingSnapshotJob() error {
 
 	err = pr.ps.updatePeerState(pr.ps.getCell(), mraft.Normal, nil)
 	if err != nil {
-		log.Errorf("raftstore[cell-%d]: apply snap update peer state failed, errors:\n %+v",
+		log.Fatalf("raftstore[cell-%d]: apply snap update peer state failed, errors:\n %+v",
 			pr.cellID,
 			err)
 		return err
 	}
+
+	pr.stopRaftTick = false
+	pr.store.removePendingSnapshot(pr.cellID)
 
 	log.Infof("raftstore[cell-%d]: apply snap complete", pr.cellID)
 	return nil
@@ -224,12 +230,12 @@ func (ps *peerStorage) doGenerateSnapshotJob() error {
 
 	applyState, err := ps.loadApplyState()
 	if err != nil {
-		log.Errorf("raftstore[cell-%d]: load snapshot failure, errors:\n %+v",
+		log.Fatalf("raftstore[cell-%d]: load snapshot failure, errors:\n %+v",
 			ps.getCell().ID,
 			err)
 		return nil
 	} else if nil == applyState {
-		log.Errorf("raftstore[cell-%d]: could not load snapshot", ps.getCell().ID)
+		log.Fatalf("raftstore[cell-%d]: could not load snapshot", ps.getCell().ID)
 		return nil
 	}
 
@@ -256,15 +262,16 @@ func (ps *peerStorage) doGenerateSnapshotJob() error {
 		return nil
 	}
 
-	key := mraft.SnapKey{
-		CellID: ps.getCell().ID,
-		Term:   term,
-		Index:  applyState.AppliedIndex,
+	msg := &mraft.SnapshotMessage{}
+	msg.Header = mraft.SnapshotMessageHeader{
+		Cell:  state.Cell,
+		Term:  term,
+		Index: applyState.AppliedIndex,
 	}
 
 	snapshot := raftpb.Snapshot{}
-	snapshot.Metadata.Term = key.Term
-	snapshot.Metadata.Index = key.Index
+	snapshot.Metadata.Term = msg.Header.Term
+	snapshot.Metadata.Index = msg.Header.Index
 
 	confState := raftpb.ConfState{}
 	for _, peer := range ps.getCell().Peers {
@@ -272,14 +279,10 @@ func (ps *peerStorage) doGenerateSnapshotJob() error {
 	}
 	snapshot.Metadata.ConfState = confState
 
-	snapData := &mraft.RaftSnapshotData{}
-	snapData.Cell = state.Cell
-	snapData.Key = key
+	if ps.store.snapshotManager.Register(msg, creating) {
+		defer ps.store.snapshotManager.Deregister(msg, creating)
 
-	if ps.store.snapshotManager.Register(&key, creating) {
-		defer ps.store.snapshotManager.Deregister(&key, creating)
-
-		err = ps.store.snapshotManager.Create(snapData)
+		err = ps.store.snapshotManager.Create(msg)
 		if err != nil {
 			log.Errorf("raftstore[cell-%d]: create snapshot file failure, errors:\n %+v",
 				ps.getCell().ID,
@@ -288,13 +291,18 @@ func (ps *peerStorage) doGenerateSnapshotJob() error {
 		}
 	}
 
-	snapshot.Data = util.MustMarshal(snapData)
+	snapshot.Data = util.MustMarshal(msg)
 	ps.genSnapJob.SetResult(snapshot)
 
-	observeSnapshotBuild(start)
-	snapshotSizeHistogram.Observe(float64(snapData.FileSize))
+	cost := observeSnapshotBuild(start)
 
-	log.Infof("raftstore[cell-%d]: snapshot complete", ps.getCell().ID)
+	log.Infof("raftstore[cell-%d]: snapshot created, epoch=<%s> term=<%d> index=<%d> cost=<%s>",
+		ps.getCell().ID,
+		msg.Header.Cell.Epoch.String(),
+		msg.Header.Term,
+		msg.Header.Index,
+		cost)
+
 	return nil
 }
 
@@ -320,6 +328,8 @@ func (s *Store) doDestroy(cellID uint64, peer metapb.Peer) error {
 	if d != nil {
 		d.destroy()
 		// TODO: think send notify, then liner process this and other apply result
+		s.destroyPeer(cellID, peer, false)
+	} else {
 		s.destroyPeer(cellID, peer, false)
 	}
 

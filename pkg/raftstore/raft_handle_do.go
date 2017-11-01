@@ -37,7 +37,7 @@ type readyContext struct {
 	raftState  mraft.RaftLocalState
 	applyState mraft.RaftApplyState
 	lastTerm   uint64
-	snapCell   *metapb.Cell
+	snap       *mraft.SnapshotMessage
 	wb         storage.WriteBatch
 }
 
@@ -45,7 +45,7 @@ func (ctx *readyContext) reset() {
 	ctx.raftState = emptyRaftState
 	ctx.applyState = emptyApplyState
 	ctx.lastTerm = 0
-	ctx.snapCell = nil
+	ctx.snap = nil
 	ctx.wb = nil
 }
 
@@ -108,13 +108,10 @@ func (q *readIndexQueue) size() int {
 func (ps *peerStorage) doAppendSnapshot(ctx *readyContext, snap raftpb.Snapshot) error {
 	log.Infof("raftstore[cell-%d]: begin to apply snapshot", ps.getCell().ID)
 
-	snapData := &mraft.RaftSnapshotData{}
-	util.MustUnmarshal(snapData, snap.Data)
-
-	if snapData.Cell.ID != ps.getCell().ID {
+	if ctx.snap.Header.Cell.ID != ps.getCell().ID {
 		return fmt.Errorf("raftstore[cell-%d]: cell not match, snapCell=<%d> currCell=<%d>",
 			ps.getCell().ID,
-			snapData.Cell.ID,
+			ctx.snap.Header.Cell.ID,
 			ps.getCell().ID)
 	}
 
@@ -128,7 +125,7 @@ func (ps *peerStorage) doAppendSnapshot(ctx *readyContext, snap raftpb.Snapshot)
 		}
 	}
 
-	err := ps.updatePeerState(snapData.Cell, mraft.Applying, ctx.wb)
+	err := ps.updatePeerState(ctx.snap.Header.Cell, mraft.Applying, ctx.wb)
 	if err != nil {
 		log.Errorf("raftstore[cell-%d]: write peer state failed, errors:\n %+v",
 			ps.getCell().ID,
@@ -151,9 +148,6 @@ func (ps *peerStorage) doAppendSnapshot(ctx *readyContext, snap raftpb.Snapshot)
 	log.Infof("raftstore[cell-%d]: apply snapshot ok, state=<%s>",
 		ps.getCell().ID,
 		ctx.applyState.String())
-
-	c := snapData.Cell
-	ctx.snapCell = &c
 
 	return nil
 }
@@ -235,7 +229,7 @@ func (pr *PeerReplicate) doApplySnap(ctx *readyContext, rd *raft.Ready) *applySn
 	pr.ps.lastTerm = ctx.lastTerm
 
 	// If we apply snapshot ok, we should update some infos like applied index too.
-	if ctx.snapCell == nil {
+	if ctx.snap == nil {
 		return nil
 	}
 
@@ -257,7 +251,7 @@ func (pr *PeerReplicate) doApplySnap(ctx *readyContext, rd *raft.Ready) *applySn
 	pr.startApplyingSnapJob()
 
 	prevCell := pr.ps.getCell()
-	pr.ps.setCell(*ctx.snapCell)
+	pr.ps.setCell(ctx.snap.Header.Cell)
 
 	return &applySnapResult{
 		prevCell: prevCell,

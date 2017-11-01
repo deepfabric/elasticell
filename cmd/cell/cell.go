@@ -55,29 +55,31 @@ var (
 	batchCliResps  = flag.Int64("batch-cli-resps", 64, "Batch: Max count of responses in a write operation")
 
 	// raftstore
-	cellCapacityMB         = flag.Uint64("capacity-cell", defaultCapacity, "Capacity(MB): cell")
-	intervalHeartbeatStore = flag.Int("interval-heartbeat-store", 10, "Interval(sec): Store heartbeat")
-	intervalHeartbeatCell  = flag.Int("interval-heartbeat-cell", 30, "Interval(sec): Cell heartbeat")
-	intervalSplitCheck     = flag.Int("interval-split-check", 10, "Interval(sec): Split check")
-	intervalCompact        = flag.Int("interval-compact", 10, "Interval(sec): Compact raft log")
-	intervalReportMetric   = flag.Int("interval-report-metric", 10, "Interval(sec): Report cell metric")
-	intervalRaftTick       = flag.Int("interval-raft-tick", 1000, "Interval(ms): Raft tick")
-	limitPeerDown          = flag.Uint64("limit-peer-down", 5*60, "Limit(sec): Max peer downtime")
-	limitCompactCount      = flag.Uint64("limit-compact-count", defaultCapacity*mb*3/4/kb, "Limit: Count of raft logs, if reach this limit, leader will compact [first,applied], otherwise [first, minimum replicated]")
-	limitCompactBytesMB    = flag.Uint64("limit-compact-bytes", defaultCapacity*3/4, "Limit(MB): Total bytes of raft logs, if reach this limit, leader will compact [first,applied], otherwise [first, minimum replicated]")
-	limitCompactLag        = flag.Uint64("limit-compact-lag", 128, "Limit: Max count of lag log, leader will compact [first, compact - lag], avoid send snapshot file to a little lag peer")
-	limitRaftMsgCount      = flag.Int("limit-raft-msg-count", 256, "Limit: Max count of in-flight raft append messages")
-	limitRaftMsgBytesMB    = flag.Uint64("limit-raft-msg-bytes", 1, "Limit(MB): Max bytes per raft msg")
-	limitRaftEntryBytesMB  = flag.Uint64("limit-raft-entry-bytes", 8, "Limit(MB): Max bytes of raft log entry")
-	thresholdCompact       = flag.Uint64("threshold-compact", 64, "Threshold: Raft Log compact, count of [first, replicated]")
-	thresholdSplitCheckMB  = flag.Uint64("threshold-split-check", defaultCapacity/16, "Threshold(MB): Start split check, bytes that the cell has bean stored")
-	thresholdRaftElection  = flag.Int("threshold-raft-election", 10, "Threshold: Raft election, after this ticks")
-	thresholdRaftHeartbeat = flag.Int("threshold-raft-heartbeat", 2, "Threshold: Raft heartbeat, after this ticks")
-	batchSizeProposal      = flag.Uint64("batch-size-proposal", 1024, "Batch: Max commands in a proposal.")
-	batchSizeSent          = flag.Uint64("batch-size-sent", 64, "Batch: Max size of send msgs")
-	workerCountSent        = flag.Uint64("worker-count-sent", 64, "Worker count: sent internal messages")
-	workerCountApply       = flag.Uint64("worker-count-apply", 64, "Worker count: apply raft log")
-	enableMetricsRequest   = flag.Bool("enable-metrics-request", false, "Enable: request metrics")
+	cellCapacityMB            = flag.Uint64("capacity-cell", 0, "Capacity(MB): cell")
+	intervalHeartbeatStore    = flag.Int("interval-heartbeat-store", 10, "Interval(sec): Store heartbeat")
+	intervalHeartbeatCell     = flag.Int("interval-heartbeat-cell", 30, "Interval(sec): Cell heartbeat")
+	intervalSplitCheck        = flag.Int("interval-split-check", 10, "Interval(sec): Split check")
+	intervalCompact           = flag.Int("interval-compact", 10, "Interval(sec): Compact raft log")
+	intervalReportMetric      = flag.Int("interval-report-metric", 10, "Interval(sec): Report cell metric")
+	intervalRaftTick          = flag.Int("interval-raft-tick", 1000, "Interval(ms): Raft tick")
+	intervalRetrySentSnapshot = flag.Int("interval-retry-sent-snapshot", 10, "Interval(sec): Retry sent snapshot")
+	limitPeerDown             = flag.Uint64("limit-peer-down", 5*60, "Limit(sec): Max peer downtime")
+	limitCompactCount         = flag.Uint64("limit-compact-count", 0, "Limit: Count of raft logs, if reach this limit, leader will compact [first,applied], otherwise [first, minimum replicated]")
+	limitCompactBytesMB       = flag.Uint64("limit-compact-bytes", 0, "Limit(MB): Total bytes of raft logs, if reach this limit, leader will compact [first,applied], otherwise [first, minimum replicated]")
+	limitCompactLag           = flag.Uint64("limit-compact-lag", 0, "Limit: Max count of lag log, leader will compact [first, compact - lag], avoid send snapshot file to a little lag peer")
+	limitRaftMsgCount         = flag.Int("limit-raft-msg-count", 256, "Limit: Max count of in-flight raft append messages")
+	limitRaftMsgBytesMB       = flag.Uint64("limit-raft-msg-bytes", 1, "Limit(MB): Max bytes per raft msg")
+	limitRaftEntryBytesMB     = flag.Uint64("limit-raft-entry-bytes", 8, "Limit(MB): Max bytes of raft log entry")
+	thresholdCompact          = flag.Uint64("threshold-compact", 64, "Threshold: Raft Log compact, count of [first, replicated]")
+	thresholdSplitCheckMB     = flag.Uint64("threshold-split-check", 0, "Threshold(MB): Start split check, bytes that the cell has bean stored")
+	thresholdRaftElection     = flag.Int("threshold-raft-election", 10, "Threshold: Raft election, after this ticks")
+	thresholdRaftHeartbeat    = flag.Int("threshold-raft-heartbeat", 2, "Threshold: Raft heartbeat, after this ticks")
+	batchSizeProposal         = flag.Uint64("batch-size-proposal", 1024, "Batch: Max commands in a proposal.")
+	batchSizeSent             = flag.Uint64("batch-size-sent", 64, "Batch: Max size of send msgs")
+	workerCountSent           = flag.Uint64("worker-count-sent", 64, "Worker count: sent internal messages")
+	workerCountSentSnap       = flag.Uint64("worker-count-sent-snap", 4, "Worker count: sent snap messages")
+	workerCountApply          = flag.Uint64("worker-count-apply", 64, "Worker count: apply raft log")
+	enableMetricsRequest      = flag.Bool("enable-metrics-request", false, "Enable: request metrics")
 
 	// metric
 	metricJob          = flag.String("metric-job", "", "prometheus job name")
@@ -142,6 +144,8 @@ func parseCfg() *server.Cfg {
 		os.Exit(-1)
 	}
 
+	adjust()
+
 	cfg := server.NewCfg()
 
 	cfg.Node.ClusterID = *clusterID
@@ -168,6 +172,7 @@ func parseCfg() *server.Cfg {
 	cfg.Node.RaftStore.DurationCompact = time.Second * time.Duration(*intervalCompact)
 	cfg.Node.RaftStore.DurationReportMetric = time.Second * time.Duration(*intervalReportMetric)
 	cfg.Node.RaftStore.DurationRaftTick = time.Millisecond * time.Duration(*intervalRaftTick)
+	cfg.Node.RaftStore.DurationRetrySentSnapshot = time.Second * time.Duration(*intervalRetrySentSnapshot)
 	cfg.Node.RaftStore.LimitPeerDownDuration = time.Second * time.Duration(*limitPeerDown)
 	cfg.Node.RaftStore.LimitCompactCount = *limitCompactCount
 	cfg.Node.RaftStore.LimitCompactBytes = *limitCompactBytesMB * mb
@@ -182,10 +187,32 @@ func parseCfg() *server.Cfg {
 	cfg.Node.RaftStore.BatchSizeProposal = *batchSizeProposal
 	cfg.Node.RaftStore.BatchSizeSent = *batchSizeSent
 	cfg.Node.RaftStore.WorkerCountSent = *workerCountSent
+	cfg.Node.RaftStore.WorkerCountSentSnap = *workerCountSentSnap
 	cfg.Node.RaftStore.WorkerCountApply = *workerCountApply
 	cfg.Node.RaftStore.EnableMetricsRequest = *enableMetricsRequest
 
 	cfg.Metric = util.NewMetricCfg(*metricJob, *metricAddress, time.Second*time.Duration(*metricIntervalSync))
-
 	return cfg
+}
+
+func adjust() {
+	if *cellCapacityMB == 0 {
+		*cellCapacityMB = defaultCapacity
+	}
+
+	if *limitCompactCount == 0 {
+		*limitCompactCount = *cellCapacityMB * mb * 3 / 4 / kb
+	}
+
+	if *limitCompactBytesMB == 0 {
+		*limitCompactBytesMB = *cellCapacityMB * 3 / 4
+	}
+
+	if *limitCompactLag == 0 {
+		*limitCompactLag = *cellCapacityMB * mb / 256 / 16
+	}
+
+	if *thresholdSplitCheckMB == 0 {
+		*thresholdSplitCheckMB = *cellCapacityMB / 16
+	}
 }

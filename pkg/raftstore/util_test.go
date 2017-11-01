@@ -84,7 +84,7 @@ func (s *utilTestSuite) TestCheckKeyInCell(c *C) {
 	c.Assert(checkKeyInCell([]byte{0xff}, cell), IsNil)
 }
 
-func (s *utilTestSuite) TestSaveFirstCell(c *C) {
+func (s *utilTestSuite) TestSaveCell(c *C) {
 	d := storage.NewMemoryDriver()
 
 	cell := metapb.Cell{
@@ -95,7 +95,7 @@ func (s *utilTestSuite) TestSaveFirstCell(c *C) {
 	}
 	cell.Peers = append(cell.Peers, newTestPeer(1, 1))
 
-	c.Assert(SaveFirstCell(d, cell), IsNil)
+	c.Assert(SaveCell(d, cell), IsNil)
 
 	ls := new(mraft.CellLocalState)
 	data, err := d.GetEngine().Get(getCellStateKey(cell.ID))

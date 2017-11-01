@@ -6,11 +6,16 @@ import "metapb/metapb.proto";
 import "gogoproto/gogo.proto";
 import "github.com/deepfabric/etcd/raft/raftpb/raft.proto";
 
-
 option (gogoproto.marshaler_all) = true;
 option (gogoproto.sizer_all) = true;
 option (gogoproto.unmarshaler_all) = true;
 option (gogoproto.goproto_enum_prefix_all) = false;
+
+enum SnapshotState {
+    Accept   = 0;
+    Reject   = 1;
+    Received = 2;
+}
 
 message RaftMessage  {
     optional uint64           cellID      = 1 [(gogoproto.nullable) = false];
@@ -30,28 +35,34 @@ message StoreIdent {
     optional uint64 storeID   = 2 [(gogoproto.nullable) = false];
 }
 
-message SnapKey {
-    optional uint64 cellID = 1 [(gogoproto.nullable) = false];
-    optional uint64 term   = 2 [(gogoproto.nullable) = false];
-    optional uint64 index  = 3 [(gogoproto.nullable) = false];
+message SnapshotMessageHeader {
+    optional metapb.Cell   cell     = 1 [(gogoproto.nullable) = false];
+    optional metapb.Peer   fromPeer = 2 [(gogoproto.nullable) = false];
+    optional metapb.Peer   toPeer   = 3 [(gogoproto.nullable) = false];
+    optional uint64        term     = 4 [(gogoproto.nullable) = false];
+    optional uint64        index    = 5 [(gogoproto.nullable) = false];
 }
 
-message SnapshotData {
-    optional SnapKey key  = 1 [(gogoproto.nullable) = false];
-    optional bytes   data = 2;
+message SnapshotMessage {
+    optional SnapshotMessageHeader header   = 1 [(gogoproto.nullable) = false];
+    optional SnapshotChunkMessage  chunk    = 2;
+    optional SnapshotAckMessage    ack      = 3;
+    optional SnapshotAskMessage    ask      = 4;
 }
 
-message SnapshotDataEnd {
-    optional SnapKey key      = 1 [(gogoproto.nullable) = false];
-    optional uint64  fileSize = 2 [(gogoproto.nullable) = false];
-    optional uint64  checkSum = 3 [(gogoproto.nullable) = false];
+message SnapshotChunkMessage {
+    optional bytes  data     = 1;
+    optional bool   first    = 2 [(gogoproto.nullable) = false];
+    optional bool   last     = 3 [(gogoproto.nullable) = false];
+    optional uint64 fileSize = 4 [(gogoproto.nullable) = false];
+    optional uint64 checkSum = 5 [(gogoproto.nullable) = false];
 }
 
-message RaftSnapshotData {
-    optional metapb.Cell  cell     = 1 [(gogoproto.nullable) = false];
-    optional SnapKey      key      = 2 [(gogoproto.nullable) = false];
-    optional uint64       fileSize = 3 [(gogoproto.nullable) = false];
-    optional uint64       checkSum = 4 [(gogoproto.nullable) = false];
+message SnapshotAckMessage {
+    optional SnapshotState ack = 1 [(gogoproto.nullable) = false];
+}
+
+message SnapshotAskMessage {
 }
 
 enum PeerState {

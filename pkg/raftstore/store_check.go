@@ -116,19 +116,26 @@ func (s *Store) isMsgStale(msg *mraft.RaftMessage) (bool, error) {
 func (s *Store) checkSnapshot(msg *mraft.RaftMessage) (bool, error) {
 	// Check if we can accept the snapshot
 	pr := s.getPeerReplicate(msg.CellID)
-	if pr.getStore().isInitialized() ||
-		len(msg.Message.Snapshot.Data) <= 0 {
+	if len(msg.Message.Snapshot.Data) <= 0 {
 		return true, nil
 	}
 
 	snap := msg.Message.Snapshot
-	snapData := &mraft.RaftSnapshotData{}
+	snapData := &mraft.SnapshotMessage{}
 	err := snapData.Unmarshal(snap.Data)
 	if err != nil {
 		return false, err
 	}
 
-	snapCell := snapData.Cell
+	if pr.getStore().isInitialized() {
+		return true, nil
+	}
+
+	snapData.Header.FromPeer = msg.ToPeer
+	snapData.Header.ToPeer = msg.FromPeer
+	snapData.Ack = &mraft.SnapshotAckMessage{}
+
+	snapCell := snapData.Header.Cell
 	peerID := msg.ToPeer.ID
 
 	found := false
@@ -144,7 +151,8 @@ func (s *Store) checkSnapshot(msg *mraft.RaftMessage) (bool, error) {
 			snapCell.ID,
 			snapCell,
 			msg.ToPeer)
-
+		snapData.Ack.Ack = mraft.Reject
+		s.trans.sendSnapshotMessage(snapData)
 		return false, nil
 	}
 
@@ -155,24 +163,60 @@ func (s *Store) checkSnapshot(msg *mraft.RaftMessage) (bool, error) {
 			log.Infof("cell overlapped, exist=<%v> target=<%v>",
 				exist,
 				snapCell)
+			snapData.Ack.Ack = mraft.Reject
+			s.trans.sendSnapshotMessage(snapData)
 			return false, nil
 		}
 	}
 
-	for _, c := range s.pendingCells {
-		if bytes.Compare(encStartKey(&c), encEndKey(&snapCell)) < 0 &&
-			bytes.Compare(encEndKey(&c), encStartKey(&snapCell)) > 0 &&
-			// Same cell can overlap, we will apply the latest version of snapshot.
-			c.ID != snapCell.ID {
-			log.Infof("pending cell overlapped, c=<%s> snap=<%s>",
-				c.String(),
-				snapCell.String())
-			return false, nil
-		}
+	if !s.addPendingSnapshot(snapData.Header) {
+		snapData.Ack.Ack = mraft.Reject
+		s.trans.sendSnapshotMessage(snapData)
+		return false, nil
 	}
 
-	s.pendingCells = append(s.pendingCells, snapCell)
 	return true, nil
+}
+
+func (s *Store) addPendingSnapshot(msg mraft.SnapshotMessageHeader) bool {
+	s.pendingLock.Lock()
+	if s.hasOverlapInPendingSnapshots(&msg.Cell) {
+		s.pendingLock.Unlock()
+		return false
+	}
+
+	s.pendingSnapshots[msg.Cell.ID] = msg
+	s.pendingLock.Unlock()
+
+	return true
+}
+
+func (s *Store) getPendingSnapshot(id uint64) mraft.SnapshotMessageHeader {
+	s.pendingLock.RLock()
+	value := s.pendingSnapshots[id]
+	s.pendingLock.RUnlock()
+
+	return value
+}
+
+func (s *Store) removePendingSnapshot(id uint64) {
+	s.pendingLock.Lock()
+	delete(s.pendingSnapshots, id)
+	s.pendingLock.Unlock()
+}
+
+func (s *Store) hasOverlapInPendingSnapshots(cell *metapb.Cell) bool {
+	for _, h := range s.pendingSnapshots {
+		if HasOverlap(&h.Cell, cell) &&
+			// Same cell can overlap, we will apply the latest version of snapshot.
+			h.Cell.ID != cell.ID {
+			log.Infof("pending cell overlapped, old=<%s> new=<%s>",
+				h.Cell.String(),
+				cell.String())
+			return true
+		}
+	}
+	return false
 }
 
 func checkEpoch(cell metapb.Cell, req *raftcmdpb.RaftCMDRequest) bool {
@@ -215,16 +259,6 @@ func checkEpoch(cell metapb.Cell, req *raftcmdpb.RaftCMDRequest) bool {
 	}
 
 	return true
-}
-
-func (s *Store) inPending(cell metapb.Cell) bool {
-	for _, c := range s.pendingCells {
-		if c.ID == cell.ID {
-			return true
-		}
-	}
-
-	return false
 }
 
 func (s *Store) validateStoreID(req *raftcmdpb.RaftCMDRequest) error {

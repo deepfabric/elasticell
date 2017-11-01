@@ -119,8 +119,8 @@ func newCompactLogRequest(index, term uint64) *raftcmdpb.AdminRequest {
 	return req
 }
 
-// SaveFirstCell save first cell with state, raft state and apply state.
-func SaveFirstCell(driver storage.Driver, cell metapb.Cell) error {
+// SaveCell save  cell with state, raft state and apply state.
+func SaveCell(driver storage.Driver, cell metapb.Cell) error {
 	wb := driver.NewWriteBatch()
 
 	// save state
@@ -154,4 +154,37 @@ func SaveFirstCell(driver storage.Driver, cell metapb.Cell) error {
 
 	log.Infof("bootstrap: begin to write first cell to local")
 	return driver.Write(wb)
+}
+
+// DeleteCell delete cell with state, raft state and apply state.
+func DeleteCell(id uint64, wb storage.WriteBatch) error {
+	// save state
+	err := wb.Delete(getCellStateKey(id))
+	if err != nil {
+		return err
+	}
+
+	err = wb.Delete(getRaftStateKey(id))
+	if err != nil {
+		return err
+	}
+
+	err = wb.Delete(getApplyStateKey(id))
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// HasOverlap check cells has overlap
+func HasOverlap(c1, c2 *metapb.Cell) bool {
+	return bytes.Compare(encStartKey(c1), encEndKey(c2)) < 0 &&
+		bytes.Compare(encEndKey(c1), encStartKey(c2)) > 0
+}
+
+// StalEpoch returns true if the target epoch is stale
+func StalEpoch(target, check metapb.CellEpoch) bool {
+	return (target.ConfVer < check.ConfVer) ||
+		(target.CellVer < check.CellVer)
 }

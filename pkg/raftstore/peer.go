@@ -49,6 +49,8 @@ type PeerReplicate struct {
 	applyResults *util.Queue
 	requests     *util.Queue
 
+	stopRaftTick bool
+
 	peerHeartbeatsMap *peerHeartbeatsMap
 	pendingReads      *readIndexQueue
 
@@ -346,6 +348,8 @@ func (pr *PeerReplicate) destroy() error {
 		pr.cellID)
 
 	pr.stopEventLoop()
+
+	pr.store.removePendingSnapshot(pr.cellID)
 
 	wb := pr.store.engine.NewWriteBatch()
 

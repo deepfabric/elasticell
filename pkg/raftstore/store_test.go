@@ -131,8 +131,8 @@ func (s *storeTestSuite) TestClearMeta(c *C) {
 	}
 	store.keyRanges.Update(c2)
 
-	c.Assert(SaveFirstCell(store.engine, c1), IsNil)
-	c.Assert(SaveFirstCell(store.engine, c2), IsNil)
+	c.Assert(SaveCell(store.engine, c1), IsNil)
+	c.Assert(SaveCell(store.engine, c2), IsNil)
 	wb := store.engine.NewWriteBatch()
 	store.clearMeta(c1.ID, wb)
 	store.clearMeta(c2.ID, wb)

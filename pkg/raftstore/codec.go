@@ -27,29 +27,8 @@ var (
 )
 
 const (
-	typeRaft      = 1
-	typeSnap      = 2
-	typeSnapData  = 3
-	typeSnapEnd   = 4
-	typeHeartbeat = 5
-)
-
-type heartbeatMsg struct{}
-
-func (h *heartbeatMsg) Size() int {
-	return 0
-}
-
-func (h *heartbeatMsg) Marshal() ([]byte, error) {
-	return nil, nil
-}
-
-func (h *heartbeatMsg) MarshalTo(data []byte) (int, error) {
-	return 0, nil
-}
-
-var (
-	heartbeat = &heartbeatMsg{}
+	typeRaft = 1
+	typeSnap = 2
 )
 
 type raftDecoder struct {
@@ -76,17 +55,7 @@ func (decoder raftDecoder) Decode(in *goetty.ByteBuf) (bool, interface{}, error)
 
 	switch t {
 	case typeSnap:
-		msg := &mraft.SnapKey{}
-		util.MustUnmarshal(msg, data)
-		in.MarkedBytesReaded()
-		return true, msg, nil
-	case typeSnapData:
-		msg := &mraft.SnapshotData{}
-		util.MustUnmarshal(msg, data)
-		in.MarkedBytesReaded()
-		return true, msg, nil
-	case typeSnapEnd:
-		msg := &mraft.SnapshotDataEnd{}
+		msg := &mraft.SnapshotMessage{}
 		util.MustUnmarshal(msg, data)
 		in.MarkedBytesReaded()
 		return true, msg, nil
@@ -95,10 +64,6 @@ func (decoder raftDecoder) Decode(in *goetty.ByteBuf) (bool, interface{}, error)
 		util.MustUnmarshal(msg, data)
 		in.MarkedBytesReaded()
 		return true, msg, nil
-	case typeHeartbeat:
-		in.MarkedBytesReaded()
-		// ignore the heartbeat msg
-		return false, nil, nil
 	}
 
 	log.Fatalf("bug: not support msg type, type=<%d>", t)
@@ -112,17 +77,8 @@ func (e raftEncoder) Encode(data interface{}, out *goetty.ByteBuf) error {
 	if msg, ok := data.(*mraft.RaftMessage); ok {
 		t = typeRaft
 		m = msg
-	} else if msg, ok := data.(*mraft.SnapKey); ok {
+	} else if msg, ok := data.(*mraft.SnapshotMessage); ok {
 		t = typeSnap
-		m = msg
-	} else if msg, ok := data.(*mraft.SnapshotData); ok {
-		t = typeSnapData
-		m = msg
-	} else if msg, ok := data.(*mraft.SnapshotDataEnd); ok {
-		t = typeSnapEnd
-		m = msg
-	} else if msg, ok := data.(*heartbeatMsg); ok {
-		t = typeHeartbeat
 		m = msg
 	} else {
 		log.Fatalf("bug: unsupport msg: %+v", msg)
