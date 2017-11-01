@@ -27,13 +27,13 @@ import (
 	"github.com/deepfabric/elasticell/pkg/util"
 	"github.com/fagongzi/goetty"
 	"github.com/pkg/errors"
+	"golang.org/x/net/context"
+	"golang.org/x/time/rate"
 )
 
 var (
 	creating = 1
 	sending  = 2
-
-	writeBuff = 1024 * 1024 * 8 // 8mb
 )
 
 // SnapshotManager manager snapshot
@@ -50,6 +50,8 @@ type SnapshotManager interface {
 
 type defaultSnapshotManager struct {
 	sync.RWMutex
+
+	limiter *rate.Limiter
 
 	cfg *Cfg
 	db  storage.DataEngine
@@ -117,6 +119,8 @@ func newDefaultSnapshotManager(cfg *Cfg, db storage.DataEngine) SnapshotManager 
 	}()
 
 	return &defaultSnapshotManager{
+		cfg:      cfg,
+		limiter:  rate.NewLimiter(rate.Every(time.Second), int(cfg.LimitSnapChunkRate)),
 		dir:      dir,
 		db:       db,
 		registry: make(map[string]struct{}),
@@ -230,7 +234,8 @@ func (m *defaultSnapshotManager) WriteTo(msg *mraft.SnapshotMessage, conn goetty
 	defer f.Close()
 
 	var written int64
-	buf := make([]byte, writeBuff)
+	buf := make([]byte, m.cfg.LimitSnapChunkBytes)
+	ctx := context.TODO()
 
 	for {
 		nr, er := f.Read(buf)
@@ -245,7 +250,12 @@ func (m *defaultSnapshotManager) WriteTo(msg *mraft.SnapshotMessage, conn goetty
 			}
 
 			written += int64(nr)
-			err := conn.Write(dst)
+			err := m.limiter.Wait(ctx)
+			if err != nil {
+				return 0, err
+			}
+
+			err = conn.Write(dst)
 			if err != nil {
 				return 0, err
 			}

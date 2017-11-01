@@ -540,6 +540,10 @@
 			"Rev": "99f16d856c9836c42d24e7ab64ea72916925fa97"
 		},
 		{
+			"ImportPath": "golang.org/x/time/rate",
+			"Rev": "6dc17368e09b0e8634d71cac8168d853e869a0c7"
+		},
+		{
 			"ImportPath": "google.golang.org/grpc",
 			"Comment": "v1.0.5",
 			"Rev": "708a7f9f3283aa2d4f6132d287d78683babe55c8"

@@ -70,6 +70,8 @@ var (
 	limitRaftMsgCount         = flag.Int("limit-raft-msg-count", 256, "Limit: Max count of in-flight raft append messages")
 	limitRaftMsgBytesMB       = flag.Uint64("limit-raft-msg-bytes", 1, "Limit(MB): Max bytes per raft msg")
 	limitRaftEntryBytesMB     = flag.Uint64("limit-raft-entry-bytes", 8, "Limit(MB): Max bytes of raft log entry")
+	limitSnapChunkBytesKB     = flag.Uint64("limit-snap-chunk-bytes", 1024, "Limit(KB): Max snap chunk size")
+	limitSnapChunkRate        = flag.Uint64("limit-snap-chunk-rate", 16, "Limit: Max snap chunks sent per second")
 	thresholdCompact          = flag.Uint64("threshold-compact", 64, "Threshold: Raft Log compact, count of [first, replicated]")
 	thresholdSplitCheckMB     = flag.Uint64("threshold-split-check", 0, "Threshold(MB): Start split check, bytes that the cell has bean stored")
 	thresholdRaftElection     = flag.Int("threshold-raft-election", 10, "Threshold: Raft election, after this ticks")
@@ -180,6 +182,8 @@ func parseCfg() *server.Cfg {
 	cfg.Node.RaftStore.LimitRaftMsgCount = *limitRaftMsgCount
 	cfg.Node.RaftStore.LimitRaftMsgBytes = *limitRaftMsgBytesMB * mb
 	cfg.Node.RaftStore.LimitRaftEntryBytes = *limitRaftEntryBytesMB * mb
+	cfg.Node.RaftStore.LimitSnapChunkBytes = *limitSnapChunkBytesKB * kb
+	cfg.Node.RaftStore.LimitSnapChunkRate = *limitSnapChunkRate
 	cfg.Node.RaftStore.ThresholdCompact = *thresholdCompact
 	cfg.Node.RaftStore.ThresholdSplitCheckBytes = *thresholdSplitCheckMB * mb
 	cfg.Node.RaftStore.ThresholdRaftElection = *thresholdRaftElection

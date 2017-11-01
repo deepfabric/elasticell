@@ -37,6 +37,8 @@ type Cfg struct {
 	LimitRaftMsgCount         int
 	LimitRaftMsgBytes         uint64
 	LimitRaftEntryBytes       uint64
+	LimitSnapChunkBytes       uint64
+	LimitSnapChunkRate        uint64
 	ThresholdCompact          uint64
 	ThresholdSplitCheckBytes  uint64
 	ThresholdRaftElection     int
