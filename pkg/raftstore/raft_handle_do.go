@@ -250,6 +250,12 @@ func (pr *PeerReplicate) doApplySnap(ctx *readyContext, rd *raft.Ready) *applySn
 
 	pr.startApplyingSnapJob()
 
+	// remove pending snapshots for sending
+	rms := removedPeers(ctx.snap.Header.Cell, pr.ps.getCell())
+	for _, p := range rms {
+		pr.store.trans.forceRemoveSendingSnapshot(p)
+	}
+
 	prevCell := pr.ps.getCell()
 	pr.ps.setCell(ctx.snap.Header.Cell)
 

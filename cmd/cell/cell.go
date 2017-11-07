@@ -39,14 +39,11 @@ const (
 )
 
 var (
-	pprof = flag.String("pprof-addr", "", "pprof http server address")
-)
-
-var (
 	clusterID      = flag.Uint64("clusterid", 0, "Cluster ID")
 	pd             = flag.String("pd", "", "PD addresses")
 	addr           = flag.String("addr", ":10800", "Internal address")
 	addrCli        = flag.String("addr-cli", ":6379", "KV client address")
+	pprof          = flag.String("addr-pprof", "", "pprof http server address")
 	dataDir        = flag.String("data", "", "The data dir")
 	zone           = flag.String("zone", "", "Zone label")
 	rack           = flag.String("rack", "", "Rack label")

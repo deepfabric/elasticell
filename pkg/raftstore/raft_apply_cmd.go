@@ -217,6 +217,9 @@ func (d *applyDelegate) doExecChangePeer(ctx *applyContext) (*raftcmdpb.RaftCMDR
 		removePeer(&d.cell, req.Peer.StoreID)
 		ctx.metrics.admin.removePeerSucceed++
 
+		// remove pending snapshots
+		d.store.trans.forceRemoveSendingSnapshot(req.Peer.ID)
+
 		log.Infof("raftstore-apply[cell-%d]: peer removed, peer=<%+v>",
 			d.cell.ID,
 			req.Peer)

@@ -35,12 +35,18 @@ message StoreIdent {
     optional uint64 storeID   = 2 [(gogoproto.nullable) = false];
 }
 
+message ACKMessage {
+    optional uint64 seq = 1 [(gogoproto.nullable) = false];
+    optional uint64 to  = 2 [(gogoproto.nullable) = false];
+}
+
 message SnapshotMessageHeader {
     optional metapb.Cell   cell     = 1 [(gogoproto.nullable) = false];
     optional metapb.Peer   fromPeer = 2 [(gogoproto.nullable) = false];
     optional metapb.Peer   toPeer   = 3 [(gogoproto.nullable) = false];
     optional uint64        term     = 4 [(gogoproto.nullable) = false];
     optional uint64        index    = 5 [(gogoproto.nullable) = false];
+    optional uint64        seq      = 6 [(gogoproto.nullable) = false];
 }
 
 message SnapshotMessage {

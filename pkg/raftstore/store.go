@@ -477,13 +477,13 @@ func (s *Store) onSnapshotMessage(msg *mraft.SnapshotMessage) {
 	if msg.Chunk != nil {
 		s.onSnapshotChunk(msg)
 	} else if msg.Ack != nil {
-		s.onSnapshotMessageAck(msg)
+		s.onSnapshotAck(msg)
 	} else if msg.Ask != nil {
-		s.onSnapshotMessageAsk(msg)
+		s.onSnapshotAsk(msg)
 	}
 }
 
-func (s *Store) onSnapshotMessageAsk(msg *mraft.SnapshotMessage) {
+func (s *Store) onSnapshotAsk(msg *mraft.SnapshotMessage) {
 	reply := &mraft.SnapshotMessage{}
 	util.MustUnmarshal(reply, util.MustMarshal(msg))
 	reply.Header.FromPeer = msg.Header.ToPeer
@@ -515,7 +515,7 @@ func (s *Store) onSnapshotMessageAsk(msg *mraft.SnapshotMessage) {
 	s.trans.sendSnapshotMessage(reply)
 }
 
-func (s *Store) onSnapshotMessageAck(msg *mraft.SnapshotMessage) {
+func (s *Store) onSnapshotAck(msg *mraft.SnapshotMessage) {
 	log.Infof("raftstore-snap[cell-%d]: received snap ack=<%s>, epoch=<%s> term=<%d> index=<%d>",
 		msg.Header.Cell.ID,
 		msg.Ack.Ack.String(),
@@ -526,11 +526,18 @@ func (s *Store) onSnapshotMessageAck(msg *mraft.SnapshotMessage) {
 	ack := msg.Ack.Ack
 	switch ack {
 	case mraft.Reject:
-		s.trans.removePendingSnapshot(msg.Header.FromPeer.ID, msg.Header)
+		s.trans.removeSendingSnapshot(msg.Header.FromPeer.ID, msg.Header)
 		s.addSnapJob(func() error {
 			return s.snapshotManager.CleanSnap(msg)
 		}, nil)
 	case mraft.Accept:
+		// check if this accept is stale
+		sendingSnap := s.trans.getSendingSnapshot(msg.Header.FromPeer.ID)
+		if sendingSnap == nil ||
+			isEpochStale(msg.Header.Cell.Epoch, sendingSnap.CellEpoch) {
+			return
+		}
+
 		from := msg.Header.FromPeer
 		to := msg.Header.ToPeer
 		msg.Header.ToPeer = from

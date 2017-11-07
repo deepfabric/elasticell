@@ -29,6 +29,7 @@ var (
 const (
 	typeRaft = 1
 	typeSnap = 2
+	typeAck  = 3
 )
 
 type raftDecoder struct {
@@ -64,6 +65,11 @@ func (decoder raftDecoder) Decode(in *goetty.ByteBuf) (bool, interface{}, error)
 		util.MustUnmarshal(msg, data)
 		in.MarkedBytesReaded()
 		return true, msg, nil
+	case typeAck:
+		msg := &mraft.ACKMessage{}
+		util.MustUnmarshal(msg, data)
+		in.MarkedBytesReaded()
+		return true, msg, nil
 	}
 
 	log.Fatalf("bug: not support msg type, type=<%d>", t)
@@ -79,6 +85,9 @@ func (e raftEncoder) Encode(data interface{}, out *goetty.ByteBuf) error {
 		m = msg
 	} else if msg, ok := data.(*mraft.SnapshotMessage); ok {
 		t = typeSnap
+		m = msg
+	} else if msg, ok := data.(*mraft.ACKMessage); ok {
+		t = typeAck
 		m = msg
 	} else {
 		log.Fatalf("bug: unsupport msg: %+v", msg)

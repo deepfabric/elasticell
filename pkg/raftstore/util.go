@@ -65,6 +65,26 @@ func newPeer(peerID, storeID uint64) metapb.Peer {
 	}
 }
 
+func removedPeers(new, old metapb.Cell) []uint64 {
+	var ids []uint64
+
+	for _, o := range old.Peers {
+		c := 0
+		for _, n := range new.Peers {
+			if n.ID == o.ID {
+				c++
+				break
+			}
+		}
+
+		if c == 0 {
+			ids = append(ids, o.ID)
+		}
+	}
+
+	return ids
+}
+
 // Check if key in cell range [`startKey`, `endKey`).
 func checkKeyInCell(key []byte, cell *metapb.Cell) *errorpb.Error {
 	if bytes.Compare(key, cell.Start) >= 0 && (len(cell.End) == 0 || bytes.Compare(key, cell.End) < 0) {

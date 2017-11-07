@@ -128,6 +128,35 @@ func (s *utilTestSuite) TestSaveCell(c *C) {
 	c.Assert(as.TruncatedState.Term == raftInitLogTerm, IsTrue)
 }
 
+func (s *utilTestSuite) TestRemovedPeers(c *C) {
+	new := metapb.Cell{}
+	new.Peers = append(new.Peers, newTestPeer(1, 100))
+	new.Peers = append(new.Peers, newTestPeer(2, 101))
+	new.Peers = append(new.Peers, newTestPeer(3, 102))
+
+	old := metapb.Cell{}
+	old.Peers = append(old.Peers, newTestPeer(1, 100))
+	old.Peers = append(old.Peers, newTestPeer(2, 101))
+	old.Peers = append(old.Peers, newTestPeer(4, 102))
+
+	rms := removedPeers(new, old)
+	c.Assert(len(rms) == 1, IsTrue)
+	c.Assert(rms[0] == 4, IsTrue)
+
+	new = metapb.Cell{}
+	new.Peers = append(new.Peers, newTestPeer(1, 100))
+	new.Peers = append(new.Peers, newTestPeer(2, 101))
+	new.Peers = append(new.Peers, newTestPeer(3, 102))
+
+	old = metapb.Cell{}
+	old.Peers = append(old.Peers, newTestPeer(4, 100))
+	old.Peers = append(old.Peers, newTestPeer(5, 101))
+	old.Peers = append(old.Peers, newTestPeer(6, 102))
+
+	rms = removedPeers(new, old)
+	c.Assert(len(rms) == 3, IsTrue)
+}
+
 func newTestPeer(id, storeID uint64) *metapb.Peer {
 	return &metapb.Peer{
 		ID:      id,
