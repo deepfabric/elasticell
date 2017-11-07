@@ -43,7 +43,7 @@ func (e *nemoDataEngine) GetTargetSizeKey(startKey []byte, endKey []byte, size u
 	} else {
 		currentSize = uint64(it.TotalVolume())
 	}
-
+	it.Free()
 	return currentSize, targetKey, nil
 }
 
