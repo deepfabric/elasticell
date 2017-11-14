@@ -319,11 +319,6 @@
 			"Rev": "1c941d73110817a80b9fa6e14d5d2b00d977ce2a"
 		},
 		{
-			"ImportPath": "github.com/deepfabric/c-nemo",
-			"Comment": "nemo-v0.1.2-112-g62ebb4f",
-			"Rev": "62ebb4fc0455c289cd375061cf39b5cc2e5a41ac"
-		},
-		{
 			"ImportPath": "github.com/deepfabric/etcd/raft",
 			"Comment": "v3.1.9-2-gf8c66a5",
 			"Rev": "f8c66a5abeb737f1aeeafe0fbe2aa16e9813b0dd"
@@ -332,18 +327,6 @@
 			"ImportPath": "github.com/deepfabric/etcd/raft/raftpb",
 			"Comment": "v3.1.9-2-gf8c66a5",
 			"Rev": "f8c66a5abeb737f1aeeafe0fbe2aa16e9813b0dd"
-		},
-		{
-			"ImportPath": "github.com/deepfabric/go-nemo",
-			"Rev": "ed21d7d1df23ba7fa2fccf1ccf264cf744c2784c"
-		},
-		{
-			"ImportPath": "github.com/fagongzi/goetty",
-			"Rev": "2e369222b4f4d40511993dea44d7110d89a3c986"
-		},
-		{
-			"ImportPath": "github.com/fagongzi/goetty/protocol/redis",
-			"Rev": "2e369222b4f4d40511993dea44d7110d89a3c986"
 		},
 		{
 			"ImportPath": "github.com/funny/slab",
