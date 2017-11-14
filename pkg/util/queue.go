@@ -152,6 +152,52 @@ func (q *Queue) Put(items ...interface{}) error {
 	return nil
 }
 
+// PutOrUpdate will add the specified item to the queue, update it if exists
+func (q *Queue) PutOrUpdate(cmp func(interface{}, interface{}) bool, item interface{}) error {
+	q.lock.Lock()
+
+	if q.disposed {
+		q.lock.Unlock()
+		return ErrDisposed
+	}
+
+	i := 0
+	pos := -1
+	for _, old := range q.items {
+		if cmp(old, item) {
+			pos = i
+			break
+		}
+		i++
+	}
+
+	if pos != -1 {
+		q.items[pos] = item
+	} else {
+		q.items = append(q.items, item)
+	}
+
+	for {
+		sema := q.waiters.get()
+		if sema == nil {
+			break
+		}
+		sema.response.Add(1)
+		select {
+		case sema.ready <- true:
+			sema.response.Wait()
+		default:
+			// This semaphore timed out.
+		}
+		if len(q.items) == 0 {
+			break
+		}
+	}
+
+	q.lock.Unlock()
+	return nil
+}
+
 // Get retrieves items from the queue.  If there are some items in the
 // queue, get will return a number UP TO the number passed in as a
 // parameter.  If no items are in the queue, this method will pause

@@ -40,11 +40,11 @@ var (
 )
 
 func (s *Server) startEmbedEtcd() {
-	log.Info("bootstrap: start embed ectd server")
+	log.Info("bootstrap: start embed etcd server")
 
 	cfg, err := s.cfg.getEmbedEtcdConfig()
 	if err != nil {
-		log.Fatalf("bootstrap: start embed ectd server failure, errors:\n %+v",
+		log.Fatalf("bootstrap: start embed etcd server failure, errors:\n %+v",
 			err)
 		return
 	}
@@ -55,7 +55,7 @@ func (s *Server) startEmbedEtcd() {
 
 	s.etcd, err = embed.StartEtcd(cfg)
 	if err != nil {
-		log.Fatalf("bootstrap: start embed ectd server failure, errors:\n %+v",
+		log.Fatalf("bootstrap: start embed etcd server failure, errors:\n %+v",
 			err)
 		return
 	}
@@ -70,7 +70,7 @@ func (s *Server) startEmbedEtcd() {
 }
 
 func (s *Server) doAfterEmbedEtcdServerReady(cfg *embed.Config) {
-	s.checkEctdCluster()
+	s.checkEtcdCluster()
 
 	s.id = uint64(s.etcd.Server.ID())
 	log.Infof("bootstrap: embed server ids, id=<%d>, leader=<%d>",
@@ -144,7 +144,7 @@ func (s *Server) initStore(cfg *embed.Config) {
 func (s *Server) updateAdvertisePeerUrls() {
 	members, err := s.store.GetCurrentClusterMembers()
 	if err != nil {
-		log.Fatalf("bootstrap: update current members of ectd cluster")
+		log.Fatalf("bootstrap: update current members of etcd cluster")
 		return
 	}
 
@@ -161,7 +161,7 @@ func (s *Server) updateAdvertisePeerUrls() {
 	}
 }
 
-func (s *Server) checkEctdCluster() {
+func (s *Server) checkEtcdCluster() {
 	um, err := types.NewURLsMap(s.cfg.EmbedEtcd.InitialCluster)
 	if err != nil {
 		s.closeEmbedEtcd()
@@ -186,11 +186,11 @@ func (s *Server) closeEmbedEtcd() {
 
 	if s.store != nil {
 		s.store.Close()
-		log.Info("stop: ectd v3 client is closed")
+		log.Info("stop: etcd v3 client is closed")
 	}
 
 	s.etcd.Close()
-	log.Info("stop: embed ectd server is stopped")
+	log.Info("stop: embed etcd server is stopped")
 }
 
 func checkClusterID(localClusterID types.ID, um types.URLsMap) error {
@@ -221,14 +221,14 @@ func checkClusterID(localClusterID types.ID, um types.URLsMap) error {
 		trp.CloseIdleConnections()
 		if gerr != nil {
 			// Do not return error, because other members may be not ready.
-			log.Warnf("bootstrap: check ectd embed, may be member is not ready, member=<%s>",
+			log.Warnf("bootstrap: check etcd embed, may be member is not ready, member=<%s>",
 				u)
 			continue
 		}
 
 		remoteClusterID := remoteCluster.ID()
 		if remoteClusterID != localClusterID {
-			return errors.Wrapf(errEmbedEctdClusterIDNotMatch,
+			return errors.Wrapf(errEmbedEtcdClusterIDNotMatch,
 				"expect=<%d>, got=<%d>",
 				localClusterID,
 				remoteClusterID)

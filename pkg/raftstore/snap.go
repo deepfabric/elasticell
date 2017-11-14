@@ -237,6 +237,11 @@ func (m *defaultSnapshotManager) WriteTo(msg *mraft.SnapshotMessage, conn goetty
 	buf := make([]byte, m.cfg.LimitSnapChunkBytes)
 	ctx := context.TODO()
 
+	log.Infof("raftstore-snap[cell-%d]: try to send snap, header=<%s>,size=<%d>",
+		msg.Header.Cell.ID,
+		msg.Header.String(),
+		fileSize)
+
 	for {
 		nr, er := f.Read(buf)
 		if nr > 0 {
@@ -268,6 +273,8 @@ func (m *defaultSnapshotManager) WriteTo(msg *mraft.SnapshotMessage, conn goetty
 		}
 	}
 
+	log.Infof("raftstore-snap[cell-%d]: send snap complete",
+		msg.Header.Cell.ID)
 	return uint64(written), nil
 }
 
@@ -276,10 +283,10 @@ func (m *defaultSnapshotManager) CleanSnap(msg *mraft.SnapshotMessage) error {
 
 	tmpFile := m.getTmpPathOfSnapKeyGZ(msg)
 	if exist(tmpFile) {
-		log.Infof("raftstore-snap[cell-%d]: delete exists snap tmp file, file=<%s>, key=<%+v>",
+		log.Infof("raftstore-snap[cell-%d]: delete exists snap tmp file, file=<%s>, header=<%s>",
 			msg.Header.Cell.ID,
 			tmpFile,
-			msg)
+			msg.Header.String())
 		err = os.RemoveAll(tmpFile)
 	}
 
@@ -289,10 +296,10 @@ func (m *defaultSnapshotManager) CleanSnap(msg *mraft.SnapshotMessage) error {
 
 	file := m.getPathOfSnapKeyGZ(msg)
 	if exist(file) {
-		log.Infof("raftstore-snap[cell-%d]: delete exists snap gz file, file=<%s>, key=<%+v>",
+		log.Infof("raftstore-snap[cell-%d]: delete exists snap gz file, file=<%s>, header=<%s>",
 			msg.Header.Cell.ID,
 			file,
-			msg)
+			msg.Header.String())
 		err = os.RemoveAll(file)
 	}
 
@@ -302,10 +309,10 @@ func (m *defaultSnapshotManager) CleanSnap(msg *mraft.SnapshotMessage) error {
 
 	dir := m.getPathOfSnapKey(msg)
 	if exist(dir) {
-		log.Infof("raftstore-snap[cell-%d]: delete exists snap dir, file=<%s>, key=<%+v>",
+		log.Infof("raftstore-snap[cell-%d]: delete exists snap dir, file=<%s>, header=<%s>",
 			msg.Header.Cell.ID,
 			dir,
-			msg)
+			msg.Header.String())
 		err = os.RemoveAll(dir)
 	}
 
@@ -382,10 +389,10 @@ func (m *defaultSnapshotManager) cleanTmp(msg *mraft.SnapshotMessage) error {
 	var err error
 	tmpFile := m.getTmpPathOfSnapKeyGZ(msg)
 	if exist(tmpFile) {
-		log.Infof("raftstore-snap[cell-%d]: delete exists snap tmp file, file=<%s>, key=<%+v>",
+		log.Infof("raftstore-snap[cell-%d]: delete exists snap tmp file, file=<%s>, header=<%s>",
 			msg.Header.Cell.ID,
 			tmpFile,
-			msg)
+			msg.Header.String())
 		err = os.RemoveAll(tmpFile)
 	}
 

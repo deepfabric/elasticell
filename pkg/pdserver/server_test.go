@@ -71,10 +71,10 @@ func (s *testServerSuite) stopMultiPDServers(c *C) {
 
 func (s *testServerSuite) restartMultiPDServer(c *C, count int) {
 	s.stopMultiPDServers(c)
-	file, _ := ioutil.TempDir("", "ectd-log")
+	file, _ := ioutil.TempDir("", "etcd-log")
 	f, err := os.Open(file)
 	c.Assert(err, IsNil)
-	RedirectEmbedEctdLog(f)
+	RedirectEmbedEtcdLog(f)
 
 	s.servers = NewTestMultiServers(count)
 	var addrs []string

@@ -26,7 +26,7 @@ var (
 )
 
 var (
-	errEmbedEctdClusterIDNotMatch = errors.New("embed etcd cluster id not match")
+	errEmbedEtcdClusterIDNotMatch = errors.New("embed etcd cluster id not match")
 	errRPCReq                     = errors.New("invalid rpc req")
 	errStaleCell                  = errors.New("stale cell epoch")
 	errNotBootstrapped            = errors.New("cluster not bootstrapped")

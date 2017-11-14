@@ -52,8 +52,10 @@ type ClusterStore interface {
 	LoadClusterMeta(clusterID uint64) (*metapb.Cluster, error)
 	LoadStoreMeta(clusterID uint64, limit int64, do func(metapb.Store)) error
 	LoadCellMeta(clusterID uint64, limit int64, do func(metapb.Cell)) error
+	LoadWatchers(clusterID uint64, limit int64) ([]string, error)
 	SetStoreMeta(clusterID uint64, store metapb.Store) error
 	SetCellMeta(clusterID uint64, cell metapb.Cell) error
+	SetWatchers(clusterID uint64, watcher string) error
 }
 
 // LeaderStore is the store interface for leader info
@@ -95,7 +97,7 @@ type pdStore struct {
 
 // NewStore create a store
 func NewStore(cfg *embed.Config) (Store, error) {
-	c, err := initEctdClient(cfg)
+	c, err := initEtcdClient(cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -105,7 +107,7 @@ func NewStore(cfg *embed.Config) (Store, error) {
 	return s, nil
 }
 
-func initEctdClient(cfg *embed.Config) (*clientv3.Client, error) {
+func initEtcdClient(cfg *embed.Config) (*clientv3.Client, error) {
 	endpoints := []string{cfg.LCUrls[0].String()}
 
 	log.Infof("bootstrap: create etcd v3 client, endpoints=<%v>", endpoints)
@@ -121,7 +123,7 @@ func initEctdClient(cfg *embed.Config) (*clientv3.Client, error) {
 	return client, nil
 }
 
-// Close close ectd client
+// Close close etcd client
 func (s *pdStore) Close() error {
 	if s.client != nil {
 		return s.client.Close()
@@ -171,7 +173,7 @@ func (t *slowLogTxn) Commit() (*clientv3.TxnResponse, error) {
 
 	cost := time.Now().Sub(start)
 	if cost > DefaultSlowRequestTime {
-		log.Warn("embed-ectd: txn runs too slow, resp=<%v> cost=<%s> errors:\n %+v",
+		log.Warnf("embed-etcd: txn runs too slow, resp=<%+v> cost=<%s> errors:\n %+v",
 			resp,
 			cost,
 			err)
@@ -202,14 +204,14 @@ func (s *pdStore) get(key string, opts ...clientv3.OpOption) (*clientv3.GetRespo
 	start := time.Now()
 	resp, err := clientv3.NewKV(s.client).Get(ctx, key, opts...)
 	if err != nil {
-		log.Errorf("embed-ectd: read option failure, key=<%s>, errors:\n %+v",
+		log.Errorf("embed-etcd: read option failure, key=<%s>, errors:\n %+v",
 			key,
 			err)
 		return resp, errors.Wrap(err, "")
 	}
 
 	if cost := time.Since(start); cost > DefaultSlowRequestTime {
-		log.Warnf("embed-ectd: read option is too slow, key=<%s>, cost=<%d>",
+		log.Warnf("embed-etcd: read option is too slow, key=<%s>, cost=<%d>",
 			key,
 			cost)
 	}

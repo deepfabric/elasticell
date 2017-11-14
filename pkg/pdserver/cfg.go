@@ -32,9 +32,13 @@ type Cfg struct {
 	DataDir string `json:"dataDir"`
 	// for leader election
 	LeaseSecsTTL int64 `json:"leaseSecsTTL"`
+	// watcher heartbeat timeout
+	WatcherHeartbeatSec int `json:"watcherHeartbeatSec"`
+	// watcher heartbeat timeout
+	WatcherPauseTimeout int `json:"watcherPauseTimeout"`
 	// RPCAddr rpc addr
 	RPCAddr string `json:"rpcAddr"`
-	// EmbedEtcd is the embed ectd configuration
+	// EmbedEtcd is the embed etcd configuration
 	EmbedEtcd *EmbedEtcdCfg `json:"embedEtcd"`
 	// Schedule is the Schedule configuration
 	Schedule *ScheduleCfg `json:"schedule"`

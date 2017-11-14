@@ -63,6 +63,7 @@ func (s *Server) startLeaderLoop() {
 				log.Infof("leader-loop: we are not leader, watch the leader, leader=<%v>",
 					leader)
 				s.resetLeaderRPCProxy(leader)
+				s.notifier.removedAllWatcher()
 				s.notifyElectionComplete()
 				s.store.WatchLeader()
 				log.Infof("leader-loop: leader changed, try to campaign leader, leader=<%v>", leader)
@@ -80,8 +81,6 @@ func (s *Server) startLeaderLoop() {
 }
 
 func (s *Server) enableLeader() {
-	s.notifyElectionComplete()
-
 	// now, we are leader
 	atomic.StoreInt64(&s.isLeaderValue, 1)
 	log.Infof("leader-loop: PD cluster leader is ready, leader=<%s>", s.cfg.Name)
@@ -93,6 +92,19 @@ func (s *Server) enableLeader() {
 		log.Fatalf("leader-loop: start cell cluster failure, errors:\n %+v", err)
 		return
 	}
+
+	// load watchers
+	watchers, err := s.store.LoadWatchers(s.GetClusterID(), 256)
+	if err != nil {
+		log.Fatalf("leader-loop: load watchers failure, errors:\n %+v", err)
+		return
+	}
+
+	for _, watcher := range watchers {
+		s.notifier.addWatcher(watcher)
+	}
+
+	s.notifyElectionComplete()
 }
 
 func (s *Server) disableLeader() {
@@ -119,7 +131,7 @@ func (s *Server) GetLeader() (*pdpb.Leader, error) {
 func (s *Server) marshalLeader() string {
 	leader := &pdpb.Leader{
 		Addr:           s.cfg.RPCAddr,
-		EctdClientAddr: s.cfg.EmbedEtcd.ClientUrls,
+		EtcdClientAddr: s.cfg.EmbedEtcd.ClientUrls,
 		ID:             s.id,
 		Name:           s.cfg.Name,
 	}

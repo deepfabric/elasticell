@@ -18,6 +18,7 @@ import (
 
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
+	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
 	"github.com/pkg/errors"
 )
 
@@ -25,13 +26,14 @@ const (
 	batchLimit = 10000
 )
 
-func newCache(clusterID uint64, store Store, allocator *idAllocator) *cache {
+func newCache(clusterID uint64, store Store, allocator *idAllocator, notify *watcherNotifier) *cache {
 	c := new(cache)
 	c.clusterID = clusterID
 	c.sc = newStoreCache()
 	c.cc = newCellCache()
 	c.store = store
 	c.allocator = allocator
+	c.notify = notify
 
 	return c
 }
@@ -54,8 +56,11 @@ type cache struct {
 	cluster   *ClusterInfo
 	sc        *storeCache
 	cc        *cellCache
-	store     Store
+
 	allocator *idAllocator
+	notify    *watcherNotifier
+
+	store Store
 }
 
 func (c *cache) getStoreCache() *storeCache {
@@ -89,7 +94,13 @@ func (c *cache) handleCellHeartbeat(source *CellInfo) error {
 
 	// add new cell
 	if nil == current {
-		return c.doSaveCellInfo(source)
+		err := c.doSaveCellInfo(source)
+		if err != nil {
+			return err
+		}
+
+		c.notifyChangedRange(source.Meta.ID)
+		return nil
 	}
 
 	// update cell
@@ -108,27 +119,44 @@ func (c *cache) handleCellHeartbeat(source *CellInfo) error {
 		return errStaleCell
 	}
 
+	rangeChanged := sourceEpoch.CellVer > currentEpoch.CellVer
+	peersChanged := sourceEpoch.ConfVer > currentEpoch.ConfVer
 	// cell meta is updated, update kv and cache.
-	if sourceEpoch.CellVer > currentEpoch.CellVer ||
-		sourceEpoch.ConfVer > currentEpoch.ConfVer {
+	if rangeChanged || peersChanged {
 		log.Infof("cell-heartbeat[%d]: cell version updated, cellVer=<%d->%d> confVer=<%d->%d>",
 			source.Meta.ID,
 			currentEpoch.CellVer,
 			sourceEpoch.CellVer,
 			currentEpoch.ConfVer,
 			sourceEpoch.ConfVer)
-		return c.doSaveCellInfo(source)
+		err := c.doSaveCellInfo(source)
+		if err != nil {
+			return err
+		}
+
+		if rangeChanged {
+			c.notifyChangedRange(source.Meta.ID)
+		}
+
+		return nil
 	}
 
+	leaderChanged := false
 	if current.LeaderPeer != nil && current.LeaderPeer.ID != source.LeaderPeer.ID {
 		log.Infof("cell-heartbeat[%d]: update cell leader, from=<%v> to=<%+v>",
 			current.getID(),
 			current,
 			source)
+		leaderChanged = true
 	}
 
 	// cell meta is the same, update cache only.
 	c.getCellCache().addOrUpdate(source)
+
+	if leaderChanged {
+		c.notifyChangedRange(source.Meta.ID)
+	}
+
 	return nil
 }
 
@@ -140,6 +168,18 @@ func (c *cache) doSaveCellInfo(source *CellInfo) error {
 
 	c.getCellCache().addOrUpdate(source)
 	return nil
+}
+
+func (c *cache) notifyChangedRange(id uint64) {
+	cr := c.getCellCache().getCell(id)
+	r := &pdpb.Range{
+		Cell: cr.Meta,
+	}
+	if cr.LeaderPeer != nil {
+		r.LeaderStore = c.getStoreCache().getStore(cr.LeaderPeer.StoreID).Meta
+	}
+
+	c.notify.notify(r)
 }
 
 func randCell(cells map[uint64]*CellInfo) *CellInfo {

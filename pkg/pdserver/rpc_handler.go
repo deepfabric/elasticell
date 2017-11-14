@@ -39,6 +39,42 @@ func NewRPCHandler(server *Server) pdpb.PDServiceServer {
 	}
 }
 
+// RegisterWatcher regsiter a watcher for newest cell info notify
+func (h *RPCHandler) RegisterWatcher(c context.Context, req *pdpb.RegisterWatcherReq) (*pdpb.RegisterWatcherRsp, error) {
+	doFun := func() (interface{}, error) {
+		return h.server.registerWatcher(req)
+	}
+
+	forwardFun := func(proxy *pd.Client) (interface{}, error) {
+		return proxy.RegisterWatcher(c, req)
+	}
+
+	rsp, err := h.doHandle("RegisterWatcher", req, forwardFun, doFun)
+	if err != nil {
+		return nil, err
+	}
+
+	return rsp.(*pdpb.RegisterWatcherRsp), nil
+}
+
+// WatcherHeartbeat update the watcher lastest alive time
+func (h *RPCHandler) WatcherHeartbeat(c context.Context, req *pdpb.WatcherHeartbeatReq) (*pdpb.WatcherHeartbeatRsp, error) {
+	doFun := func() (interface{}, error) {
+		return h.server.watcherHeartbeat(req)
+	}
+
+	forwardFun := func(proxy *pd.Client) (interface{}, error) {
+		return proxy.WatcherHeartbeat(c, req)
+	}
+
+	rsp, err := h.doHandle("WatcherHeartbeat", req, forwardFun, doFun)
+	if err != nil {
+		return nil, err
+	}
+
+	return rsp.(*pdpb.WatcherHeartbeatRsp), nil
+}
+
 // GetClusterID returns cluster id
 func (h *RPCHandler) GetClusterID(c context.Context, req *pdpb.GetClusterIDReq) (*pdpb.GetClusterIDRsp, error) {
 	doFun := func() (interface{}, error) {

@@ -14,6 +14,8 @@
 package pdserver
 
 import (
+	"time"
+
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	. "github.com/pingcap/check"
 )
@@ -29,7 +31,7 @@ func (t *testCacheSuite) TearDownSuite(c *C) {
 }
 
 func (t *testCacheSuite) newTestCache() *cache {
-	return newCache(100, _testSingleSvr.store, _testSingleSvr.idAlloc)
+	return newCache(100, _testSingleSvr.store, _testSingleSvr.idAlloc, newWatcherNotifier(time.Second))
 }
 
 func (t *testCacheSuite) newTestPeer(id, storeID uint64) *metapb.Peer {

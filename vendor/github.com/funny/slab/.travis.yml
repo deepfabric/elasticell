@@ -1,0 +1,19 @@
+language: go
+
+go:
+  - 1.5.4
+  - 1.6.3
+  - 1.7.1
+
+install:
+    - go get github.com/mattn/goveralls
+    - go get -t -v ./...
+
+script:
+    - go vet -x
+    - go install
+    - go test -benchmem -bench=. -v
+    - go test -race -bench=. -coverprofile=coverage.txt -covermode=atomic -v
+
+after_success:
+    - bash <(curl -s https://codecov.io/bash)

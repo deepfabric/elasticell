@@ -155,6 +155,22 @@ func (s *Server) getLastRanges(req *pdpb.GetLastRangesReq) (*pdpb.GetLastRangesR
 	return c.doGetLastRanges(req)
 }
 
+func (s *Server) registerWatcher(req *pdpb.RegisterWatcherReq) (*pdpb.RegisterWatcherRsp, error) {
+	err := s.store.SetWatchers(s.GetClusterID(), req.Addr)
+	if err != nil {
+		return nil, err
+	}
+
+	s.notifier.addWatcher(req.Addr)
+	return &pdpb.RegisterWatcherRsp{}, nil
+}
+
+func (s *Server) watcherHeartbeat(req *pdpb.WatcherHeartbeatReq) (*pdpb.WatcherHeartbeatRsp, error) {
+	return &pdpb.WatcherHeartbeatRsp{
+		Paused: s.notifier.watcherHeartbeat(req.Addr, req.Offset),
+	}, nil
+}
+
 // GetClusterID returns cluster id
 func (s *Server) GetClusterID() uint64 {
 	return s.clusterID
@@ -219,7 +235,7 @@ type CellCluster struct {
 func newCellCluster(s *Server) *CellCluster {
 	c := &CellCluster{
 		s:     s,
-		cache: newCache(s.clusterID, s.store, s.idAlloc),
+		cache: newCache(s.clusterID, s.store, s.idAlloc, s.notifier),
 	}
 
 	c.coordinator = newCoordinator(s.cfg, c.cache)
@@ -228,6 +244,9 @@ func newCellCluster(s *Server) *CellCluster {
 }
 
 func (c *CellCluster) doBootstrap(store metapb.Store, cells []metapb.Cell) (*pdpb.BootstrapClusterRsp, error) {
+	c.mux.Lock()
+	defer c.mux.Unlock()
+
 	cluster := metapb.Cluster{
 		ID:          c.s.GetClusterID(),
 		MaxReplicas: c.s.cfg.Schedule.MaxReplicas,
@@ -244,6 +263,9 @@ func (c *CellCluster) doBootstrap(store metapb.Store, cells []metapb.Cell) (*pdp
 }
 
 func (c *CellCluster) doCellHeartbeat(cr *CellInfo) (*pdpb.CellHeartbeatRsp, error) {
+	c.mux.Lock()
+	defer c.mux.Unlock()
+
 	err := c.cache.handleCellHeartbeat(cr)
 	if err != nil {
 		return nil, err
@@ -365,6 +387,9 @@ func (c *CellCluster) doAskSplit(req *pdpb.AskSplitReq) (*pdpb.AskSplitRsp, erro
 }
 
 func (c *CellCluster) doReportSplit(req *pdpb.ReportSplitReq) (*pdpb.ReportSplitRsp, error) {
+	c.mux.Lock()
+	defer c.mux.Unlock()
+
 	left := req.Left
 	right := req.Right
 

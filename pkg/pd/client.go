@@ -176,6 +176,42 @@ func (c *Client) AllocID(ctx context.Context, req *pdpb.AllocIDReq) (*pdpb.Alloc
 	return rsp.(*pdpb.AllocIDRsp), nil
 }
 
+// RegisterWatcher register a watcher for newest cell info notify
+func (c *Client) RegisterWatcher(ctx context.Context, req *pdpb.RegisterWatcherReq) (*pdpb.RegisterWatcherRsp, error) {
+	rsp, err := c.proxyRPC(ctx,
+		req,
+		func() {
+			req.From = c.name
+			req.ID = c.seq
+		},
+		func(cc context.Context) (interface{}, error) {
+			return c.pd.RegisterWatcher(cc, req, grpc.FailFast(true))
+		})
+	if err != nil {
+		return nil, err
+	}
+
+	return rsp.(*pdpb.RegisterWatcherRsp), nil
+}
+
+// WatcherHeartbeat update the watcher lastest alive time
+func (c *Client) WatcherHeartbeat(ctx context.Context, req *pdpb.WatcherHeartbeatReq) (*pdpb.WatcherHeartbeatRsp, error) {
+	rsp, err := c.proxyRPC(ctx,
+		req,
+		func() {
+			req.From = c.name
+			req.ID = c.seq
+		},
+		func(cc context.Context) (interface{}, error) {
+			return c.pd.WatcherHeartbeat(cc, req, grpc.FailFast(true))
+		})
+	if err != nil {
+		return nil, err
+	}
+
+	return rsp.(*pdpb.WatcherHeartbeatRsp), nil
+}
+
 // GetClusterID returns cluster id
 func (c *Client) GetClusterID(ctx context.Context, req *pdpb.GetClusterIDReq) (*pdpb.GetClusterIDRsp, error) {
 	rsp, err := c.proxyRPC(ctx,

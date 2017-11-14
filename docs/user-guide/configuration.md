@@ -6,10 +6,10 @@
 |dataDir|The meta data storage dir|
 |leaseSecsTTL|Lease time for PD leader|
 |rpcAddr|Export grpc address for External components|
-|embedEtcd:clientUrls|Ectd address for internal etcd client|
-|embedEtcd:peerUrls|Ectd address for internal etcd peer|
+|embedEtcd:clientUrls|Etcd address for internal etcd client|
+|embedEtcd:peerUrls|Etcd address for internal etcd peer|
 |embedEtcd:initialCluster|PD cluster info|
-|embedEtcd:initialClusterState|Iniial ectd cluster state|
+|embedEtcd:initialClusterState|Iniial etcd cluster state|
 |schedule:maxReplicas|The max replicas number for each cell|
 |schedule:locationLabels|The location label for store, pd use this select best store for cell replicas|
 |schedule:maxSnapshotCount|The max snapshot count for store, pd use this select best store for cell replicas|

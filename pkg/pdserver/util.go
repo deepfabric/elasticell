@@ -20,9 +20,9 @@ import (
 	"github.com/coreos/pkg/capnslog"
 )
 
-// RedirectEmbedEctdLog because of our used embed ectd,
-// so we need redirect ectd log to spec.
-func RedirectEmbedEctdLog(w io.Writer) {
+// RedirectEmbedEtcdLog because of our used embed etcd,
+// so we need redirect etcd log to spec.
+func RedirectEmbedEtcdLog(w io.Writer) {
 	capnslog.SetFormatter(capnslog.NewPrettyFormatter(w, false))
 	capnslog.SetGlobalLogLevel(capnslog.DEBUG)
 }

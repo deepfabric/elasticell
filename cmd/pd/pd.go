@@ -35,7 +35,7 @@ func main() {
 		log.Fatal(err)
 	}
 	defer f.Close()
-	server.RedirectEmbedEctdLog(f)
+	server.RedirectEmbedEtcdLog(f)
 
 	s := server.NewServer(cfg)
 

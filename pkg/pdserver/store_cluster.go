@@ -257,6 +257,39 @@ func (s *pdStore) LoadCellMeta(clusterID uint64, limit int64, do func(metapb.Cel
 	return nil
 }
 
+func (s *pdStore) LoadWatchers(clusterID uint64, limit int64) ([]string, error) {
+	var watchers []string
+
+	start := s.getMinWatcher()
+	endKey := s.getMaxWatcherMetaKey(clusterID)
+
+	withRange := clientv3.WithRange(endKey)
+	withLimit := clientv3.WithLimit(limit)
+
+	for {
+		startKey := s.getWatcherMetaKey(clusterID, start)
+		resp, err := s.get(startKey, withRange, withLimit)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, item := range resp.Kvs {
+			watchers = append(watchers, string(item.Value))
+			value := item.Value
+			c := value[len(value)-1]
+			value[len(value)-1] = c + 1
+			start = string(value)
+		}
+
+		// read complete
+		if len(resp.Kvs) < int(limit) {
+			break
+		}
+	}
+
+	return watchers, nil
+}
+
 // SetStoreMeta returns nil if store is add or update succ
 func (s *pdStore) SetStoreMeta(clusterID uint64, store metapb.Store) error {
 	key := s.getStoreMetaKey(clusterID, store.ID)
@@ -279,6 +312,12 @@ func (s *pdStore) SetCellMeta(clusterID uint64, cell metapb.Cell) error {
 	return s.save(cellKey, string(meta))
 }
 
+// SetWatchers returns nil if add or update succ
+func (s *pdStore) SetWatchers(clusterID uint64, watcher string) error {
+	key := s.getWatcherMetaKey(clusterID, watcher)
+	return s.save(key, watcher)
+}
+
 func (s *pdStore) getClusterMetaKey(clusterID uint64) string {
 	return fmt.Sprintf("%s/%d", pdClusterRootPath, clusterID)
 }
@@ -296,4 +335,18 @@ func (s *pdStore) getInitParamsKey(clusterID uint64) string {
 func (s *pdStore) getCellMetaKey(clusterID, cellID uint64) string {
 	baseKey := s.getClusterMetaKey(clusterID)
 	return fmt.Sprintf("%s/cells/%020d", baseKey, cellID)
+}
+
+func (s *pdStore) getWatcherMetaKey(clusterID uint64, addr string) string {
+	baseKey := s.getClusterMetaKey(clusterID)
+	return fmt.Sprintf("%s/watchers/%021s", baseKey, addr)
+}
+
+func (s *pdStore) getMaxWatcherMetaKey(clusterID uint64) string {
+	baseKey := s.getClusterMetaKey(clusterID)
+	return fmt.Sprintf("%s/watchers/;;;;;;;;;;;;;;;;;;;;;", baseKey)
+}
+
+func (s *pdStore) getMinWatcher() string {
+	return "000000000000000000000"
 }

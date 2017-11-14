@@ -19,3 +19,4 @@ import (
 var _ = Suite(&testIDStoreSuite{})
 var _ = Suite(&testLeaderStoreSuite{})
 var _ = Suite(&testClusterStoreSuite{})
+var _ = Suite(&testWatcherSuite{})

@@ -60,7 +60,7 @@ func (h *redirector) ServeHTTP(w http.ResponseWriter, r *http.Request, next http
 		return
 	}
 
-	urls, err := util.ParseUrls(leader.EctdClientAddr)
+	urls, err := util.ParseUrls(leader.EtcdClientAddr)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

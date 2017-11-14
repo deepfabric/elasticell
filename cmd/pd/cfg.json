@@ -3,6 +3,8 @@
     "dataDir": "/root/pd1/data",
     "leaseSecsTTL": 5,
     "rpcAddr": ":20800",
+    "watcherHeartbeatSec": 10,
+    "watcherPauseTimeout": 5,
     "embedEtcd": {
         "clientUrls": "http://127.0.0.1:2379",
         "peerUrls": "http://127.0.0.1:2380",

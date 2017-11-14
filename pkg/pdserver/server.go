@@ -16,6 +16,7 @@ package pdserver
 import (
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/coreos/etcd/embed"
 	"github.com/deepfabric/elasticell/pkg/log"
@@ -27,7 +28,7 @@ import (
 type Server struct {
 	cfg *Cfg
 
-	// ectd fields
+	// etcd fields
 	id   uint64
 	etcd *embed.Etcd
 
@@ -44,6 +45,8 @@ type Server struct {
 	leaderProxy     *pd.Client
 	leaderMux       sync.RWMutex
 	idAlloc         *idAllocator
+
+	notifier *watcherNotifier
 
 	// status
 	callStop bool
@@ -64,6 +67,7 @@ func NewServer(cfg *Cfg) *Server {
 	s.stopC = make(chan interface{})
 	s.isLeaderValue = 0
 	s.complete = make(chan struct{})
+	s.notifier = newWatcherNotifier(time.Second * time.Duration(cfg.WatcherHeartbeatSec*cfg.WatcherPauseTimeout))
 
 	return s
 }
@@ -84,6 +88,8 @@ func (s *Server) Start() {
 
 	s.setServerIsStarted()
 	go s.startLeaderLoop()
+
+	s.notifier.start()
 
 	<-s.complete
 	close(s.complete)
@@ -109,6 +115,7 @@ func (s *Server) doStop() {
 		s.closeRPC()
 		s.closeEmbedEtcd()
 		s.setServerIsStopped()
+		s.notifier.stop()
 	})
 }
 

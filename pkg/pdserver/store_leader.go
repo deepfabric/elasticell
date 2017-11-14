@@ -102,7 +102,7 @@ func (s *pdStore) CampaignLeader(leaderSignature string, leaderLeaseTTL int64, e
 	cancel()
 
 	if cost := time.Now().Sub(start); cost > DefaultSlowRequestTime {
-		log.Warnf("embed-ectd: lessor grants too slow, cost=<%s>", cost)
+		log.Warnf("embed-etcd: lessor grants too slow, cost=<%s>", cost)
 	}
 
 	if err != nil {

@@ -10,6 +10,8 @@ option (gogoproto.unmarshaler_all) = true;
 option (gogoproto.goproto_enum_prefix_all) = false;
 
 service PDService {
+    rpc RegisterWatcher (RegisterWatcherReq) returns (RegisterWatcherRsp) {}
+    rpc WatcherHeartbeat (WatcherHeartbeatReq) returns (WatcherHeartbeatRsp) {}
     rpc GetLeader (LeaderReq) returns (LeaderRsp) {}
     rpc AllocID (AllocIDReq) returns (AllocIDRsp) {}
     rpc GetClusterID(GetClusterIDReq) returns (GetClusterIDRsp) {}
@@ -87,7 +89,41 @@ message Leader {
     optional uint64 id             = 1 [(gogoproto.nullable) = false, (gogoproto.customname) = "ID"];
     optional string name           = 2 [(gogoproto.nullable) = false];
     optional string addr           = 3 [(gogoproto.nullable) = false];
-    optional string ectdClientAddr = 4 [(gogoproto.nullable) = false];
+    optional string etcdClientAddr = 4 [(gogoproto.nullable) = false];
+}
+
+message RegisterWatcherReq {
+    optional string from = 1 [(gogoproto.nullable) = false];
+    optional uint64 id   = 2 [(gogoproto.nullable) = false, (gogoproto.customname) = "ID"];
+    optional string addr = 3 [(gogoproto.nullable) = false];
+}
+
+message RegisterWatcherRsp {
+  
+}
+
+message WatcherHeartbeatReq {
+    optional string from   = 1 [(gogoproto.nullable) = false];
+    optional uint64 id     = 2 [(gogoproto.nullable) = false, (gogoproto.customname) = "ID"];
+    optional string addr   = 3 [(gogoproto.nullable) = false];
+    optional uint64 offset = 4 [(gogoproto.nullable) = false];
+}
+
+message WatcherHeartbeatRsp {
+    optional bool paused = 1 [(gogoproto.nullable) = false];
+}
+
+message WatcherNotify {
+    optional uint64 offset = 1 [(gogoproto.nullable) = false];
+}
+
+message WatcherNotifySync {
+    optional uint64 offset = 1 [(gogoproto.nullable) = false];
+}
+
+message WatcherNotifyRsp {
+    optional uint64 offset    = 1 [(gogoproto.nullable) = false];
+    repeated Range  ranges = 2;
 }
 
 message LeaderReq {

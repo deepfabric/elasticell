@@ -296,7 +296,9 @@ func (t *transport) addPendingSnapshot(msg *mraft.RaftMessage) error {
 	}
 
 	t.pendingLock.Unlock()
-	return fmt.Errorf("stale snapshot")
+	return fmt.Errorf("stale snapshot, sending=<%s>, add=<%s>",
+		check.String(),
+		msg.CellEpoch.String())
 }
 
 func (t *transport) getSendingSnapshot(peerID uint64) *mraft.RaftMessage {
