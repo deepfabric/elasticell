@@ -15,6 +15,7 @@ package util
 
 import (
 	"encoding/binary"
+	"math"
 	"strconv"
 
 	"github.com/pkg/errors"
@@ -54,4 +55,38 @@ func FormatInt64ToBytes(v int64) []byte {
 // FormatFloat64ToBytes float64 -> string
 func FormatFloat64ToBytes(v float64) []byte {
 	return strconv.AppendFloat(nil, v, 'f', -1, 64)
+}
+
+/*
+Float32ToSortableUint64 converts a float32 string to sortable uint64.
+
+Refers to:
+github.com/apache/lucene-solr/lucene/core/src/java/org/apache/lucene/util/NumericUtils.java,
+  public static int floatToSortableInt(float value);
+  public static long doubleToSortableLong(double value);
+
+https://en.wikipedia.org/wiki/Single-precision_floating-point_format
+https://en.wikipedia.org/wiki/Double-precision_floating-point_format
+*/
+func Float32ToSortableUint64(valS string) (val uint64, err error) {
+	var valF float64
+	if valF, err = strconv.ParseFloat(valS, 32); err != nil {
+		return
+	}
+	bits := math.Float32bits(float32(valF))
+	int0 := int32(bits)
+	val = uint64(uint32(int0^((int0>>31)&0x7fffffff)) ^ 0x80000000)
+	return
+}
+
+//Float64ToSortableUint64 converts a float64 string to sortable uint64.
+func Float64ToSortableUint64(valS string) (val uint64, err error) {
+	var valF float64
+	if valF, err = strconv.ParseFloat(valS, 64); err != nil {
+		return
+	}
+	bits := math.Float64bits(valF)
+	int0 := int64(bits)
+	val = uint64(int0^((int0>>63)&0x7fffffffffffffff)) ^ 0x8000000000000000
+	return
 }

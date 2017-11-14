@@ -284,6 +284,24 @@ func (c *Client) BootstrapCluster(ctx context.Context, req *pdpb.BootstrapCluste
 	return rsp.(*pdpb.BootstrapClusterRsp), nil
 }
 
+// ListStore returns list store response
+func (c *Client) ListStore(ctx context.Context, req *pdpb.ListStoreReq) (*pdpb.ListStoreRsp, error) {
+	rsp, err := c.proxyRPC(ctx,
+		req,
+		func() {
+			req.From = c.name
+			req.ID = c.seq
+		},
+		func(cc context.Context) (interface{}, error) {
+			return c.pd.ListStore(ctx, req, grpc.FailFast(true))
+		})
+	if err != nil {
+		return nil, err
+	}
+
+	return rsp.(*pdpb.ListStoreRsp), nil
+}
+
 // PutStore returns put store response
 func (c *Client) PutStore(ctx context.Context, req *pdpb.PutStoreReq) (*pdpb.PutStoreRsp, error) {
 	rsp, err := c.proxyRPC(ctx,

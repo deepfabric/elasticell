@@ -52,6 +52,24 @@ func (s *Server) bootstrapCluster(req *pdpb.BootstrapClusterReq) (*pdpb.Bootstra
 	return rsp, nil
 }
 
+func (s *Server) listStore(req *pdpb.ListStoreReq) (*pdpb.ListStoreRsp, error) {
+	c := s.GetCellCluster()
+	if c == nil {
+		return nil, errNotBootstrapped
+	}
+
+	rsp := &pdpb.ListStoreRsp{
+		Stores: make([]*metapb.Store, 0),
+	}
+	storeInfos := c.cache.getStoreCache().getStores()
+	for _, storeInfo := range storeInfos {
+		rsp.Stores = append(rsp.Stores, &storeInfo.Meta)
+	}
+
+	log.Debugf("cell-cluster: list store ok, stores=<%+v>", rsp.Stores)
+	return rsp, nil
+}
+
 func (s *Server) putStore(req *pdpb.PutStoreReq) (*pdpb.PutStoreRsp, error) {
 	c := s.GetCellCluster()
 	if c == nil {
@@ -125,7 +143,12 @@ func (s *Server) storeHeartbeat(req *pdpb.StoreHeartbeatReq) (*pdpb.StoreHeartbe
 		return nil, err
 	}
 
-	return c.doStoreHeartbeat(req)
+	rsp, err := c.doStoreHeartbeat(req)
+	if err != nil {
+		return nil, err
+	}
+	rsp.Indices, err = s.ListIndex()
+	return rsp, err
 }
 
 func (s *Server) askSplit(req *pdpb.AskSplitReq) (*pdpb.AskSplitRsp, error) {

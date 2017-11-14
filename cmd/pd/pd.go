@@ -15,13 +15,13 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
 
 	"github.com/deepfabric/elasticell/pkg/log"
 	server "github.com/deepfabric/elasticell/pkg/pdserver"
+	"github.com/deepfabric/elasticell/pkg/util"
 )
 
 func main() {
@@ -30,7 +30,11 @@ func main() {
 	log.InitLog()
 	cfg := server.GetCfg()
 
-	f, err := os.OpenFile(fmt.Sprintf("./%s-etcd.log", cfg.Name), os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666)
+	var logFile, etcdLogFile string
+	logFile = log.GetLogFile()
+	etcdLogFile = util.ReplaceFpExt(logFile, "-etcd.log")
+
+	f, err := os.OpenFile(etcdLogFile, os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666)
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -20,6 +20,7 @@ import (
 
 	"github.com/deepfabric/elasticell/pkg/util"
 	"github.com/fagongzi/goetty"
+	"github.com/pkg/errors"
 )
 
 type memoryDataEngine struct {
@@ -39,6 +40,19 @@ func (e *memoryDataEngine) RangeDelete(start, end []byte) error {
 
 func (e *memoryDataEngine) GetTargetSizeKey(startKey []byte, endKey []byte, size uint64) (uint64, []byte, error) {
 	return 0, nil, nil
+}
+
+func (e *memoryDataEngine) ScanIndexInfo(start []byte, end []byte, skipEmpty bool, handler func(key, idxInfo []byte) error) error {
+	return errors.New("(*memoryDataEngine).ScanIndexInfo is not implemented")
+}
+
+func (e *memoryDataEngine) SetIndexInfo(key, idxInfo []byte) error {
+	return errors.New("(*memoryDataEngine).SetIndexInfo is not implemented")
+}
+
+func (e *memoryDataEngine) GetIndexInfo(key []byte) (idxInfo []byte, err error) {
+	err = errors.New("(*memoryDataEngine).GetIndexInfo is not implemented")
+	return
 }
 
 func (e *memoryDataEngine) CreateSnapshot(path string, start, end []byte) error {

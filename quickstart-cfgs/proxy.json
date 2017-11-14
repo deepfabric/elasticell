@@ -9,6 +9,7 @@
     "retryDuration": 2000,
     "workerCount": 2,
     "supportCMDs": [
+        "query",
         "ping",
         "set",
         "get",

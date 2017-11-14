@@ -39,6 +39,7 @@ const (
 	pdClusterIDPath    = "/pd/meta/cluster_id"
 	pdBootstrappedPath = "/pd/meta/boot"
 	pdClusterRootPath  = "/pd/cluster"
+	pdIndicesRootPath  = "/pd/indices"
 )
 
 // ClusterStore is the store interface for cluster info
@@ -80,11 +81,20 @@ type IDStore interface {
 	UpdateID(leaderSignature string, old, value uint64) error
 }
 
+// IndexStore is the store interface for index info
+type IndexStore interface {
+	ListIndex() (idxDefs []*pdpb.IndexDef, err error)
+	GetIndex(id string) (idxDef *pdpb.IndexDef, err error)
+	CreateIndex(idxDef *pdpb.IndexDef) (err error)
+	DeleteIndex(id string) (err error)
+}
+
 // Store is the store interface for all pd store info
 type Store interface {
 	ClusterStore
 	IDStore
 	LeaderStore
+	IndexStore
 
 	Close() error
 	RawClient() *clientv3.Client
@@ -221,6 +231,32 @@ func (s *pdStore) get(key string, opts ...clientv3.OpOption) (*clientv3.GetRespo
 
 func (s *pdStore) save(key, value string) error {
 	resp, err := s.txn().Then(clientv3.OpPut(key, value)).Commit()
+	if err != nil {
+		return errors.Wrap(err, "")
+	}
+
+	if !resp.Succeeded {
+		return errors.Wrap(errTxnFailed, "")
+	}
+
+	return nil
+}
+
+func (s *pdStore) create(key, value string) error {
+	resp, err := s.txn().If(clientv3.Compare(clientv3.CreateRevision(key), "=", 0)).Then(clientv3.OpPut(key, value)).Commit()
+	if err != nil {
+		return errors.Wrap(err, "")
+	}
+
+	if !resp.Succeeded {
+		return errors.Wrap(errTxnFailed, "")
+	}
+
+	return nil
+}
+
+func (s *pdStore) delete(key string, opts ...clientv3.OpOption) error {
+	resp, err := s.txn().Then(clientv3.OpDelete(key, opts...)).Commit()
 	if err != nil {
 		return errors.Wrap(err, "")
 	}

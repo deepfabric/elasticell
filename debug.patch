@@ -1,0 +1,92 @@
+diff --git a/cmd/cell/cell.go b/cmd/cell/cell.go
+index 1743bf0..4cef7a3 100644
+--- a/cmd/cell/cell.go
++++ b/cmd/cell/cell.go
+@@ -55,14 +55,14 @@ var (
+ 
+ 	// raftstore
+ 	cellCapacityMB            = flag.Uint64("capacity-cell", 0, "Capacity(MB): cell")
+-	intervalHeartbeatStore    = flag.Int("interval-heartbeat-store", 10, "Interval(sec): Store heartbeat")
+-	intervalHeartbeatCell     = flag.Int("interval-heartbeat-cell", 30, "Interval(sec): Cell heartbeat")
++	intervalHeartbeatStore    = flag.Int("interval-heartbeat-store", 1, "Interval(sec): Store heartbeat")
++	intervalHeartbeatCell     = flag.Int("interval-heartbeat-cell", 3, "Interval(sec): Cell heartbeat")
+ 	intervalSplitCheck        = flag.Int("interval-split-check", 10, "Interval(sec): Split check")
+ 	intervalCompact           = flag.Int("interval-compact", 10, "Interval(sec): Compact raft log")
+ 	intervalReportMetric      = flag.Int("interval-report-metric", 10, "Interval(sec): Report cell metric")
+ 	intervalRaftTick          = flag.Int("interval-raft-tick", 1000, "Interval(ms): Raft tick")
+ 	intervalRetrySentSnapshot = flag.Int("interval-retry-sent-snapshot", 10, "Interval(sec): Retry sent snapshot")
+-	limitPeerDown             = flag.Uint64("limit-peer-down", 5*60, "Limit(sec): Max peer downtime")
++	limitPeerDown             = flag.Uint64("limit-peer-down", 10, "Limit(sec): Max peer downtime")
+ 	limitCompactCount         = flag.Uint64("limit-compact-count", 0, "Limit: Count of raft logs, if reach this limit, leader will compact [first,applied], otherwise [first, minimum replicated]")
+ 	limitCompactBytesMB       = flag.Uint64("limit-compact-bytes", 0, "Limit(MB): Total bytes of raft logs, if reach this limit, leader will compact [first,applied], otherwise [first, minimum replicated]")
+ 	limitCompactLag           = flag.Uint64("limit-compact-lag", 0, "Limit: Max count of lag log, leader will compact [first, compact - lag], avoid send snapshot file to a little lag peer")
+@@ -176,7 +176,7 @@ func parseCfg() *server.Cfg {
+ 	cfg.BufferCliWrite = *bufferCliWrite
+ 	cfg.BatchCliResps = *batchCliResps
+ 
+-	cfg.Node.RaftStore.CellCapacity = *cellCapacityMB * mb
++	cfg.Node.RaftStore.CellCapacity = *cellCapacityMB * kb
+ 	cfg.Node.RaftStore.DurationHeartbeatStore = time.Second * time.Duration(*intervalHeartbeatStore)
+ 	cfg.Node.RaftStore.DurationHeartbeatCell = time.Second * time.Duration(*intervalHeartbeatCell)
+ 	cfg.Node.RaftStore.DurationSplitCheck = time.Second * time.Duration(*intervalSplitCheck)
+@@ -194,7 +194,7 @@ func parseCfg() *server.Cfg {
+ 	cfg.Node.RaftStore.LimitSnapChunkBytes = *limitSnapChunkBytesKB * kb
+ 	cfg.Node.RaftStore.LimitSnapChunkRate = *limitSnapChunkRate
+ 	cfg.Node.RaftStore.ThresholdCompact = *thresholdCompact
+-	cfg.Node.RaftStore.ThresholdSplitCheckBytes = *thresholdSplitCheckMB * mb
++	cfg.Node.RaftStore.ThresholdSplitCheckBytes = *thresholdSplitCheckMB * kb
+ 	cfg.Node.RaftStore.ThresholdRaftElection = *thresholdRaftElection
+ 	cfg.Node.RaftStore.ThresholdRaftHeartbeat = *thresholdRaftHeartbeat
+ 	cfg.Node.RaftStore.BatchSizeProposal = *batchSizeProposal
+diff --git a/cmd/pd/cfg.json b/cmd/pd/cfg.json
+index e9eccdf..5afc911 100644
+--- a/cmd/pd/cfg.json
++++ b/cmd/pd/cfg.json
+@@ -15,7 +15,7 @@
+         "maxReplicas": 3,
+         "locationLabels": ["zone", "rack"],
+         "maxSnapshotCount": 3,
+-        "maxStoreDownTimeMs": 3600000,
++        "maxStoreDownTimeMs": 10000,
+         "leaderScheduleLimit": 16,
+         "cellScheduleLimit": 12,
+         "replicaScheduleLimit": 16
+diff --git a/quickstart-cfgs/pd1.json b/quickstart-cfgs/pd1.json
+index 97d2c0f..0a70fe2 100644
+--- a/quickstart-cfgs/pd1.json
++++ b/quickstart-cfgs/pd1.json
+@@ -13,7 +13,7 @@
+         "maxReplicas": 3,
+         "locationLabels": ["zone", "rack"],
+         "maxSnapshotCount": 3,
+-        "maxStoreDownTimeMs": 3600000,
++        "maxStoreDownTimeMs": 10000,
+         "leaderScheduleLimit": 16,
+         "cellScheduleLimit": 12,
+         "replicaScheduleLimit": 16,
+diff --git a/quickstart-cfgs/pd2.json b/quickstart-cfgs/pd2.json
+index 00a7b2d..8e15bdb 100644
+--- a/quickstart-cfgs/pd2.json
++++ b/quickstart-cfgs/pd2.json
+@@ -13,7 +13,7 @@
+         "maxReplicas": 3,
+         "locationLabels": ["zone", "rack"],
+         "maxSnapshotCount": 3,
+-        "maxStoreDownTimeMs": 3600000,
++        "maxStoreDownTimeMs": 10000,
+         "leaderScheduleLimit": 16,
+         "cellScheduleLimit": 12,
+         "replicaScheduleLimit": 16,
+diff --git a/quickstart-cfgs/pd3.json b/quickstart-cfgs/pd3.json
+index 880eda1..abdc007 100644
+--- a/quickstart-cfgs/pd3.json
++++ b/quickstart-cfgs/pd3.json
+@@ -13,7 +13,7 @@
+         "maxReplicas": 3,
+         "locationLabels": ["zone", "rack"],
+         "maxSnapshotCount": 3,
+-        "maxStoreDownTimeMs": 3600000,
++        "maxStoreDownTimeMs": 10000,
+         "leaderScheduleLimit": 16,
+         "cellScheduleLimit": 12,
+         "replicaScheduleLimit": 16,

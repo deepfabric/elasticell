@@ -18,6 +18,7 @@ service PDService {
     rpc GetInitParams(GetInitParamsReq) returns (GetInitParamsRsp) {}
     rpc IsClusterBootstrap (IsClusterBootstrapReq) returns (IsClusterBootstrapRsp) {}
     rpc BootstrapCluster (BootstrapClusterReq) returns (BootstrapClusterRsp) {}
+    rpc ListStore(ListStoreReq) returns (ListStoreRsp) {}
     rpc PutStore(PutStoreReq) returns (PutStoreRsp) {}
     rpc GetStore(GetStoreReq) returns (GetStoreRsp) {}
     rpc CellHeartbeat (CellHeartbeatReq) returns (CellHeartbeatRsp) {}
@@ -135,6 +136,15 @@ message LeaderRsp {
     optional Leader leader = 1 [(gogoproto.nullable) = false];
 }
 
+message ListStoreReq {
+    optional string from = 1 [(gogoproto.nullable) = false];
+    optional uint64 id   = 2 [(gogoproto.nullable) = false, (gogoproto.customname) = "ID"];
+}
+
+message ListStoreRsp {
+    repeated metapb.Store  stores = 1;
+}
+
 message PutStoreReq {
     optional string        from   = 1 [(gogoproto.nullable) = false];
     optional uint64        id     = 2 [(gogoproto.nullable) = false, (gogoproto.customname) = "ID"];
@@ -238,6 +248,7 @@ message StoreHeartbeatReq {
 message StoreHeartbeatRsp {
     optional ResponseHeader header      = 1 [(gogoproto.nullable) = false];
     optional SetLogLevel    setLogLevel = 2 [(gogoproto.nullable) = true];
+    repeated IndexDef       indices     = 3 [(gogoproto.nullable) = true];
 }
 
 message AskSplitReq {
@@ -276,4 +287,57 @@ message GetLastRangesRsp {
 
 message SetLogLevel {
     optional int32 newLevel = 1 [(gogoproto.nullable) = false];
+}
+
+enum FieldType {
+    Text   = 0;
+    Uint8  = 1;
+    Uint16 = 2;
+    Uint32 = 3;
+    Uint64 = 4;
+    Float32 = 5;
+    Float64 = 6;
+}
+
+message FieldDef {
+    required string name    = 1;
+    required FieldType type = 2;
+}
+
+message IndexDef {
+    optional string        name         = 1 [(gogoproto.nullable) = false];
+    optional string        keyPattern   = 2 [(gogoproto.nullable) = false];
+	repeated FieldDef      fields       = 3;
+}
+
+message IndexKeyRequest {
+	optional uint64 cellID   = 1 [(gogoproto.nullable) = false];
+    optional string idxName  = 2 [(gogoproto.nullable) = false];
+	repeated bytes dataKeys  = 3;
+	optional bool isDel      = 4 [(gogoproto.nullable) = false];
+}
+
+message IndexSplitRequest {
+	optional uint64 leftCellID  = 1 [(gogoproto.nullable) = false];
+	optional uint64 rightCellID = 2 [(gogoproto.nullable) = false];
+}
+
+message IndexDestroyCellRequest {
+    optional uint64 cellID = 1 [(gogoproto.nullable) = false];
+}
+
+message IndexRebuildCellRequest {
+    optional uint64 cellID = 1 [(gogoproto.nullable) = false];
+}
+
+message IndexRequest {
+    optional IndexKeyRequest idxKey     = 1;
+    optional IndexSplitRequest idxSplit = 2;
+    optional IndexDestroyCellRequest idxDestroy = 3;
+    optional IndexRebuildCellRequest idxRebuild = 4;
+}
+
+message KeyMetaVal {
+	optional string idxName   = 1 [(gogoproto.nullable) = false];
+	optional uint64 docID     = 2 [(gogoproto.nullable) = false];
 }

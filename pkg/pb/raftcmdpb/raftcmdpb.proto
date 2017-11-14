@@ -5,6 +5,7 @@ import "metapb/metapb.proto";
 import "pdpb/pdpb.proto";
 import "errorpb/errorpb.proto";
 import "gogoproto/gogo.proto";
+import "querypb/querypb.proto";
 
 option (gogoproto.marshaler_all) = true;
 option (gogoproto.sizer_all) = true;
@@ -229,5 +230,7 @@ message Response {
     optional bool          withscores                   = 15;
     optional Request       originRequest                = 16 [(gogoproto.nullable) = true];
     optional int64         sessionID                    = 17 [(gogoproto.nullable) = false];
-    optional errorpb.Error error                        = 18 [(gogoproto.nullable) = false];
+    repeated querypb.Document  docArrayResult           = 18;
+    optional bool          hasEmptyDocArrayResult       = 19;
+    optional errorpb.Error error                        = 20 [(gogoproto.nullable) = false];
 }

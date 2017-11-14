@@ -75,3 +75,13 @@ func (e *nemoKVEngine) SetNX(key, value []byte) (int64, error) {
 func (e *nemoKVEngine) StrLen(key []byte) (int64, error) {
 	return e.db.StrLen(key)
 }
+
+func (e *nemoKVEngine) NewWriteBatch() WriteBatch {
+	wb := gonemo.NewWriteBatch()
+	return newNemoWriteBatch(wb)
+}
+
+func (e *nemoKVEngine) Write(wb WriteBatch) error {
+	nwb := wb.(*nemoWriteBatch)
+	return e.db.BatchWrite(e.db.GetKvHandle(), nwb.wb, false)
+}

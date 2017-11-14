@@ -217,6 +217,14 @@ func (pr *PeerReplicate) doApplyingSnapshotJob() error {
 	pr.stopRaftTick = false
 	pr.store.removePendingSnapshot(pr.cellID)
 
+	cell := pr.ps.getCell()
+	if err = pr.store.notifyRebuildCellIndex(&cell); err != nil {
+		log.Errorf("raftstore[cell-%d]: notifyRebuildCellIndex failed\n%+v",
+			pr.cellID,
+			err)
+		return err
+	}
+
 	log.Infof("raftstore[cell-%d]: apply snap complete", pr.cellID)
 	return nil
 }
