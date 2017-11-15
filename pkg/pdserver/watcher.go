@@ -146,7 +146,7 @@ func (wn *watcherNotifier) start() {
 
 				conn, err := wn.pool.GetConn(nt.watcher)
 				if err != nil {
-					wn.pause(nt.watcher)
+					wn.pause(nt.watcher, true)
 					log.Warnf("notify: %d to %s failed, errors:\n%+v",
 						nt.offset,
 						nt.watcher,
@@ -159,7 +159,7 @@ func (wn *watcherNotifier) start() {
 				}
 				err = conn.Write(req)
 				if err != nil {
-					wn.pause(nt.watcher)
+					wn.pause(nt.watcher, true)
 					log.Warnf("notify: %d to %s failed, errors:\n%+v",
 						nt.offset,
 						nt.watcher,
@@ -230,7 +230,7 @@ func (wn *watcherNotifier) watcherHeartbeat(addr string, offset uint64) bool {
 }
 
 func (wn *watcherNotifier) watcherTimeout(arg interface{}) {
-	wn.pause(arg.(string))
+	wn.pause(arg.(string), true)
 }
 
 func (wn *watcherNotifier) allowNotify(addr string) bool {
@@ -258,9 +258,11 @@ func (wn *watcherNotifier) allowSend(nt *notify) bool {
 	return false
 }
 
-func (wn *watcherNotifier) pause(addr string) {
+func (wn *watcherNotifier) pause(addr string, remove bool) {
 	wn.Lock()
-	wn.pool.RemoveConn(addr)
+	if remove {
+		wn.pool.RemoveConn(addr)
+	}
 	if state, ok := wn.watchers[addr]; ok {
 		state.pause()
 	}
@@ -318,7 +320,7 @@ func (wn *watcherNotifier) sync(addr string, offset uint64) *pdpb.WatcherNotifyR
 
 // ConnectFailed pool status handler
 func (wn *watcherNotifier) ConnectFailed(addr string, err error) {
-	wn.pause(addr)
+	wn.pause(addr, false)
 }
 
 // Connected pool status handler
@@ -328,14 +330,14 @@ func (wn *watcherNotifier) Connected(addr string, conn goetty.IOSession) {
 			msg, err := conn.Read()
 			if err != nil {
 				log.Errorf("notify: read from %s failed, errors:\n%+v", addr, err)
-				wn.pause(addr)
+				wn.pause(addr, true)
 				return
 			}
 
 			if s, ok := msg.(*pdpb.WatcherNotifySync); ok {
 				err := conn.Write(wn.sync(addr, s.Offset))
 				if err != nil {
-					wn.pause(addr)
+					wn.pause(addr, true)
 					return
 				}
 			}
