@@ -53,5 +53,6 @@ func createRouter(prefix string, service Service) *mux.Router {
 	initAPIForCell(router, service, rd)
 	initAPIForSystem(router, service, rd)
 	initAPIForOperator(router, service, rd)
+	initAPIForIndex(router, service, rd)
 	return router
 }

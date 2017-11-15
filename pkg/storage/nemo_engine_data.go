@@ -17,6 +17,7 @@ package storage
 
 import (
 	gonemo "github.com/deepfabric/go-nemo"
+	"github.com/pkg/errors"
 )
 
 type nemoDataEngine struct {
@@ -55,4 +56,30 @@ func (e *nemoDataEngine) CreateSnapshot(path string, start, end []byte) error {
 // ApplySnapshot apply a snapshort file from giving path
 func (e *nemoDataEngine) ApplySnapshot(path string) error {
 	return e.db.IngestFile(path)
+}
+
+func (e *nemoDataEngine) ScanIndexInfo(startKey []byte, endKey []byte, skipEmpty bool, handler func(key, idxInfo []byte) error) error {
+	var err error
+	it := e.db.HmeataScan(startKey, endKey, false, skipEmpty)
+	for ; it.Valid(); it.Next() {
+		if err = handler(it.Key(), it.IndexInfo()); err != nil {
+			break
+		}
+	}
+	it.Free()
+
+	return err
+}
+
+func (e *nemoDataEngine) SetIndexInfo(key, idxInfo []byte) error {
+	return e.db.HSetIndexInfo(key, idxInfo)
+}
+
+func (e *nemoDataEngine) GetIndexInfo(key []byte) (idxInfo []byte, err error) {
+	var ret int
+	idxInfo, ret, err = e.db.HGetIndexInfo(key)
+	if err == nil && ret < 0 {
+		err = errors.Errorf("key %+v doesn't exist", key)
+	}
+	return
 }

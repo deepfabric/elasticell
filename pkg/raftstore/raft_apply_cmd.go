@@ -25,6 +25,7 @@ import (
 	"github.com/deepfabric/elasticell/pkg/pool"
 	"github.com/deepfabric/elasticell/pkg/storage"
 	"github.com/deepfabric/elasticell/pkg/util"
+	"github.com/fagongzi/goetty/protocol/redis"
 )
 
 type redisBatch struct {
@@ -398,18 +399,69 @@ func (d *applyDelegate) doExecRaftGC(ctx *applyContext) (*raftcmdpb.RaftCMDRespo
 
 func (d *applyDelegate) execWriteRequest(ctx *applyContext) *raftcmdpb.RaftCMDResponse {
 	resp := pool.AcquireRaftCMDResponse()
-
+	var err error
 	for _, req := range ctx.req.Requests {
 		log.Debugf("req: apply raft log. cell=<%d>, uuid=<%d>",
 			d.cell.ID,
 			req.UUID)
 
 		if h, ok := d.store.redisWriteHandles[req.Type]; ok {
-			resp.Responses = append(resp.Responses, h(ctx, req))
+			rsp := h(ctx, req)
+			resp.Responses = append(resp.Responses, rsp)
+			if err = d.execWriteRequestIndex(req, rsp); err != nil {
+				log.Errorf("raftstore-apply[cell-%d]: execWriteRequestIndex failed\n%+v",
+					d.cell.ID, err)
+			}
 		}
 	}
 
 	return resp
+}
+
+func (d *applyDelegate) execWriteRequestIndex(req *raftcmdpb.Request, rsp *raftcmdpb.Response) (err error) {
+	if (req.Type == raftcmdpb.HMSet || req.Type == raftcmdpb.HSet || req.Type == raftcmdpb.Del) && (rsp.ErrorResult == nil && len(rsp.ErrorResults) == 0) {
+		cmd := redis.Command(req.Cmd)
+		args := cmd.Args()
+		end := 1
+		if req.Type == raftcmdpb.Del {
+			end = len(args)
+		}
+		listEng := d.store.getListEngine()
+		idxReqQueueKey := getIdxReqQueueKey()
+		for i := 0; i < end; i++ {
+			key := args[i]
+			var idxName string
+			for name, reExp := range d.store.reExps {
+				matched := reExp.Match(key)
+				if matched {
+					idxName = name
+					break
+				}
+			}
+			if idxName != "" {
+				idxReq := &pdpb.IndexRequest{}
+				idxReq.IdxKey = &pdpb.IndexKeyRequest{
+					CellID:   d.cell.ID,
+					IdxName:  idxName,
+					DataKeys: [][]byte{key},
+					IsDel:    false,
+				}
+				if req.Type == raftcmdpb.Del {
+					idxReq.IdxKey.IsDel = true
+				}
+				var idxReqB []byte
+				if idxReqB, err = idxReq.Marshal(); err != nil {
+					return
+				}
+				log.Debugf("raftstore-apply[cell-%d]: will update index %s for key %s",
+					d.cell.ID, idxName, key)
+				if _, err = listEng.RPush(idxReqQueueKey, idxReqB); err != nil {
+					return
+				}
+			}
+		}
+	}
+	return
 }
 
 func (pr *PeerReplicate) doExecReadCmd(c *cmd) {

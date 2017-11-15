@@ -561,6 +561,11 @@ func (s *Store) doApplySplit(cellID uint64, result *splitResult) {
 	newPR.startRegistrationJob()
 	s.replicatesMap.put(newPR.cellID, newPR)
 
+	if err = s.notifySplitCellIndex(left.GetID(), right.GetID()); err != nil {
+		log.Errorf("raftstore-apply[cell-%d]: doExecSplitIndex failed\n%+v",
+			left.GetID(), err)
+	}
+
 	log.Infof("raftstore-apply[cell-%d]: new cell added, left=<%+v> right=<%+v>",
 		cellID,
 		left,
@@ -866,4 +871,56 @@ func (ps *peerStorage) setGenSnapJob(job *util.Job) {
 
 func (ps *peerStorage) setApplySnapJob(job *util.Job) {
 	ps.applySnapJob = job
+}
+
+func (s *Store) notifySplitCellIndex(leftCellID uint64, rightCellID uint64) (err error) {
+	listEng := s.getListEngine()
+	idxReqQueueKey := getIdxReqQueueKey()
+	idxReq := &pdpb.IndexRequest{
+		IdxSplit: &pdpb.IndexSplitRequest{
+			LeftCellID:  leftCellID,
+			RightCellID: rightCellID,
+		},
+	}
+	var idxReqB []byte
+	idxReqB, err = idxReq.Marshal()
+	if err != nil {
+		return
+	}
+	_, err = listEng.RPush(idxReqQueueKey, idxReqB)
+	return
+}
+
+func (s *Store) notifyDestroyCellIndex(cell *metapb.Cell) (err error) {
+	listEng := s.getListEngine()
+	idxReqQueueKey := getIdxReqQueueKey()
+	idxReq := &pdpb.IndexRequest{
+		IdxDestroy: &pdpb.IndexDestroyCellRequest{
+			CellID: cell.GetID(),
+		},
+	}
+	var idxReqB []byte
+	idxReqB, err = idxReq.Marshal()
+	if err != nil {
+		return
+	}
+	_, err = listEng.RPush(idxReqQueueKey, idxReqB)
+	return
+}
+
+func (s *Store) notifyRebuildCellIndex(cell *metapb.Cell) (err error) {
+	listEng := s.getListEngine()
+	idxReqQueueKey := getIdxReqQueueKey()
+	idxReq := &pdpb.IndexRequest{
+		IdxRebuild: &pdpb.IndexRebuildCellRequest{
+			CellID: cell.GetID(),
+		},
+	}
+	var idxReqB []byte
+	idxReqB, err = idxReq.Marshal()
+	if err != nil {
+		return
+	}
+	_, err = listEng.RPush(idxReqQueueKey, idxReqB)
+	return
 }

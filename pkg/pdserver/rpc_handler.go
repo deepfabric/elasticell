@@ -208,6 +208,24 @@ func (h *RPCHandler) BootstrapCluster(c context.Context, req *pdpb.BootstrapClus
 	return rsp.(*pdpb.BootstrapClusterRsp), nil
 }
 
+// ListStore puts store
+func (h *RPCHandler) ListStore(c context.Context, req *pdpb.ListStoreReq) (*pdpb.ListStoreRsp, error) {
+	doFun := func() (interface{}, error) {
+		return h.server.listStore(req)
+	}
+
+	forwardFun := func(proxy *pd.Client) (interface{}, error) {
+		return proxy.ListStore(c, req)
+	}
+
+	rsp, err := h.doHandle("ListStore", req, forwardFun, doFun)
+	if err != nil {
+		return nil, err
+	}
+
+	return rsp.(*pdpb.ListStoreRsp), nil
+}
+
 // PutStore puts store
 func (h *RPCHandler) PutStore(c context.Context, req *pdpb.PutStoreReq) (*pdpb.PutStoreRsp, error) {
 	doFun := func() (interface{}, error) {

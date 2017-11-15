@@ -1,0 +1,49 @@
+syntax = "proto2";
+package querypb;
+
+import "errorpb/errorpb.proto";
+import "gogoproto/gogo.proto";
+
+option (gogoproto.marshaler_all) = true;
+option (gogoproto.sizer_all) = true;
+option (gogoproto.unmarshaler_all) = true;
+option (gogoproto.goproto_enum_prefix_all) = false;
+
+message QueryReq {
+    optional bytes uuid = 1 [(gogoproto.customname) = "UUID"];
+    optional int64 sessionID = 2 [(gogoproto.nullable) = false];
+    optional uint64 toStore = 3 [(gogoproto.nullable) = false];
+    optional uint64 fromStore = 4 [(gogoproto.nullable) = false];
+    repeated uint64 cells = 5; //empty means to query in all cells
+    optional string index = 6 [(gogoproto.nullable) = false];
+    repeated UintPred uintPreds = 7;
+    repeated StrPred strPreds = 8;
+    optional uint64 limit = 9 [(gogoproto.nullable) = false];
+    optional string orderBy = 10 [(gogoproto.nullable) = false];
+}
+
+message UintPred {
+    optional string name = 1 [(gogoproto.nullable) = false];
+    optional uint64 low = 2 [(gogoproto.nullable) = false];  //inclusive
+    optional uint64 high = 3 [(gogoproto.nullable) = false]; //inclusive
+}
+
+message StrPred {
+    optional string name = 1 [(gogoproto.nullable) = false];
+    optional string contWord = 2 [(gogoproto.nullable) = false];
+}
+
+message QueryRsp {
+    optional bytes uuid = 1 [(gogoproto.customname) = "UUID"];
+    optional uint64 toStore = 2 [(gogoproto.nullable) = false];
+    optional uint64 fromStore = 3 [(gogoproto.nullable) = false];
+    repeated uint64 cells = 4; //shall not be empty
+    optional errorpb.Error error = 5; //nil means no error
+    repeated Document docs = 6;
+}
+
+message Document {
+    repeated uint64 order = 1;
+    optional bytes key = 2;
+    repeated bytes fvPairs = 3;    
+}

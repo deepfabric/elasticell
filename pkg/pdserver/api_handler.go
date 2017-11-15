@@ -19,6 +19,7 @@ import (
 	"sort"
 
 	"github.com/deepfabric/elasticell/pkg/log"
+	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
 	"github.com/deepfabric/elasticell/pkg/pdapi"
 )
 
@@ -270,6 +271,22 @@ func (s *Server) GetOperators() ([]interface{}, error) {
 	}
 
 	return cluster.coordinator.getOperators(), nil
+}
+
+func (s *Server) ListIndex() (idxDefs []*pdpb.IndexDef, err error) {
+	return s.store.ListIndex()
+}
+
+// GetIndex returns the info of given index
+func (s *Server) GetIndex(id string) (idxDef *pdpb.IndexDef, err error) {
+	return s.store.GetIndex(id)
+}
+
+func (s *Server) CreateIndex(idxDef *pdpb.IndexDef) (err error) {
+	return s.store.CreateIndex(idxDef)
+}
+func (s *Server) DeleteIndex(id string) (err error) {
+	return s.store.DeleteIndex(id)
 }
 
 func toAPIStore(store *StoreInfo) *pdapi.StoreInfo {

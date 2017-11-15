@@ -45,6 +45,8 @@ type KVEngine interface {
 	Append(key, value []byte) (int64, error)
 	SetNX(key, value []byte) (int64, error)
 	StrLen(key []byte) (int64, error)
+	NewWriteBatch() WriteBatch
+	Write(wb WriteBatch) error
 }
 
 // HashEngine is the storage of Hash
@@ -138,6 +140,11 @@ type DataEngine interface {
 	CreateSnapshot(path string, start, end []byte) error
 	// ApplySnapshot apply a snapshort file from giving path
 	ApplySnapshot(path string) error
+
+	// ScanIndexInfo scans the range and execute the handler fun.
+	ScanIndexInfo(startKey []byte, endKey []byte, skipEmpty bool, handler func(key, idxInfo []byte) error) error
+	SetIndexInfo(key, idxInfo []byte) error
+	GetIndexInfo(key []byte) (idxInfo []byte, err error)
 }
 
 // Engine is the storage of meta data

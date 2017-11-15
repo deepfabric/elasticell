@@ -23,6 +23,7 @@ import (
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
 	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
+	"github.com/deepfabric/elasticell/pkg/pb/querypb"
 	"github.com/deepfabric/elasticell/pkg/pd"
 	"github.com/deepfabric/elasticell/pkg/pool"
 	"github.com/deepfabric/elasticell/pkg/util"
@@ -156,6 +157,22 @@ func (t *transport) sendACK(msg *mraft.SnapshotMessage) {
 	t.doSend(ack, msg.Header.FromPeer.StoreID)
 }
 
+func (t *transport) sendQuery(msg interface{}) {
+	var storeID uint64
+	switch msg2 := msg.(type) {
+	case *querypb.QueryReq:
+		storeID = msg2.ToStore
+	case *querypb.QueryRsp:
+		storeID = msg2.ToStore
+	}
+
+	if storeID == t.store.id {
+		t.store.notify(msg)
+		return
+	}
+	t.msgs[t.mask&storeID].Put(msg)
+}
+
 func (t *transport) sendRaftMessage(msg *mraft.RaftMessage) {
 	storeID := msg.ToPeer.StoreID
 
@@ -194,9 +211,13 @@ func (t *transport) readyToSendRaft(q *util.Queue) {
 		}
 
 		for i := int64(0); i < n; i++ {
-			msg := items[i].(*mraft.RaftMessage)
-			err := t.doSend(msg, msg.ToPeer.StoreID)
-			t.postSend(msg, err)
+			switch msg := items[i].(type) {
+			case *mraft.RaftMessage:
+				err := t.doSend(msg, msg.ToPeer.StoreID)
+				t.postSend(msg, err)
+			case *querypb.QueryReq, *querypb.QueryRsp:
+				t.doSendQuery(items[i])
+			}
 		}
 
 		queueGauge.WithLabelValues(labelQueueMsgs).Set(float64(q.Len()))
@@ -249,6 +270,32 @@ func (t *transport) readyToSendSnapshots(q *util.Queue) {
 
 		queueGauge.WithLabelValues(labelQueueSnaps).Set(float64(q.Len()))
 	}
+}
+
+func (t *transport) doSendQuery(item interface{}) {
+	var toStore, fromStore uint64
+	switch msg := item.(type) {
+	case *querypb.QueryReq:
+		toStore = msg.ToStore
+		fromStore = msg.FromStore
+	case *querypb.QueryRsp:
+		toStore = msg.ToStore
+		fromStore = msg.FromStore
+	}
+	conn, err := t.getConn(toStore)
+	if err != nil {
+		log.Errorf("raftstore: doSendQuery failed, from_store=<%d> to_store=<%d>, errors:\n%s", fromStore, toStore, err)
+		return
+	}
+	err = conn.Write(item)
+	if err != nil {
+		conn.Close()
+		log.Errorf("raftstore: doSendQuery failed, from_store=<%d> to_store=<%d>, errors:\n%s", fromStore, toStore, err)
+		return
+	}
+
+	t.putConn(toStore, conn)
+	return
 }
 
 func (t *transport) waitACK(msg *mraft.SnapshotMessage) {

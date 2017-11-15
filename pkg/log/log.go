@@ -18,9 +18,12 @@ import (
 	"io"
 	"log"
 	"os"
+	"path/filepath"
 	"runtime"
 	"sync"
 	"time"
+
+	"github.com/pkg/errors"
 )
 
 const (
@@ -135,6 +138,11 @@ func SetOutput(out io.Writer) {
 // SetOutputByName set log file use file name
 func SetOutputByName(path string) error {
 	return defaultLog.SetOutputByName(path)
+}
+
+// GetLogFile get log file name
+func GetLogFile() string {
+	return defaultLog.GetFileName()
 }
 
 // SetFlags set log flags
@@ -308,18 +316,24 @@ func (l *Logger) SetOutput(out io.Writer) {
 	l._log = log.New(out, l._log.Prefix(), l._log.Flags())
 }
 
-func (l *Logger) SetOutputByName(path string) error {
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666)
-	if err != nil {
-		log.Fatal(err)
+func (l *Logger) SetOutputByName(path string) (err error) {
+	var f *os.File
+	if path, err = filepath.Abs(path); err != nil {
+		err = errors.Wrap(err, "")
+		return
 	}
-
+	if f, err = os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666); err != nil {
+		err = errors.Wrap(err, "")
+		return
+	}
 	l.SetOutput(f)
-
 	l.fileName = path
 	l.fd = f
+	return
+}
 
-	return err
+func (l *Logger) GetFileName() string {
+	return l.fileName
 }
 
 func (l *Logger) log(t Type, v ...interface{}) {

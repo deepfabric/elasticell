@@ -164,21 +164,22 @@ func (s *RedisServer) doConnection(session goetty.IOSession) error {
 
 			err = s.onRedisCommand(req, rs)
 			if err != nil {
+				log.Debugf("onRedisCommand faied. req=<%+v>, err=<%+v>", req, err)
 				rsp := pool.AcquireResponse()
 				rsp.ErrorResult = util.StringToSlice(err.Error())
 				rs.onResp(rsp)
 			}
 		} else if req, ok := value.(*raftcmdpb.Request); ok {
 			if len(req.UUID) > 0 {
-				log.Debugf("req: read a raft req. from=<%s>, uuid=<%d>, cmd=<%s>",
+				log.Debugf("req: read a raft req. from=<%s>, req=<%v>",
 					addr,
-					req.UUID,
-					req.Cmd)
+					req)
 			}
 
 			rs.setFromProxy()
 			err = s.onProxyReq(req, rs)
 			if err != nil {
+				log.Debugf("onProxyReq faied. req=<%+v>, err=<%+v>", req, err)
 				rsp := pool.AcquireResponse()
 				rsp.ErrorResult = util.StringToSlice(err.Error())
 				rsp.UUID = req.UUID

@@ -6,7 +6,7 @@
 set -e
 
 # directories containing protos to be built
-DIRS="./metapb ./pdpb ./mraft ./raftcmdpb ./errorpb"
+DIRS="./metapb ./pdpb ./mraft ./raftcmdpb ./errorpb ./querypb"
 
 GOGOPROTO_ROOT="${GOPATH}/src/github.com/gogo/protobuf"
 GOGOPROTO_PATH="${GOGOPROTO_ROOT}:${GOGOPROTO_ROOT}/protobuf"

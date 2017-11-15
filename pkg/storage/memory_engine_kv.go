@@ -77,3 +77,21 @@ func (e *memoryKVEngine) SetNX(key, value []byte) (int64, error) {
 func (e *memoryKVEngine) StrLen(key []byte) (int64, error) {
 	return 0, nil
 }
+
+func (e *memoryKVEngine) NewWriteBatch() WriteBatch {
+	return newMemoryWriteBatch()
+}
+
+func (e *memoryKVEngine) Write(wb WriteBatch) error {
+	mwb := wb.(*memoryWriteBatch)
+
+	for _, opt := range mwb.opts {
+		if opt.isDelete {
+			e.kv.Delete(opt.key)
+		} else {
+			e.kv.Put(opt.key, opt.value)
+		}
+	}
+
+	return nil
+}

@@ -16,6 +16,7 @@ package redis
 import (
 	"strconv"
 
+	"github.com/deepfabric/elasticell/pkg/pb/querypb"
 	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
 	"github.com/deepfabric/elasticell/pkg/util"
 	"github.com/fagongzi/goetty"
@@ -71,6 +72,42 @@ func WriteScorePairArray(lst []*raftcmdpb.ScorePair, withScores bool, buf *goett
 			if withScores {
 				gredis.WriteBulk(util.FormatFloat64ToBytes(lst[i].Score), buf)
 			}
+		}
+	}
+}
+
+// WriteDocArray write doc array resp
+func WriteDocArray(lst []*querypb.Document, buf *goetty.ByteBuf) {
+	buf.WriteByte('*')
+	if len(lst) == 0 {
+		buf.Write(gredis.NullArray)
+		buf.Write(gredis.Delims)
+	} else {
+		buf.Write(util.StringToSlice(strconv.Itoa(len(lst))))
+		buf.Write(gredis.Delims)
+
+		for i := 0; i < len(lst); i++ {
+			buf.WriteByte('*')
+			buf.Write(util.StringToSlice("3"))
+			buf.Write(gredis.Delims)
+
+			//order
+			orders := lst[i].Order
+			buf.WriteByte('*')
+			if len(orders) == 0 {
+				buf.Write(gredis.NullArray)
+				buf.Write(gredis.Delims)
+			} else {
+				buf.Write(util.StringToSlice(strconv.Itoa(len(orders))))
+				buf.Write(gredis.Delims)
+				for j := 0; j < len(orders); j++ {
+					gredis.WriteInteger(int64(orders[j]), buf)
+				}
+			}
+			//key
+			gredis.WriteBulk(lst[i].Key, buf)
+			//fvPairs
+			gredis.WriteSliceArray(lst[i].FvPairs, buf)
 		}
 	}
 }
