@@ -140,14 +140,14 @@ do_status () {
 }
 
 do_clear () {
-    echo "clearing date, index and log......"
+    echo "clearing date and log......"
     mkdir -p $CFG_DIR $LOG_DIR &&
     cd $ELASTICELL_DIR &&
     rm -rf pd1/* pd2/* pd3/* cell1/* cell2/* cell3/* log/* &&
     mkdir -p pd1/data pd2/data pd3/data &&
-    mkdir -p cell1/data cell1/index &&
-    mkdir -p cell2/data cell2/index &&
-    mkdir -p cell3/data cell3/index
+    mkdir -p cell1/data &&
+    mkdir -p cell2/data &&
+    mkdir -p cell3/data
 }
 
 do_build () {

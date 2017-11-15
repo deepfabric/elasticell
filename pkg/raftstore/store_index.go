@@ -14,7 +14,6 @@
 package raftstore
 
 import (
-	"encoding/binary"
 	"fmt"
 	"path/filepath"
 	"reflect"
@@ -30,6 +29,7 @@ import (
 	"github.com/deepfabric/elasticell/pkg/util"
 	"github.com/deepfabric/indexer"
 	"github.com/deepfabric/indexer/cql"
+	"github.com/pilosa/pilosa"
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 )
@@ -75,52 +75,36 @@ func (s *Store) persistIndices() (err error) {
 }
 
 func (s *Store) allocateDocID(cellID uint64) (docID uint64, err error) {
-	var idxerExt *IndexerExt
-	var docIDB []byte
-	if idxerExt, err = s.getIndexer(cellID); err != nil {
+	var nextDocID int64
+	if nextDocID, err = s.getKVEngine().IncrBy(getCellNextDocIDKey(cellID), 1); err != nil {
 		return
 	}
-	if idxerExt.NextDocID == 0 {
-		if docIDB, err = s.getKVEngine().Get(getCellNextDocIDKey(cellID)); err != nil {
+	nextDocID--
+	if nextDocID&(pilosa.SliceWidth-1) == 0 {
+		//If the key does not exist, it is set to 0 before performing the operation.
+		if nextDocID, err = s.getKVEngine().IncrBy(getCellNextDocIDKey(0), 1); err != nil {
 			return
 		}
-		if docIDB != nil && len(docIDB) != 0 {
-			idxerExt.NextDocID = binary.BigEndian.Uint64(docIDB)
-		}
-	}
-	if idxerExt.NextDocID&0xffff == 0 {
-		var rsp *pdpb.AllocIDRsp
-		rsp, err = s.pdClient.AllocID(context.TODO(), new(pdpb.AllocIDReq))
-		if err != nil {
+		nextDocID--
+		nextDocID *= pilosa.SliceWidth
+		if err = s.getKVEngine().Set(getCellNextDocIDKey(cellID), []byte(strconv.FormatInt(nextDocID+1, 10))); err != nil {
 			return
 		}
-		idxerExt.NextDocID = rsp.GetID() << 16
 	}
-	docID = idxerExt.NextDocID
-	idxerExt.NextDocID++
-	if docIDB == nil || len(docIDB) <= 8 {
-		docIDB = make([]byte, 8)
-	}
-	binary.BigEndian.PutUint64(docIDB, idxerExt.NextDocID)
-	err = s.getKVEngine().Set(getCellNextDocIDKey(cellID), docIDB)
+	docID = uint64(nextDocID)
 	return
 }
 
-func (s *Store) getIndexer(cellID uint64) (idxerExt *IndexerExt, err error) {
-	var idxer *indexer.Indexer
+func (s *Store) getIndexer(cellID uint64) (idxer *indexer.Indexer, err error) {
 	var ok bool
 	var docProt *cql.DocumentWithIdx
-	if idxerExt, ok = s.indexers[cellID]; !ok {
-		idxerExt = &IndexerExt{}
-	} else if idxerExt.Indexer != nil {
-		// already initialized
-		return
-	} else {
-		err = errors.Errorf("indexer %d is not initialized correctly", cellID)
+	if idxer, ok = s.indexers[cellID]; ok {
 		return
 	}
 	indicesDir := filepath.Join(globalCfg.DataPath, "index", fmt.Sprintf("%d", cellID))
-	idxer, err = indexer.NewIndexer(indicesDir, false)
+	if idxer, err = indexer.NewIndexer(indicesDir, false); err != nil {
+		return
+	}
 	for _, idxDef := range s.indices {
 		//creation shall be idempotent
 		if docProt, err = convertToDocProt(idxDef); err != nil {
@@ -130,8 +114,7 @@ func (s *Store) getIndexer(cellID uint64) (idxerExt *IndexerExt, err error) {
 			return
 		}
 	}
-	idxerExt.Indexer = idxer
-	s.indexers[cellID] = idxerExt
+	s.indexers[cellID] = idxer
 	return
 }
 
@@ -156,8 +139,8 @@ func (s *Store) handleIndicesChange(rspIndices []*pdpb.IndexDef) (err error) {
 	delta := diffIndices(s.indices, indicesNew)
 	for _, idxDef := range delta.toDelete {
 		//deletion shall be idempotent
-		for _, idxerExt := range s.indexers {
-			if err = idxerExt.Indexer.DestroyIndex(idxDef.GetName()); err != nil {
+		for _, idxer := range s.indexers {
+			if err = idxer.DestroyIndex(idxDef.GetName()); err != nil {
 				return
 			}
 		}
@@ -170,8 +153,8 @@ func (s *Store) handleIndicesChange(rspIndices []*pdpb.IndexDef) (err error) {
 		if docProt, err = convertToDocProt(idxDef); err != nil {
 			return
 		}
-		for _, idxerExt := range s.indexers {
-			if err = idxerExt.Indexer.CreateIndex(docProt); err != nil {
+		for _, idxer := range s.indexers {
+			if err = idxer.CreateIndex(docProt); err != nil {
 				return
 			}
 		}
@@ -273,7 +256,7 @@ func (s *Store) readyToServeIndex(ctx context.Context) {
 }
 
 func (s *Store) deleteIndexedKey(cellID uint64, idxNameIn string, dataKey []byte, wb storage.WriteBatch) (err error) {
-	var idxerExt *IndexerExt
+	var idxer *indexer.Indexer
 	var metaValB []byte
 	if metaValB, err = s.engine.GetDataEngine().GetIndexInfo(dataKey); err != nil || len(metaValB) == 0 {
 		return
@@ -288,10 +271,10 @@ func (s *Store) deleteIndexedKey(cellID uint64, idxNameIn string, dataKey []byte
 		//TODO(yzc): add metric?
 	}
 
-	if idxerExt, err = s.getIndexer(cellID); err != nil {
+	if idxer, err = s.getIndexer(cellID); err != nil {
 		return
 	}
-	if _, err = idxerExt.Indexer.Del(idxName, docID); err != nil {
+	if _, err = idxer.Del(idxName, docID); err != nil {
 		return
 	}
 	if err = wb.Delete(getDocIDKey(docID)); err != nil {
@@ -302,7 +285,7 @@ func (s *Store) deleteIndexedKey(cellID uint64, idxNameIn string, dataKey []byte
 }
 
 func (s *Store) addIndexedKey(cellID uint64, idxNameIn string, docID uint64, dataKey []byte, wb storage.WriteBatch) (err error) {
-	var idxerExt *IndexerExt
+	var idxer *indexer.Indexer
 	var metaVal *pdpb.KeyMetaVal
 	var metaValB []byte
 	var doc *cql.DocumentWithIdx
@@ -338,14 +321,14 @@ func (s *Store) addIndexedKey(cellID uint64, idxNameIn string, docID uint64, dat
 		err = errors.Errorf("index %s doesn't exist", idxNameIn)
 		return
 	}
-	if idxerExt, err = s.getIndexer(cellID); err != nil {
+	if idxer, err = s.getIndexer(cellID); err != nil {
 		return
 	}
 
 	if doc, err = convertToDocument(idxDef, docID, pairs); err != nil {
 		return
 	}
-	if err = idxerExt.Indexer.Insert(doc); err != nil {
+	if err = idxer.Insert(doc); err != nil {
 		return
 	}
 	log.Debugf("store-index[%d.%d]: added dataKey %+v to index %s, docID %d, paris %+v",
@@ -368,8 +351,8 @@ func (s *Store) indexSplitCell(idxSplitReq *pdpb.IndexSplitRequest, wb storage.W
 	start := encStartKey(cellR)
 	end := encEndKey(cellR)
 
-	var idxerExtL *IndexerExt
-	if idxerExtL, err = s.getIndexer(idxSplitReq.LeftCellID); err != nil {
+	var idxerL *indexer.Indexer
+	if idxerL, err = s.getIndexer(idxSplitReq.LeftCellID); err != nil {
 		return
 	}
 	if _, err = s.getIndexer(idxSplitReq.RightCellID); err != nil {
@@ -388,7 +371,7 @@ func (s *Store) indexSplitCell(idxSplitReq *pdpb.IndexSplitRequest, wb storage.W
 		}
 		idxName, docID := metaVal.GetIdxName(), metaVal.GetDocID()
 		if idxName != "" {
-			if _, err = idxerExtL.Indexer.Del(idxName, docID); err != nil {
+			if _, err = idxerL.Del(idxName, docID); err != nil {
 				return
 			}
 
@@ -412,13 +395,13 @@ func (s *Store) indexDestroyCell(idxDestroyReq *pdpb.IndexDestroyCellRequest, wb
 	start := encStartKey(cell)
 	end := encEndKey(cell)
 
-	var idxerExt *IndexerExt
+	var idxer *indexer.Indexer
 	cellID := idxDestroyReq.GetCellID()
-	if idxerExt, err = s.getIndexer(cellID); err != nil {
+	if idxer, err = s.getIndexer(cellID); err != nil {
 		return
 	}
 	delete(s.indexers, idxDestroyReq.GetCellID())
-	if err = idxerExt.Indexer.Destroy(); err != nil {
+	if err = idxer.Destroy(); err != nil {
 		return
 	}
 	if err = wb.Delete(getCellNextDocIDKey(cellID)); err != nil {
@@ -455,16 +438,16 @@ func (s *Store) indexRebuildCell(idxRebuildReq *pdpb.IndexRebuildCellRequest, wb
 	start := encStartKey(cell)
 	end := encEndKey(cell)
 
-	var idxerExt *IndexerExt
+	var idxer *indexer.Indexer
 
 	cellID := idxRebuildReq.GetCellID()
-	if idxerExt, err = s.getIndexer(cellID); err != nil {
+	if idxer, err = s.getIndexer(cellID); err != nil {
 		return
 	}
-	if err = idxerExt.Indexer.Destroy(); err != nil {
+	if err = idxer.Destroy(); err != nil {
 		return
 	}
-	if err = idxerExt.Indexer.Open(); err != nil {
+	if err = idxer.Open(); err != nil {
 		return
 	}
 

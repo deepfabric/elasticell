@@ -87,23 +87,17 @@ type Store struct {
 	reveivingSnapCount uint32
 
 	rwlock         sync.RWMutex
-	indices        map[string]*pdpb.IndexDef //index name -> IndexDef
-	reExps         map[string]*regexp.Regexp //index name -> Regexp
-	docProts       map[string]*cql.Document  //index name -> cql.Document
-	indexers       map[uint64]*IndexerExt    // cell id -> IndexerExt
-	cellIDToStores map[uint64][]uint64       // cell id -> non-leader store ids, fetched from PD
-	storeIDToCells map[uint64][]uint64       // store id -> leader cell ids, fetched from PD
+	indices        map[string]*pdpb.IndexDef   //index name -> IndexDef
+	reExps         map[string]*regexp.Regexp   //index name -> Regexp
+	docProts       map[string]*cql.Document    //index name -> cql.Document
+	indexers       map[uint64]*indexer.Indexer // cell id -> Indexer
+	cellIDToStores map[uint64][]uint64         // cell id -> non-leader store ids, fetched from PD
+	storeIDToCells map[uint64][]uint64         // store id -> leader cell ids, fetched from PD
 	syncEpoch      uint64
 
 	queryStates  map[string]*QueryState // query UUID -> query state
 	queryReqChan chan *QueryRequestCb
 	queryRspChan chan *querypb.QueryRsp
-}
-
-// IndexerExt is per PeerReplicate
-type IndexerExt struct {
-	Indexer   *indexer.Indexer
-	NextDocID uint64
 }
 
 // DocPtr is alias of querypb.Document
@@ -175,7 +169,7 @@ func NewStore(clusterID uint64, pdClient *pd.Client, meta metapb.Store, engine s
 
 	s.indices = make(map[string]*pdpb.IndexDef)
 	s.reExps = make(map[string]*regexp.Regexp)
-	s.indexers = make(map[uint64]*IndexerExt)
+	s.indexers = make(map[uint64]*indexer.Indexer)
 	s.docProts = make(map[string]*cql.Document)
 	s.cellIDToStores = make(map[uint64][]uint64)
 	s.storeIDToCells = make(map[uint64][]uint64)
