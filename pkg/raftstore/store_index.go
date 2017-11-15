@@ -14,6 +14,7 @@
 package raftstore
 
 import (
+	"bytes"
 	"fmt"
 	"path/filepath"
 	"reflect"
@@ -205,6 +206,18 @@ func (s *Store) readyToServeIndex(ctx context.Context) {
 				}
 				log.Debugf("store-index[%d]: got idxReq %+v", s.GetID(), idxReq)
 				if idxKeyReq = idxReq.GetIdxKey(); idxKeyReq != nil {
+					var epochStale bool
+					var cellEnd []byte
+					cell := s.getCell(idxKeyReq.CellID)
+					if cell == nil {
+						log.Debugf("store-index[%d.%d]: skipped handling idxKeyReq %+v since cell is gone",
+							s.GetID(), idxKeyReq.CellID, idxKeyReq)
+						return
+					}
+					if idxKeyReq.Epoch.CellVer != cell.Epoch.CellVer || idxKeyReq.Epoch.ConfVer != cell.Epoch.ConfVer {
+						epochStale = true
+						cellEnd = encEndKey(cell)
+					}
 					for _, key := range idxKeyReq.GetDataKeys() {
 						err = s.deleteIndexedKey(idxKeyReq.CellID, idxKeyReq.GetIdxName(), key, wb)
 						if idxKeyReq.IsDel {
@@ -216,6 +229,11 @@ func (s *Store) readyToServeIndex(ctx context.Context) {
 							log.Debugf("store-index[%d.%d]: deleted key %+v from index %s",
 								s.GetID(), idxKeyReq.CellID, key, idxKeyReq.GetIdxName())
 						} else {
+							if epochStale && bytes.Compare(key, cellEnd) >= 0 {
+								log.Debugf("store-index[%d.%d]: skipped adding key %s since it's outside the cell range",
+									s.GetID(), idxKeyReq.CellID, key)
+								continue
+							}
 							if err = s.addIndexedKey(idxKeyReq.CellID, idxKeyReq.GetIdxName(), 0, key, wb); err != nil {
 								log.Errorf("store-index[%d]: failed to add key %s to index %s\n%+v", s.GetID(), key, idxKeyReq.GetIdxName(), err)
 								continue
