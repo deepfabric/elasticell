@@ -341,4 +341,5 @@ message IndexRequest {
 message KeyMetaVal {
 	optional string idxName   = 1 [(gogoproto.nullable) = false];
 	optional uint64 docID     = 2 [(gogoproto.nullable) = false];
+	optional uint64 cellID    = 3 [(gogoproto.nullable) = false];
 }
