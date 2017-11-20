@@ -26,6 +26,7 @@ type Index struct {
 	intFrames map[string]*IntFrame
 	txtFrames map[string]*TextFrame
 	liveDocs  *TextFrame //row 0 of this frame stores a bitmap of live docIDs. other rows are not used.
+	dirty     bool
 }
 
 // QueryResult is query result
@@ -144,6 +145,7 @@ func (ind *Index) Destroy() (err error) {
 			err = errors.Wrap(err, "")
 		}
 	}
+	ind.dirty = false
 	return
 }
 
@@ -193,6 +195,7 @@ func (ind *Index) Open() (err error) {
 		return
 	}
 	ind.liveDocs = tfm
+	ind.dirty = false
 	return
 }
 
@@ -220,6 +223,7 @@ func (ind *Index) Close() (err error) {
 	ind.intFrames = nil
 	ind.txtFrames = nil
 	ind.liveDocs = nil
+	ind.dirty = false
 	return
 }
 
@@ -227,6 +231,9 @@ func (ind *Index) Close() (err error) {
 func (ind *Index) Sync() (err error) {
 	ind.rwlock.Lock()
 	defer ind.rwlock.Unlock()
+	if !ind.dirty {
+		return
+	}
 	for _, ifm := range ind.intFrames {
 		if err = ifm.Sync(); err != nil {
 			return
@@ -240,6 +247,7 @@ func (ind *Index) Sync() (err error) {
 	if err = ind.liveDocs.Sync(); err != nil {
 		return
 	}
+	ind.dirty = false
 	return
 }
 
@@ -275,6 +283,7 @@ func (ind *Index) Insert(doc *cql.DocumentWithIdx) (err error) {
 			return
 		}
 	}
+	ind.dirty = true
 	return
 }
 
@@ -289,6 +298,7 @@ func (ind *Index) Del(docID uint64) (found bool, err error) {
 		return
 	}
 	found = true
+	ind.dirty = true
 	return
 }
 

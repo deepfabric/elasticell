@@ -89,7 +89,7 @@
   branch = "master"
   name = "github.com/deepfabric/indexer"
   packages = [".","cql","cql/parser"]
-  revision = "3ddd2f790ab2f3bd0989b8444bb7181e4a23931d"
+  revision = "a70335bd2b7cb0315680a8ca02e6317ec9d2379a"
 
 [[projects]]
   branch = "master"
@@ -314,6 +314,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "e76e7bfd167a4d5915ee12e7941b347534f0b0a03da255c493494e1c751fae18"
+  inputs-digest = "e9d788082f674c319a126d850a2f342f6b6da290a3cf3078cedc95bf619d5518"
   solver-name = "gps-cdcl"
   solver-version = 1
