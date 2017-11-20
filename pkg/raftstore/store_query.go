@@ -311,7 +311,7 @@ func (s *Store) refreshRanges() (err error) {
 	var glrRsp *pdpb.GetLastRangesRsp
 	var ok bool
 	old := s.getSyncEpoch()
-	log.Infof("store-query[%d]: try to sync, epoch=<%d>", s.GetID(), old)
+	log.Debugf("store-query[%d]: try to sync, epoch=<%d>", s.GetID(), old)
 
 	s.rwlock.Lock()
 	defer s.rwlock.Unlock()
@@ -348,7 +348,7 @@ func (s *Store) refreshRanges() (err error) {
 
 	s.syncEpoch++
 
-	log.Infof("store-query[%d]: sync complete, epoch=%d", s.GetID(), s.syncEpoch)
+	log.Debugf("store-query[%d]: sync complete, epoch=%d", s.GetID(), s.syncEpoch)
 	return
 }
 
