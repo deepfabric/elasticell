@@ -442,6 +442,7 @@ func (d *applyDelegate) execWriteRequestIndex(req *raftcmdpb.Request, rsp *raftc
 				idxReq := &pdpb.IndexRequest{}
 				idxReq.IdxKey = &pdpb.IndexKeyRequest{
 					CellID:   d.cell.ID,
+					Epoch:    d.cell.Epoch,
 					IdxName:  idxName,
 					DataKeys: [][]byte{key},
 					IsDel:    false,

@@ -13,12 +13,6 @@ func main() {
 	var ir *indexer.Indexer
 	var sum string
 
-	conf := indexer.Conf{
-		T0mCap:   1000,
-		LeafCap:  100,
-		IntraCap: 4,
-	}
-
 	if len(os.Args) <= 1 {
 		log.Fatalf("paths required\n")
 	}
@@ -29,7 +23,7 @@ func main() {
 			log.Fatalf("path %s doesn't exists", fp)
 		}
 
-		if ir, err = indexer.NewIndexer(fp, &conf, false); err != nil {
+		if ir, err = indexer.NewIndexer(fp, false); err != nil {
 			log.Fatalf("%+v", err)
 		}
 

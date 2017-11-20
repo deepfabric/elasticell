@@ -97,12 +97,12 @@ func (s *Store) readyToServeQuery(ctx context.Context) {
 				normCellIDs := make([]uint64, 0)
 				for _, cellID := range qrc.qr.Cells {
 					s.rwlock.RLock()
-					var idxerExt *IndexerExt
-					if idxerExt, ok = s.indexers[cellID]; !ok {
+					var idxer *indexer.Indexer
+					if idxer, ok = s.indexers[cellID]; !ok {
 						goneCellIDs = append(goneCellIDs, cellID)
 					} else {
 						normCellIDs = append(normCellIDs, cellID)
-						idxers = append(idxers, idxerExt.Indexer)
+						idxers = append(idxers, idxer)
 					}
 					s.rwlock.RUnlock()
 				}
