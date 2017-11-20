@@ -69,7 +69,7 @@ func newExcludedFilter(sources, targets map[uint64]struct{}) *excludedFilter {
 }
 
 func (f *stateFilter) filter(store *StoreInfo) bool {
-	return !(store.isUp() && store.downTime() < f.cfg.Schedule.getMaxStoreDownTimeDuration())
+	return !(store.isUp() && store.downTime() < f.cfg.LimitStoreDownDuration)
 }
 
 func (f *stateFilter) FilterSource(store *StoreInfo) bool {
@@ -85,7 +85,7 @@ func (f *storageThresholdFilter) FilterSource(store *StoreInfo) bool {
 }
 
 func (f *storageThresholdFilter) FilterTarget(store *StoreInfo) bool {
-	return store.storageRatio() > f.cfg.Schedule.StorageRatioThreshold
+	return store.storageRatio() > f.cfg.ThresholdStorageRate
 }
 
 func (f *excludedFilter) FilterSource(store *StoreInfo) bool {
@@ -125,7 +125,7 @@ func (f *healthFilter) filter(store *StoreInfo) bool {
 		return true
 	}
 
-	return store.downTime() > f.cfg.Schedule.getMaxStoreDownTimeDuration()
+	return store.downTime() > f.cfg.LimitStoreDownDuration
 }
 
 func (f *healthFilter) FilterSource(store *StoreInfo) bool {
@@ -161,9 +161,9 @@ func newSnapshotCountFilter(cfg *Cfg) *snapshotCountFilter {
 }
 
 func (f *snapshotCountFilter) filter(store *StoreInfo) bool {
-	return uint64(store.Status.Stats.SendingSnapCount) > f.cfg.Schedule.MaxSnapshotCount ||
-		uint64(store.Status.Stats.ReceivingSnapCount) > f.cfg.Schedule.MaxSnapshotCount ||
-		uint64(store.Status.Stats.ApplyingSnapCount) > f.cfg.Schedule.MaxSnapshotCount
+	return uint64(store.Status.Stats.SendingSnapCount) > f.cfg.LimitSnapshots ||
+		uint64(store.Status.Stats.ReceivingSnapCount) > f.cfg.LimitSnapshots ||
+		uint64(store.Status.Stats.ApplyingSnapCount) > f.cfg.LimitSnapshots
 }
 
 func (f *snapshotCountFilter) FilterSource(store *StoreInfo) bool {

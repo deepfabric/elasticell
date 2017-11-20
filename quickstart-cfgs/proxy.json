@@ -1,5 +1,7 @@
 {
     "addr": ":6379",
+    "addrNotify": "127.0.0.1:9998",
+    "watcherHeartbeatSec": 5,
     "pdAddrs": [
         "127.0.0.1:20801",
         "127.0.0.1:20802",

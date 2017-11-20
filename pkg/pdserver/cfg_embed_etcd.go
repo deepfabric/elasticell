@@ -18,43 +18,33 @@ import (
 	"github.com/deepfabric/elasticell/pkg/util"
 )
 
-// EmbedEtcdCfg is the embed etcd cfg
-type EmbedEtcdCfg struct {
-	ClientUrls          string `json:"clientUrls"`
-	PeerUrls            string `json:"peerUrls"`
-	AdvertiseClientUrls string `json:"advertiseClientUrls"`
-	AdvertisePeerUrls   string `json:"advertisePeerUrls"`
-	InitialCluster      string `json:"initialCluster"`
-	InitialClusterState string `json:"initialClusterState"`
-}
-
 func (c *Cfg) getEmbedEtcdConfig() (*embed.Config, error) {
 	cfg := embed.NewConfig()
 	cfg.Name = c.Name
-	cfg.Dir = c.DataDir
+	cfg.Dir = c.DataPath
 	cfg.WalDir = ""
-	cfg.InitialCluster = c.EmbedEtcd.InitialCluster
-	cfg.ClusterState = c.EmbedEtcd.InitialClusterState
+	cfg.InitialCluster = c.InitialCluster
+	cfg.ClusterState = c.InitialClusterState
 	cfg.EnablePprof = false
 	cfg.Debug = false
 
 	var err error
-	cfg.LPUrls, err = util.ParseUrls(c.EmbedEtcd.PeerUrls)
+	cfg.LPUrls, err = util.ParseUrls(c.URLsPeer)
 	if err != nil {
 		return nil, err
 	}
 
-	cfg.APUrls, err = util.ParseUrls(util.GetStringValue(c.EmbedEtcd.AdvertisePeerUrls, c.EmbedEtcd.PeerUrls))
+	cfg.APUrls, err = util.ParseUrls(util.GetStringValue(c.URLsAdvertisePeer, c.URLsPeer))
 	if err != nil {
 		return nil, err
 	}
 
-	cfg.LCUrls, err = util.ParseUrls(c.EmbedEtcd.ClientUrls)
+	cfg.LCUrls, err = util.ParseUrls(c.URLsClient)
 	if err != nil {
 		return nil, err
 	}
 
-	cfg.ACUrls, err = util.ParseUrls(util.GetStringValue(c.EmbedEtcd.AdvertiseClientUrls, c.EmbedEtcd.ClientUrls))
+	cfg.ACUrls, err = util.ParseUrls(util.GetStringValue(c.URLsAdvertiseClient, c.URLsClient))
 	if err != nil {
 		return nil, err
 	}

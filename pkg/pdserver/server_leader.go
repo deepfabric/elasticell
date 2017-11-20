@@ -72,7 +72,7 @@ func (s *Server) startLeaderLoop() {
 
 		log.Debugf("leader-loop: begin to campaign leader, name=<%s>",
 			s.cfg.Name)
-		if err = s.store.CampaignLeader(s.leaderSignature, s.cfg.LeaseSecsTTL, s.enableLeader); err != nil {
+		if err = s.store.CampaignLeader(s.leaderSignature, s.cfg.DurationLeaderLease, s.enableLeader); err != nil {
 			if !s.callStop {
 				log.Errorf("leader-loop: campaign leader failure, errors:\n %+v", err)
 			}
@@ -114,7 +114,7 @@ func (s *Server) disableLeader() {
 
 func (s *Server) isMatchLeader(leader *pdpb.Leader) bool {
 	return leader != nil &&
-		s.cfg.RPCAddr == leader.GetAddr() &&
+		s.cfg.AddrRPC == leader.GetAddr() &&
 		s.id == leader.GetID()
 }
 
@@ -130,8 +130,8 @@ func (s *Server) GetLeader() (*pdpb.Leader, error) {
 
 func (s *Server) marshalLeader() string {
 	leader := &pdpb.Leader{
-		Addr:           s.cfg.RPCAddr,
-		EtcdClientAddr: s.cfg.EmbedEtcd.ClientUrls,
+		Addr:           s.cfg.AddrRPC,
+		EtcdClientAddr: s.cfg.URLsClient,
 		ID:             s.id,
 		Name:           s.cfg.Name,
 	}

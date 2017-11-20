@@ -48,7 +48,7 @@ func (r *replicaChecker) Check(target *CellInfo) Operator {
 
 	currReplicasCount := uint32(len(target.getPeers()))
 
-	if currReplicasCount < r.cfg.Schedule.MaxReplicas {
+	if currReplicasCount < r.cfg.LimitReplicas {
 		newPeer, _ := r.selectBestPeer(target, true, r.filters...)
 		if newPeer == nil {
 			return nil
@@ -57,7 +57,7 @@ func (r *replicaChecker) Check(target *CellInfo) Operator {
 		return newAddPeerAggregationOp(target, newPeer)
 	}
 
-	if currReplicasCount > r.cfg.Schedule.MaxReplicas {
+	if currReplicasCount > r.cfg.LimitReplicas {
 		oldPeer, _ := r.selectWorstPeer(target)
 		if oldPeer == nil {
 			return nil
@@ -74,11 +74,11 @@ func (r *replicaChecker) checkDownPeer(cell *CellInfo) Operator {
 		peer := stats.Peer
 		store := r.cache.getStoreCache().getStore(peer.StoreID)
 
-		if nil != store && store.downTime() < r.cfg.Schedule.getMaxStoreDownTimeDuration() {
+		if nil != store && store.downTime() < r.cfg.LimitStoreDownDuration {
 			continue
 		}
 
-		if nil != store && stats.DownSeconds < uint64(r.cfg.Schedule.getMaxStoreDownTimeDuration().Seconds()) {
+		if nil != store && stats.DownSeconds < uint64(r.cfg.LimitStoreDownDuration.Seconds()) {
 			continue
 		}
 

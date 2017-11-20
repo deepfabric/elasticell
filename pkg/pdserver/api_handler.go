@@ -56,7 +56,7 @@ func (s *Server) GetSystem() (*pdapi.System, error) {
 	}
 
 	system.AlreadyBootstrapped = true
-	system.MaxReplicas = s.cfg.Schedule.MaxReplicas
+	system.MaxReplicas = s.cfg.LimitReplicas
 	system.OperatorCount = cluster.coordinator.getOperatorCount()
 	system.InitParams = params
 

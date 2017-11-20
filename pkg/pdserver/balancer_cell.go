@@ -50,7 +50,7 @@ func (s *balanceCellScheduler) GetResourceKind() ResourceKind {
 }
 
 func (s *balanceCellScheduler) GetResourceLimit() uint64 {
-	return minUint64(s.limit, s.cfg.Schedule.CellScheduleLimit)
+	return minUint64(s.limit, s.cfg.LimitScheduleCell)
 }
 
 func (s *balanceCellScheduler) Prepare(cache *cache) error { return nil }
@@ -65,7 +65,7 @@ func (s *balanceCellScheduler) Schedule(cache *cache) Operator {
 	}
 
 	// We don't schedule cell with abnormal number of replicas.
-	if len(cell.getPeers()) != int(s.cfg.Schedule.MaxReplicas) {
+	if len(cell.getPeers()) != int(s.cfg.LimitReplicas) {
 		return nil
 	}
 

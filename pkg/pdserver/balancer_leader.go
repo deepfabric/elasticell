@@ -51,7 +51,7 @@ func (l *balanceLeaderScheduler) GetResourceKind() ResourceKind {
 }
 
 func (l *balanceLeaderScheduler) GetResourceLimit() uint64 {
-	return minUint64(l.limit, l.cfg.Schedule.LeaderScheduleLimit)
+	return minUint64(l.limit, l.cfg.LimitScheduleLeader)
 }
 
 func (l *balanceLeaderScheduler) Prepare(cache *cache) error { return nil }

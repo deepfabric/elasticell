@@ -67,7 +67,7 @@ func NewServer(cfg *Cfg) *Server {
 	s.stopC = make(chan interface{})
 	s.isLeaderValue = 0
 	s.complete = make(chan struct{})
-	s.notifier = newWatcherNotifier(time.Second * time.Duration(cfg.WatcherHeartbeatSec*cfg.WatcherPauseTimeout))
+	s.notifier = newWatcherNotifier(cfg.DurationHeartbeatWatcher * time.Duration(cfg.ThresholdPauseWatcher))
 
 	return s
 }

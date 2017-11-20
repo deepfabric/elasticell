@@ -62,7 +62,7 @@ func (s *testServerSuite) stopMultiPDServers(c *C) {
 	if s.servers != nil {
 		for _, s := range s.servers {
 			s.Stop()
-			os.RemoveAll(s.GetCfg().DataDir)
+			os.RemoveAll(s.GetCfg().DataPath)
 		}
 
 		s.servers = nil
@@ -80,7 +80,7 @@ func (s *testServerSuite) restartMultiPDServer(c *C, count int) {
 	var addrs []string
 	var wg sync.WaitGroup
 	for index := 0; index < count; index++ {
-		addrs = append(addrs, s.servers[index].cfg.RPCAddr)
+		addrs = append(addrs, s.servers[index].cfg.AddrRPC)
 		wg.Add(1)
 		go func(index int) {
 			defer wg.Done()

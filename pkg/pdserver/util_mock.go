@@ -99,28 +99,25 @@ func NewTestMultiServers(count int) []*Server {
 }
 
 func newTestConfig(name, addrClient, addrPeer, addrRPC, initCluster string) *Cfg {
-	cfg := &Cfg{
-		EmbedEtcd: &EmbedEtcdCfg{},
-		Schedule:  &ScheduleCfg{},
-	}
+	cfg := &Cfg{}
 
 	cfg.Name = name
-	cfg.DataDir, _ = ioutil.TempDir("/tmp", cfg.Name)
-	cfg.LeaseSecsTTL = 1
-	cfg.RPCAddr = addrRPC
+	cfg.DataPath, _ = ioutil.TempDir("/tmp", cfg.Name)
+	cfg.DurationLeaderLease = 1
+	cfg.AddrRPC = addrRPC
 
-	cfg.EmbedEtcd.ClientUrls = addrClient
-	cfg.EmbedEtcd.PeerUrls = addrPeer
-	cfg.EmbedEtcd.InitialCluster = initCluster
-	cfg.EmbedEtcd.InitialClusterState = "new"
+	cfg.URLsClient = addrClient
+	cfg.URLsPeer = addrPeer
+	cfg.InitialCluster = initCluster
+	cfg.InitialClusterState = "new"
 
-	cfg.Schedule.MaxReplicas = 3
-	cfg.Schedule.LocationLabels = []string{"zone", "rack"}
-	cfg.Schedule.MaxSnapshotCount = 3
-	cfg.Schedule.MaxStoreDownTimeMs = 1000
-	cfg.Schedule.LeaderScheduleLimit = 16
-	cfg.Schedule.CellScheduleLimit = 12
-	cfg.Schedule.ReplicaScheduleLimit = 16
+	cfg.LimitReplicas = 3
+	cfg.LabelsLocation = []string{"zone", "rack"}
+	cfg.LimitSnapshots = 3
+	cfg.LimitStoreDownDuration = 1000
+	cfg.LimitScheduleLeader = 16
+	cfg.LimitScheduleCell = 12
+	cfg.LimitScheduleReplica = 16
 
 	return cfg
 }

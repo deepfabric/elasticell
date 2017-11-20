@@ -29,10 +29,10 @@ func (s *Server) startRPC() {
 		}
 	}()
 
-	lis, err := net.Listen("tcp", s.cfg.RPCAddr)
+	lis, err := net.Listen("tcp", s.cfg.AddrRPC)
 	if err != nil {
 		log.Fatalf("bootstrap: start grpc server failure, listen=<%s> errors:\n %+v",
-			s.cfg.RPCAddr,
+			s.cfg.AddrRPC,
 			err)
 		return
 	}
@@ -44,14 +44,14 @@ func (s *Server) startRPC() {
 	if err := s.rpcServer.Serve(lis); err != nil {
 		if !s.callStop {
 			log.Fatalf("bootstrap: start grpc server failure, listen=<%s> errors:\n %+v",
-				s.cfg.RPCAddr,
+				s.cfg.AddrRPC,
 				err)
 		}
 
 		return
 	}
 
-	log.Infof("stop: grpc server stopped, addr=<%s>", s.cfg.RPCAddr)
+	log.Infof("stop: grpc server stopped, addr=<%s>", s.cfg.AddrRPC)
 }
 
 func (s *Server) closeRPC() {

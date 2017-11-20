@@ -33,7 +33,7 @@ type ReplicationCfg struct {
 
 func (c *Cfg) getLocationLabels() []string {
 	var value []string
-	for _, v := range c.Schedule.LocationLabels {
+	for _, v := range c.LabelsLocation {
 		value = append(value, v)
 	}
 

@@ -14,69 +14,44 @@
 package pdserver
 
 import (
-	"encoding/json"
-	"flag"
-	"io/ioutil"
-	"log"
-
-	"github.com/pkg/errors"
-)
-
-var (
-	cfgFile = flag.String("cfg", "./pd.json", "Configuration file of pd server base on json formart.")
+	"time"
 )
 
 // Cfg pd server Cfg
 type Cfg struct {
-	Name    string `json:"name"`
-	DataDir string `json:"dataDir"`
-	// for leader election
-	LeaseSecsTTL int64 `json:"leaseSecsTTL"`
-	// watcher heartbeat timeout
-	WatcherHeartbeatSec int `json:"watcherHeartbeatSec"`
-	// watcher heartbeat timeout
-	WatcherPauseTimeout int `json:"watcherPauseTimeout"`
-	// RPCAddr rpc addr
-	RPCAddr string `json:"rpcAddr"`
-	// EmbedEtcd is the embed etcd configuration
-	EmbedEtcd *EmbedEtcdCfg `json:"embedEtcd"`
-	// Schedule is the Schedule configuration
-	Schedule *ScheduleCfg `json:"schedule"`
-}
+	Name                     string
+	DataPath                 string
+	AddrRPC                  string
+	DurationLeaderLease      int64
+	DurationHeartbeatWatcher time.Duration
+	ThresholdPauseWatcher    int
 
-// GetCfg get cfg from command
-func GetCfg() *Cfg {
-	data, err := ioutil.ReadFile(*cfgFile)
-	if err != nil {
-		log.Fatalf("bootstrap: read configuration file failure, cfg=<%s>, errors:\n %+v",
-			*cfgFile,
-			err)
-		return nil
-	}
+	URLsClient          string
+	URLsAdvertiseClient string
+	URLsPeer            string
+	URLsAdvertisePeer   string
+	InitialCluster      string
+	InitialClusterState string
 
-	cfg, err := unmarshal(data)
-	if err != nil {
-		log.Fatalf("bootstrap: parse configuration file failure, cfg=<%s>, errors:\n %+v",
-			*cfgFile,
-			err)
-		return nil
-	}
-
-	return cfg
-}
-
-func unmarshal(data []byte) (*Cfg, error) {
-	v := &Cfg{}
-
-	err := json.Unmarshal(data, v)
-
-	if nil != err {
-		return nil, errors.Wrap(err, "")
-	}
-
-	return v, nil
-}
-
-func (c *Cfg) string() string {
-	return ""
+	// The label keys specified the location of a store.
+	// The placement priorities is implied by the order of label keys.
+	// For example, ["zone", "rack"] means that we should place replicas to
+	// different zones first, then to different racks if we don't have enough zones.
+	LabelsLocation []string
+	// LimitReplicas is the number of replicas for each cell.
+	LimitReplicas uint32
+	// If the snapshot count of one store is greater than this value,
+	// it will never be used as a source or target store.
+	LimitSnapshots uint64
+	// MaxStoreDownTime is the max duration after which
+	// a store will be considered to be down if it hasn't reported heartbeats.
+	LimitStoreDownDuration time.Duration
+	// LimitScheduleLeader is the max coexist leader schedules.
+	LimitScheduleLeader uint64
+	// LimitScheduleCell is the max coexist cell schedules.
+	LimitScheduleCell uint64
+	// LimitScheduleReplica is the max coexist replica schedules.
+	LimitScheduleReplica uint64
+	// ThresholdStorageRate is the max storage rate of used for schduler
+	ThresholdStorageRate int
 }

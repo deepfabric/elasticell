@@ -90,7 +90,7 @@ func (c *coordinator) dispatch(target *CellInfo) *pdpb.CellHeartbeatRsp {
 	}
 
 	// Check replica operator.
-	if c.limiter.operatorCount(cellKind) >= c.cfg.Schedule.ReplicaScheduleLimit {
+	if c.limiter.operatorCount(cellKind) >= c.cfg.LimitScheduleReplica {
 		return nil
 	}
 

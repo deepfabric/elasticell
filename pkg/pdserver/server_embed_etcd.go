@@ -151,18 +151,18 @@ func (s *Server) updateAdvertisePeerUrls() {
 	for _, m := range members.Members {
 		if s.id == m.ID {
 			etcdPeerURLs := strings.Join(m.PeerURLs, ",")
-			if s.cfg.EmbedEtcd.AdvertisePeerUrls != etcdPeerURLs {
+			if s.cfg.URLsAdvertisePeer != etcdPeerURLs {
 				log.Infof("bootstrap: update advertise peer urls succ, old=<%s>, new=<%s>",
-					s.cfg.EmbedEtcd.AdvertisePeerUrls,
+					s.cfg.URLsAdvertisePeer,
 					etcdPeerURLs)
-				s.cfg.EmbedEtcd.AdvertisePeerUrls = etcdPeerURLs
+				s.cfg.URLsAdvertisePeer = etcdPeerURLs
 			}
 		}
 	}
 }
 
 func (s *Server) checkEtcdCluster() {
-	um, err := types.NewURLsMap(s.cfg.EmbedEtcd.InitialCluster)
+	um, err := types.NewURLsMap(s.cfg.InitialCluster)
 	if err != nil {
 		s.closeEmbedEtcd()
 		log.Fatalf("bootstrap: check embed etcd server failure, errors:\n %+v",
