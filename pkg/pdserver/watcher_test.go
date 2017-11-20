@@ -76,7 +76,7 @@ func (s *testWatcherSuite) TestNotify(c *C) {
 	c.Assert(wn.watchers[addr].q.GetMaxOffset() == 1, IsTrue)
 
 	// pause
-	wn.pause(addr)
+	wn.pause(addr, false)
 	time.Sleep(time.Millisecond * 150)
 	c.Assert(wn.watchers[addr].state == paused, IsTrue)
 
