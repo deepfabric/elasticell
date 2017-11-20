@@ -93,15 +93,9 @@
 
 [[projects]]
   branch = "master"
-  name = "github.com/pilosa/pilosa"
-  packages = ["internal","pql","roaring","statik"]
-  revision = "0dfbba370dcc6d4f1f366083251e3bc539afb122"
-
-[[projects]]
-  branch = "master"
   name = "github.com/fagongzi/goetty"
   packages = [".","protocol/redis"]
-  revision = "2e369222b4f4d40511993dea44d7110d89a3c986"
+  revision = "db900362fdd71a1f03fc846afe847ec1b47e8730"
 
 [[projects]]
   branch = "master"
@@ -200,6 +194,12 @@
   revision = "53be0d36a84c2a886ca057d34b6aa4468df9ccb4"
 
 [[projects]]
+  branch = "master"
+  name = "github.com/pilosa/pilosa"
+  packages = [".","diagnostics","internal","pql","roaring","statik"]
+  revision = "0dfbba370dcc6d4f1f366083251e3bc539afb122"
+
+[[projects]]
   name = "github.com/pingcap/check"
   packages = ["."]
   revision = "9b266636177e249ec28b0aeffe8e86bc272bb481"
@@ -245,6 +245,12 @@
   name = "github.com/shirou/gopsutil"
   packages = ["disk","internal/common"]
   revision = "423a8ff2a6da39265b3d05d36ca7e3f18fc8d733"
+
+[[projects]]
+  name = "github.com/sony/gobreaker"
+  packages = ["."]
+  revision = "e9556a45379ef1da12e54847edb2fb3d7d566f36"
+  version = "0.3.0"
 
 [[projects]]
   name = "github.com/stretchr/testify"
@@ -304,12 +310,6 @@
   name = "gopkg.in/yaml.v2"
   packages = ["."]
   revision = "a3f3340b5840cee44f372bddb5880fcbc419b46a"
-
-[[projects]]
-  name = "github.com/sony/gobreaker"
-  packages = ["."]
-  revision = "e9556a45379ef1da12e54847edb2fb3d7d566f36"
-  version = "0.3.0"
 
 [solve-meta]
   analyzer-name = "dep"

@@ -169,6 +169,8 @@ func (c *connector) IsConnected() bool {
 func (c *connector) reset() {
 	atomic.StoreInt32(&c.closed, 1)
 	c.conn = nil
+	c.in.Clear()
+	c.out.Clear()
 }
 
 // Read read data from server, block until a msg arrived or  get a error
