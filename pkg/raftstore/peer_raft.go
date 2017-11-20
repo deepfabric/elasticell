@@ -120,8 +120,8 @@ func (pr *PeerReplicate) readyToServeRaft(ctx context.Context) {
 			return
 		}
 
-		pr.handleTick(items)
 		pr.handleStep(items)
+		pr.handleTick(items)
 		pr.handleReport(items)
 		pr.handleApplyResult(items)
 		pr.handleRequest(items)
