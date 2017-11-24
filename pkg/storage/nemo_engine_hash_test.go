@@ -27,7 +27,9 @@ type testNemoHashSuite struct {
 
 func (s *testNemoHashSuite) SetUpSuite(c *C) {
 	var err error
-	s.driver, err = NewNemoDriver("/tmp/nemo-hash")
+	s.driver, err = NewNemoDriver(&NemoCfg{
+		DataPath: "/tmp/nemo-hash",
+	})
 	c.Assert(err, IsNil)
 }
 

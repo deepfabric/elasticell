@@ -16,16 +16,20 @@
 package storage
 
 import (
+	"github.com/deepfabric/elasticell/pkg/util"
 	gonemo "github.com/deepfabric/go-nemo"
+	"golang.org/x/net/context"
 )
 
 type nemoMetaEngine struct {
+	limiter *util.Limiter
 	db      *gonemo.NEMO
 	handler *gonemo.DBNemo
 }
 
-func newNemoMetaEngine(db *gonemo.NEMO) Engine {
+func newNemoMetaEngine(db *gonemo.NEMO, cfg *NemoCfg) Engine {
 	return &nemoMetaEngine{
+		limiter: util.NewLimiter(cfg.LimitConcurrencyWrite),
 		db:      db,
 		handler: db.GetMetaHandle(),
 	}
@@ -33,7 +37,11 @@ func newNemoMetaEngine(db *gonemo.NEMO) Engine {
 
 func (e *nemoMetaEngine) Set(key []byte, value []byte) error {
 	// TODO: cfg
-	return e.db.PutWithHandle(e.handler, key, value, false)
+	e.limiter.Wait(context.TODO())
+	err := e.db.PutWithHandle(e.handler, key, value, false)
+	e.limiter.Release()
+
+	return err
 }
 
 func (e *nemoMetaEngine) Get(key []byte) ([]byte, error) {
@@ -42,11 +50,19 @@ func (e *nemoMetaEngine) Get(key []byte) ([]byte, error) {
 
 func (e *nemoMetaEngine) Delete(key []byte) error {
 	// TODO: cfg
-	return e.db.DeleteWithHandle(e.handler, key, false)
+	e.limiter.Wait(context.TODO())
+	err := e.db.DeleteWithHandle(e.handler, key, false)
+	e.limiter.Release()
+
+	return err
 }
 
 func (e *nemoMetaEngine) RangeDelete(start, end []byte) error {
-	return e.db.RangeDelWithHandle(e.handler, start, end)
+	e.limiter.Wait(context.TODO())
+	err := e.db.RangeDelWithHandle(e.handler, start, end)
+	e.limiter.Release()
+
+	return err
 }
 
 // Scan scans the range and execute the handler fun.

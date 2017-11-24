@@ -35,7 +35,9 @@ type testNemoDataSuite struct {
 
 func (s *testNemoDataSuite) SetUpSuite(c *C) {
 	var err error
-	s.driver, err = NewNemoDriver("/tmp/nemo-data")
+	s.driver, err = NewNemoDriver(&NemoCfg{
+		DataPath: "/tmp/nemo-data",
+	})
 	c.Assert(err, IsNil)
 }
 
@@ -117,7 +119,9 @@ func (s *testNemoDataSuite) CreateSnapshot(c *C) {
 }
 
 func (s *testNemoDataSuite) TestApplySnapshot(c *C) {
-	driver, err := NewNemoDriver(applyPath)
+	driver, err := NewNemoDriver(&NemoCfg{
+		DataPath: applyPath,
+	})
 	c.Assert(err, IsNil)
 
 	s.driver.GetDataEngine().RangeDelete([]byte(""), []byte{byte('z' + 1)})

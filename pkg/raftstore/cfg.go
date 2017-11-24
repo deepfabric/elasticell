@@ -22,6 +22,7 @@ import (
 type Cfg struct {
 	Addr                      string
 	DataPath                  string
+	OptionPath                string
 	CellCapacity              uint64
 	DurationHeartbeatStore    time.Duration
 	DurationHeartbeatCell     time.Duration
@@ -39,6 +40,7 @@ type Cfg struct {
 	LimitRaftEntryBytes       uint64
 	LimitSnapChunkBytes       uint64
 	LimitSnapChunkRate        uint64
+	LimitConcurrencyWrite     uint64
 	ThresholdCompact          uint64
 	ThresholdSplitCheckBytes  uint64
 	ThresholdRaftElection     int

@@ -17,21 +17,28 @@ package storage
 
 import (
 	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
+	"github.com/deepfabric/elasticell/pkg/util"
 	gonemo "github.com/deepfabric/go-nemo"
+	"golang.org/x/net/context"
 )
 
 type nemoHashEngine struct {
-	db *gonemo.NEMO
+	limiter *util.Limiter
+	db      *gonemo.NEMO
 }
 
-func newNemoHashEngine(db *gonemo.NEMO) HashEngine {
+func newNemoHashEngine(db *gonemo.NEMO, cfg *NemoCfg) HashEngine {
 	return &nemoHashEngine{
-		db: db,
+		limiter: util.NewLimiter(cfg.LimitConcurrencyWrite),
+		db:      db,
 	}
 }
 
 func (e *nemoHashEngine) HSet(key, field, value []byte) (int64, error) {
+	e.limiter.Wait(context.TODO())
 	n, err := e.db.HSet(key, field, value)
+	e.limiter.Release()
+
 	return int64(n), err
 }
 
@@ -40,7 +47,11 @@ func (e *nemoHashEngine) HGet(key, field []byte) ([]byte, error) {
 }
 
 func (e *nemoHashEngine) HDel(key []byte, fields ...[]byte) (int64, error) {
-	return e.db.HDel(key, fields...)
+	e.limiter.Wait(context.TODO())
+	n, err := e.db.HDel(key, fields...)
+	e.limiter.Release()
+
+	return n, err
 }
 
 func (e *nemoHashEngine) HExists(key, field []byte) (bool, error) {
@@ -81,7 +92,10 @@ func (e *nemoHashEngine) HLen(key []byte) (int64, error) {
 }
 
 func (e *nemoHashEngine) HMGet(key []byte, fields ...[]byte) ([][]byte, []error) {
+	e.limiter.Wait(context.TODO())
 	values, errors := e.db.HMGet(key, fields)
+	e.limiter.Release()
+
 	var errs []error
 	if len(errors) > 0 {
 		for _, err := range errors {
@@ -95,12 +109,19 @@ func (e *nemoHashEngine) HMGet(key []byte, fields ...[]byte) ([][]byte, []error)
 }
 
 func (e *nemoHashEngine) HMSet(key []byte, fields, values [][]byte) error {
+	e.limiter.Wait(context.TODO())
 	_, err := e.db.HMSet(key, fields, values)
+	e.limiter.Release()
+
 	return err
 }
 
 func (e *nemoHashEngine) HSetNX(key, field, value []byte) (int64, error) {
-	return e.db.HSetnx(key, field, value)
+	e.limiter.Wait(context.TODO())
+	n, err := e.db.HSetnx(key, field, value)
+	e.limiter.Release()
+
+	return n, err
 }
 
 func (e *nemoHashEngine) HStrLen(key, field []byte) (int64, error) {
@@ -108,5 +129,9 @@ func (e *nemoHashEngine) HStrLen(key, field []byte) (int64, error) {
 }
 
 func (e *nemoHashEngine) HIncrBy(key, field []byte, incrment int64) ([]byte, error) {
-	return e.db.HIncrby(key, field, incrment)
+	e.limiter.Wait(context.TODO())
+	value, err := e.db.HIncrby(key, field, incrment)
+	e.limiter.Release()
+
+	return value, err
 }

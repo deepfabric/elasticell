@@ -27,7 +27,9 @@ type testNemoListSuite struct {
 
 func (s *testNemoListSuite) SetUpSuite(c *C) {
 	var err error
-	s.driver, err = NewNemoDriver("/tmp/nemo-list")
+	s.driver, err = NewNemoDriver(&NemoCfg{
+		DataPath: "/tmp/nemo-list",
+	})
 	c.Assert(err, IsNil)
 }
 

@@ -16,8 +16,17 @@
 package storage
 
 import (
+	"runtime"
+
 	gonemo "github.com/deepfabric/go-nemo"
 )
+
+// NemoCfg nemo cfg
+type NemoCfg struct {
+	DataPath              string
+	OptionPath            string
+	LimitConcurrencyWrite uint64
+}
 
 type nemoDrvier struct {
 	db         *gonemo.NEMO
@@ -31,27 +40,38 @@ type nemoDrvier struct {
 }
 
 // NewNemoDriver return a driver implemention by nemo
-func NewNemoDriver(path string) (Driver, error) {
-	opts := gonemo.NewDefaultOptions()
-	db := gonemo.OpenNemo(opts, path)
+func NewNemoDriver(cfg *NemoCfg) (Driver, error) {
+	var opts *gonemo.Options
+
+	if cfg.OptionPath != "" {
+		opts, _ = gonemo.NewOptions(cfg.OptionPath)
+	} else {
+		opts = gonemo.NewDefaultOptions()
+	}
+
+	db := gonemo.OpenNemo(opts, cfg.DataPath)
 
 	driver := &nemoDrvier{
 		db: db,
 	}
 
-	driver.init()
+	driver.init(cfg)
 
 	return driver, nil
 }
 
-func (n *nemoDrvier) init() {
-	n.metaEngine = newNemoMetaEngine(n.db)
-	n.dataEngine = newNemoDataEngine(n.db)
-	n.kvEngine = newNemoKVEngine(n.db)
-	n.hashEngine = newNemoHashEngine(n.db)
-	n.listEngine = newNemoListEngine(n.db)
-	n.setEngine = newNemoSetEngine(n.db)
-	n.zsetEngine = newNemoZSetEngine(n.db)
+func (n *nemoDrvier) init(cfg *NemoCfg) {
+	if cfg.LimitConcurrencyWrite == 0 {
+		cfg.LimitConcurrencyWrite = uint64(runtime.NumCPU())
+	}
+
+	n.metaEngine = newNemoMetaEngine(n.db, cfg)
+	n.dataEngine = newNemoDataEngine(n.db, cfg)
+	n.kvEngine = newNemoKVEngine(n.db, cfg)
+	n.hashEngine = newNemoHashEngine(n.db, cfg)
+	n.listEngine = newNemoListEngine(n.db, cfg)
+	n.setEngine = newNemoSetEngine(n.db, cfg)
+	n.zsetEngine = newNemoZSetEngine(n.db, cfg)
 }
 
 func (n *nemoDrvier) GetEngine() Engine {

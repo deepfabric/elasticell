@@ -16,16 +16,20 @@
 package storage
 
 import (
+	"github.com/deepfabric/elasticell/pkg/util"
 	gonemo "github.com/deepfabric/go-nemo"
+	"golang.org/x/net/context"
 )
 
 type nemoListEngine struct {
-	db *gonemo.NEMO
+	limiter *util.Limiter
+	db      *gonemo.NEMO
 }
 
-func newNemoListEngine(db *gonemo.NEMO) ListEngine {
+func newNemoListEngine(db *gonemo.NEMO, cfg *NemoCfg) ListEngine {
 	return &nemoListEngine{
-		db: db,
+		limiter: util.NewLimiter(cfg.LimitConcurrencyWrite),
+		db:      db,
 	}
 }
 
@@ -34,7 +38,11 @@ func (e *nemoListEngine) LIndex(key []byte, index int64) ([]byte, error) {
 }
 
 func (e *nemoListEngine) LInsert(key []byte, pos int, pivot []byte, value []byte) (int64, error) {
-	return e.db.LInsert(key, pos, pivot, value)
+	e.limiter.Wait(context.TODO())
+	n, err := e.db.LInsert(key, pos, pivot, value)
+	e.limiter.Release()
+
+	return n, err
 }
 
 func (e *nemoListEngine) LLen(key []byte) (int64, error) {
@@ -42,16 +50,28 @@ func (e *nemoListEngine) LLen(key []byte) (int64, error) {
 }
 
 func (e *nemoListEngine) LPop(key []byte) ([]byte, error) {
-	return e.db.LPop(key)
+	e.limiter.Wait(context.TODO())
+	value, err := e.db.LPop(key)
+	e.limiter.Release()
+
+	return value, err
 }
 
 func (e *nemoListEngine) LPush(key []byte, values ...[]byte) (int64, error) {
 	// TODO: nemo must support more value push
-	return e.db.LPush(key, values[0])
+	e.limiter.Wait(context.TODO())
+	n, err := e.db.LPush(key, values[0])
+	e.limiter.Release()
+
+	return n, err
 }
 
 func (e *nemoListEngine) LPushX(key []byte, value []byte) (int64, error) {
-	return e.db.LPushx(key, value)
+	e.limiter.Wait(context.TODO())
+	n, err := e.db.LPushx(key, value)
+	e.limiter.Release()
+
+	return n, err
 }
 
 func (e *nemoListEngine) LRange(key []byte, begin int64, end int64) ([][]byte, error) {
@@ -60,26 +80,50 @@ func (e *nemoListEngine) LRange(key []byte, begin int64, end int64) ([][]byte, e
 }
 
 func (e *nemoListEngine) LRem(key []byte, count int64, value []byte) (int64, error) {
-	return e.db.LRem(key, count, value)
+	e.limiter.Wait(context.TODO())
+	n, err := e.db.LRem(key, count, value)
+	e.limiter.Release()
+
+	return n, err
 }
 
 func (e *nemoListEngine) LSet(key []byte, index int64, value []byte) error {
-	return e.db.LSet(key, index, value)
+	e.limiter.Wait(context.TODO())
+	err := e.db.LSet(key, index, value)
+	e.limiter.Release()
+
+	return err
 }
 
 func (e *nemoListEngine) LTrim(key []byte, begin int64, end int64) error {
-	return e.db.LTrim(key, begin, end)
+	e.limiter.Wait(context.TODO())
+	err := e.db.LTrim(key, begin, end)
+	e.limiter.Release()
+
+	return err
 }
 
 func (e *nemoListEngine) RPop(key []byte) ([]byte, error) {
-	return e.db.RPop(key)
+	e.limiter.Wait(context.TODO())
+	value, err := e.db.RPop(key)
+	e.limiter.Release()
+
+	return value, err
 }
 
 func (e *nemoListEngine) RPush(key []byte, values ...[]byte) (int64, error) {
 	// TODO: nemo must support more value push
-	return e.db.RPush(key, values[0])
+	e.limiter.Wait(context.TODO())
+	n, err := e.db.RPush(key, values[0])
+	e.limiter.Release()
+
+	return n, err
 }
 
 func (e *nemoListEngine) RPushX(key []byte, value []byte) (int64, error) {
-	return e.db.RPushx(key, value)
+	e.limiter.Wait(context.TODO())
+	n, err := e.db.RPushx(key, value)
+	e.limiter.Release()
+
+	return n, err
 }

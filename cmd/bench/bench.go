@@ -129,14 +129,17 @@ func startG(total int64, wg, complate *sync.WaitGroup, ready chan struct{}, ans 
 				os.Exit(1)
 			}
 
-			now := time.Now()
-			cu := now.Sub(*q.pop()).Nanoseconds()
-			if cu > max {
-				max = cu
-			}
+			s := q.pop()
+			if s != nil {
+				now := time.Now()
+				cu := now.Sub(*s).Nanoseconds()
+				if cu > max {
+					max = cu
+				}
 
-			if cu < min {
-				min = cu
+				if cu < min {
+					min = cu
+				}
 			}
 
 			received++
@@ -279,12 +282,22 @@ func (a *analysis) print() {
 
 	a.calc(recv - prev)
 
-	fmt.Printf("[%d, %d, %d], tps: <%d>/s, avg: %s \n",
+	min := int64(0)
+	if a.min != math.MaxInt64 {
+		min = a.min
+	}
+
+	fmt.Printf("[%d, %d, %d](%d s), tps: <%d>/s, avg: %s, min: %s, max: %s \n",
 		sent,
 		recv,
 		(sent - recv),
+		int(time.Now().Sub(a.startAt).Seconds()),
 		(recv - prev),
-		time.Duration(a.avg))
+		time.Duration(a.avg),
+		time.Duration(min),
+		time.Duration(a.max))
+
+	a.set(math.MaxInt64, 0)
 }
 
 type queue struct {
@@ -306,6 +319,11 @@ func (q *queue) add(start *time.Time) {
 
 func (q *queue) pop() *time.Time {
 	q.Lock()
+	if len(q.starts) == 0 {
+		q.Unlock()
+		return nil
+	}
+
 	value := q.starts[0]
 	q.starts[0] = nil
 	q.starts = q.starts[1:]

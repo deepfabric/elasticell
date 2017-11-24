@@ -27,7 +27,9 @@ type testNemoKVSuite struct {
 
 func (s *testNemoKVSuite) SetUpSuite(c *C) {
 	var err error
-	s.driver, err = NewNemoDriver("/tmp/nemo-kv")
+	s.driver, err = NewNemoDriver(&NemoCfg{
+		DataPath: "/tmp/nemo-kv",
+	})
 	c.Assert(err, IsNil)
 }
 

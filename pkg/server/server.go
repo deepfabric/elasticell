@@ -158,5 +158,10 @@ func (s *Server) initNode() {
 }
 
 func (s *Server) initDriver() (storage.Driver, error) {
-	return storage.NewNemoDriver(globalCfg.Node.RaftStore.DataPath)
+	cfg := &storage.NemoCfg{
+		DataPath:              globalCfg.Node.RaftStore.DataPath,
+		OptionPath:            globalCfg.Node.RaftStore.OptionPath,
+		LimitConcurrencyWrite: globalCfg.Node.RaftStore.LimitConcurrencyWrite,
+	}
+	return storage.NewNemoDriver(cfg)
 }

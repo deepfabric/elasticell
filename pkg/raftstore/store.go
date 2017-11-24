@@ -22,8 +22,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/deepfabric/indexer/cql"
-
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
@@ -39,6 +37,7 @@ import (
 	"github.com/deepfabric/etcd/raft/raftpb"
 	datastructures "github.com/deepfabric/go-datastructures"
 	"github.com/deepfabric/indexer"
+	"github.com/deepfabric/indexer/cql"
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 )
@@ -58,46 +57,37 @@ var (
 
 // Store is the store for raft
 type Store struct {
-	id        uint64
-	clusterID uint64
-	startAt   uint32
-	meta      metapb.Store
-
-	snapshotManager SnapshotManager
-
-	pdClient *pd.Client
-
-	keyConvertFun func([]byte, func([]byte) metapb.Cell) metapb.Cell
-	replicatesMap *cellPeersMap // cellid -> peer replicate
-	keyRanges     *util.CellTree
-	peerCache     *peerCacheMap
-	delegates     *applyDelegateMap
-
-	pendingLock      sync.RWMutex
-	pendingSnapshots map[uint64]mraft.SnapshotMessageHeader
-
-	trans  *transport
-	engine storage.Driver
-	runner *util.Runner
-
-	redisReadHandles  map[raftcmdpb.CMDType]func(*raftcmdpb.Request) *raftcmdpb.Response
-	redisWriteHandles map[raftcmdpb.CMDType]func(*applyContext, *raftcmdpb.Request) *raftcmdpb.Response
-
+	id                 uint64
+	clusterID          uint64
+	startAt            uint32
+	meta               metapb.Store
+	snapshotManager    SnapshotManager
+	pdClient           *pd.Client
+	keyConvertFun      func([]byte, func([]byte) metapb.Cell) metapb.Cell
+	replicatesMap      *cellPeersMap // cellid -> peer replicate
+	keyRanges          *util.CellTree
+	peerCache          *peerCacheMap
+	delegates          *applyDelegateMap
+	pendingLock        sync.RWMutex
+	pendingSnapshots   map[uint64]mraft.SnapshotMessageHeader
+	trans              *transport
+	engine             storage.Driver
+	runner             *util.Runner
+	redisReadHandles   map[raftcmdpb.CMDType]func(*raftcmdpb.Request) *raftcmdpb.Response
+	redisWriteHandles  map[raftcmdpb.CMDType]func(*applyContext, *raftcmdpb.Request) *raftcmdpb.Response
 	sendingSnapCount   uint32
 	reveivingSnapCount uint32
-
-	rwlock         sync.RWMutex
-	indices        map[string]*pdpb.IndexDef   //index name -> IndexDef
-	reExps         map[string]*regexp.Regexp   //index name -> Regexp
-	docProts       map[string]*cql.Document    //index name -> cql.Document
-	indexers       map[uint64]*indexer.Indexer // cell id -> Indexer
-	cellIDToStores map[uint64][]uint64         // cell id -> non-leader store ids, fetched from PD
-	storeIDToCells map[uint64][]uint64         // store id -> leader cell ids, fetched from PD
-	syncEpoch      uint64
-
-	queryStates  map[string]*QueryState // query UUID -> query state
-	queryReqChan chan *QueryRequestCb
-	queryRspChan chan *querypb.QueryRsp
+	rwlock             sync.RWMutex
+	indices            map[string]*pdpb.IndexDef   //index name -> IndexDef
+	reExps             map[string]*regexp.Regexp   //index name -> Regexp
+	docProts           map[string]*cql.Document    //index name -> cql.Document
+	indexers           map[uint64]*indexer.Indexer // cell id -> Indexer
+	cellIDToStores     map[uint64][]uint64         // cell id -> non-leader store ids, fetched from PD
+	storeIDToCells     map[uint64][]uint64         // store id -> leader cell ids, fetched from PD
+	syncEpoch          uint64
+	queryStates        map[string]*QueryState // query UUID -> query state
+	queryReqChan       chan *QueryRequestCb
+	queryRspChan       chan *querypb.QueryRsp
 }
 
 // DocPtr is alias of querypb.Document

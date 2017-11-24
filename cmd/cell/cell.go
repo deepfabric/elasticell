@@ -46,7 +46,8 @@ var (
 	addr           = flag.String("addr", ":10800", "Internal address")
 	addrCli        = flag.String("addr-cli", ":6379", "KV client address")
 	pprof          = flag.String("addr-pprof", "", "pprof http server address")
-	dataDir        = flag.String("data", "", "The data dir")
+	dataPath       = flag.String("data", "", "The data dir")
+	optionPath     = flag.String("option", "", "The option file")
 	zone           = flag.String("zone", "", "Zone label")
 	rack           = flag.String("rack", "", "Rack label")
 	bufferCliRead  = flag.Int("buffer-cli-read", 256, "Buffer(bytes): bytes of KV client read")
@@ -71,6 +72,7 @@ var (
 	limitRaftEntryBytesMB     = flag.Uint64("limit-raft-entry-bytes", 8, "Limit(MB): Max bytes of raft log entry")
 	limitSnapChunkBytesKB     = flag.Uint64("limit-snap-chunk-bytes", 1024, "Limit(KB): Max snap chunk size")
 	limitSnapChunkRate        = flag.Uint64("limit-snap-chunk-rate", 16, "Limit: Max snap chunks sent per second")
+	limitConcurrencyWrite     = flag.Uint64("limit-concurrency-write", 8, "Limit: write concurrency")
 	thresholdCompact          = flag.Uint64("threshold-compact", 64, "Threshold: Raft Log compact, count of [first, replicated]")
 	thresholdSplitCheckMB     = flag.Uint64("threshold-split-check", 0, "Threshold(MB): Start split check, bytes that the cell has bean stored")
 	thresholdRaftElection     = flag.Int("threshold-raft-election", 10, "Threshold: Raft election, after this ticks")
@@ -140,7 +142,7 @@ func parseCfg() *server.Cfg {
 		os.Exit(-1)
 	}
 
-	if *dataDir == "" {
+	if *dataPath == "" {
 		fmt.Println("Data dir must be set")
 		os.Exit(-1)
 	}
@@ -163,7 +165,8 @@ func parseCfg() *server.Cfg {
 	cfg.Node.PDEndpoints = strings.Split(*pd, ",")
 	cfg.Node.RaftStore.Addr = *addr
 	cfg.AddrCli = *addrCli
-	cfg.Node.RaftStore.DataPath = *dataDir
+	cfg.Node.RaftStore.DataPath = *dataPath
+	cfg.Node.RaftStore.OptionPath = *optionPath
 	cfg.Node.StoreLables = append(cfg.Node.StoreLables, metapb.Label{
 		Key:   "zone",
 		Value: *zone,
@@ -193,6 +196,7 @@ func parseCfg() *server.Cfg {
 	cfg.Node.RaftStore.LimitRaftEntryBytes = *limitRaftEntryBytesMB * mb
 	cfg.Node.RaftStore.LimitSnapChunkBytes = *limitSnapChunkBytesKB * kb
 	cfg.Node.RaftStore.LimitSnapChunkRate = *limitSnapChunkRate
+	cfg.Node.RaftStore.LimitConcurrencyWrite = *limitConcurrencyWrite
 	cfg.Node.RaftStore.ThresholdCompact = *thresholdCompact
 	cfg.Node.RaftStore.ThresholdSplitCheckBytes = *thresholdSplitCheckMB * mb
 	cfg.Node.RaftStore.ThresholdRaftElection = *thresholdRaftElection

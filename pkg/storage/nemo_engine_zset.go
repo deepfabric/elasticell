@@ -22,24 +22,35 @@ import (
 	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
 	"github.com/deepfabric/elasticell/pkg/util"
 	gonemo "github.com/deepfabric/go-nemo"
+	"golang.org/x/net/context"
 )
 
 type nemoZSetEngine struct {
-	db *gonemo.NEMO
+	limiter *util.Limiter
+	db      *gonemo.NEMO
 }
 
-func newNemoZSetEngine(db *gonemo.NEMO) ZSetEngine {
+func newNemoZSetEngine(db *gonemo.NEMO, cfg *NemoCfg) ZSetEngine {
 	return &nemoZSetEngine{
-		db: db,
+		limiter: util.NewLimiter(cfg.LimitConcurrencyWrite),
+		db:      db,
 	}
 }
 
 func (e *nemoZSetEngine) ZAdd(key []byte, score float64, member []byte) (int64, error) {
-	return e.db.ZAdd(key, score, member)
+	e.limiter.Wait(context.TODO())
+	n, err := e.db.ZAdd(key, score, member)
+	e.limiter.Release()
+
+	return n, err
 }
 
 func (e *nemoZSetEngine) ZCard(key []byte) (int64, error) {
-	return e.db.ZCard(key)
+	e.limiter.Wait(context.TODO())
+	n, err := e.db.ZCard(key)
+	e.limiter.Release()
+
+	return n, err
 }
 
 func (e *nemoZSetEngine) ZCount(key []byte, min []byte, max []byte) (int64, error) {
@@ -57,7 +68,12 @@ func (e *nemoZSetEngine) ZCount(key []byte, min []byte, max []byte) (int64, erro
 }
 
 func (e *nemoZSetEngine) ZIncrBy(key []byte, member []byte, by float64) ([]byte, error) {
-	return e.db.ZIncrby(key, member, by)
+	e.limiter.Wait(context.TODO())
+	value, err := e.db.ZIncrby(key, member, by)
+	e.limiter.Release()
+
+	return value, err
+
 }
 
 func (e *nemoZSetEngine) ZLexCount(key []byte, min []byte, max []byte) (int64, error) {
@@ -129,18 +145,30 @@ func (e *nemoZSetEngine) ZRank(key []byte, member []byte) (int64, error) {
 }
 
 func (e *nemoZSetEngine) ZRem(key []byte, members ...[]byte) (int64, error) {
-	return e.db.ZRem(key, members...)
+	e.limiter.Wait(context.TODO())
+	n, err := e.db.ZRem(key, members...)
+	e.limiter.Release()
+
+	return n, err
 }
 
 func (e *nemoZSetEngine) ZRemRangeByLex(key []byte, min []byte, max []byte) (int64, error) {
 	min, includeMin := isInclude(min)
 	max, includeMax := isInclude(max)
 
-	return e.db.ZRemrangebylex(key, min, max, includeMin, includeMax)
+	e.limiter.Wait(context.TODO())
+	n, err := e.db.ZRemrangebylex(key, min, max, includeMin, includeMax)
+	e.limiter.Release()
+
+	return n, err
 }
 
 func (e *nemoZSetEngine) ZRemRangeByRank(key []byte, start int64, stop int64) (int64, error) {
-	return e.db.ZRemrangebyrank(key, start, stop)
+	e.limiter.Wait(context.TODO())
+	n, err := e.db.ZRemrangebyrank(key, start, stop)
+	e.limiter.Release()
+
+	return n, err
 }
 
 func (e *nemoZSetEngine) ZRemRangeByScore(key []byte, min []byte, max []byte) (int64, error) {
@@ -154,7 +182,11 @@ func (e *nemoZSetEngine) ZRemRangeByScore(key []byte, min []byte, max []byte) (i
 		return 0, err
 	}
 
-	return e.db.ZRemrangebyscore(key, minF, maxF, includeMin, includeMax)
+	e.limiter.Wait(context.TODO())
+	n, err := e.db.ZRemrangebyscore(key, minF, maxF, includeMin, includeMax)
+	e.limiter.Release()
+
+	return n, err
 }
 
 func (e *nemoZSetEngine) ZScore(key []byte, member []byte) ([]byte, error) {

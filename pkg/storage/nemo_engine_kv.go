@@ -18,24 +18,35 @@ package storage
 import (
 	"github.com/deepfabric/elasticell/pkg/util"
 	gonemo "github.com/deepfabric/go-nemo"
+	"golang.org/x/net/context"
 )
 
 type nemoKVEngine struct {
-	db *gonemo.NEMO
+	limiter *util.Limiter
+	db      *gonemo.NEMO
 }
 
-func newNemoKVEngine(db *gonemo.NEMO) KVEngine {
+func newNemoKVEngine(db *gonemo.NEMO, cfg *NemoCfg) KVEngine {
 	return &nemoKVEngine{
-		db: db,
+		limiter: util.NewLimiter(cfg.LimitConcurrencyWrite),
+		db:      db,
 	}
 }
 
 func (e *nemoKVEngine) Set(key, value []byte) error {
-	return e.db.Set(key, value, 0)
+	e.limiter.Wait(context.TODO())
+	err := e.db.Set(key, value, 0)
+	e.limiter.Release()
+
+	return err
 }
 
 func (e *nemoKVEngine) MSet(keys [][]byte, values [][]byte) error {
-	return e.db.MSet(keys, values)
+	e.limiter.Wait(context.TODO())
+	err := e.db.MSet(keys, values)
+	e.limiter.Release()
+
+	return err
 }
 
 func (e *nemoKVEngine) Get(key []byte) ([]byte, error) {
@@ -43,7 +54,10 @@ func (e *nemoKVEngine) Get(key []byte) ([]byte, error) {
 }
 
 func (e *nemoKVEngine) IncrBy(key []byte, incrment int64) (int64, error) {
+	e.limiter.Wait(context.TODO())
 	v, err := e.db.Incrby(key, incrment)
+	e.limiter.Release()
+
 	if err != nil {
 		return 0, err
 	}
@@ -52,7 +66,10 @@ func (e *nemoKVEngine) IncrBy(key []byte, incrment int64) (int64, error) {
 }
 
 func (e *nemoKVEngine) DecrBy(key []byte, incrment int64) (int64, error) {
+	e.limiter.Wait(context.TODO())
 	v, err := e.db.Decrby(key, incrment)
+	e.limiter.Release()
+
 	if err != nil {
 		return 0, err
 	}
@@ -61,15 +78,27 @@ func (e *nemoKVEngine) DecrBy(key []byte, incrment int64) (int64, error) {
 }
 
 func (e *nemoKVEngine) GetSet(key, value []byte) ([]byte, error) {
-	return e.db.GetSet(key, value, 0)
+	e.limiter.Wait(context.TODO())
+	value, err := e.db.GetSet(key, value, 0)
+	e.limiter.Release()
+
+	return value, err
 }
 
 func (e *nemoKVEngine) Append(key, value []byte) (int64, error) {
-	return e.db.Append(key, value)
+	e.limiter.Wait(context.TODO())
+	n, err := e.db.Append(key, value)
+	e.limiter.Release()
+
+	return n, err
 }
 
 func (e *nemoKVEngine) SetNX(key, value []byte) (int64, error) {
-	return e.db.Setnx(key, value, 0)
+	e.limiter.Wait(context.TODO())
+	n, err := e.db.Setnx(key, value, 0)
+	e.limiter.Release()
+
+	return n, err
 }
 
 func (e *nemoKVEngine) StrLen(key []byte) (int64, error) {
@@ -83,5 +112,9 @@ func (e *nemoKVEngine) NewWriteBatch() WriteBatch {
 
 func (e *nemoKVEngine) Write(wb WriteBatch) error {
 	nwb := wb.(*nemoWriteBatch)
-	return e.db.BatchWrite(e.db.GetKvHandle(), nwb.wb, false)
+	e.limiter.Wait(context.TODO())
+	err := e.db.BatchWrite(e.db.GetKvHandle(), nwb.wb, false)
+	e.limiter.Release()
+
+	return err
 }

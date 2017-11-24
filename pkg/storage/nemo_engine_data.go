@@ -16,22 +16,30 @@
 package storage
 
 import (
+	"github.com/deepfabric/elasticell/pkg/util"
 	gonemo "github.com/deepfabric/go-nemo"
 	"github.com/pkg/errors"
+	"golang.org/x/net/context"
 )
 
 type nemoDataEngine struct {
-	db *gonemo.NEMO
+	db      *gonemo.NEMO
+	limiter *util.Limiter
 }
 
-func newNemoDataEngine(db *gonemo.NEMO) DataEngine {
+func newNemoDataEngine(db *gonemo.NEMO, cfg *NemoCfg) DataEngine {
 	return &nemoDataEngine{
-		db: db,
+		limiter: util.NewLimiter(cfg.LimitConcurrencyWrite),
+		db:      db,
 	}
 }
 
 func (e *nemoDataEngine) RangeDelete(start, end []byte) error {
-	return e.db.RangeDel(start, end)
+	e.limiter.Wait(context.TODO())
+	err := e.db.RangeDel(start, end)
+	e.limiter.Release()
+
+	return err
 }
 
 func (e *nemoDataEngine) GetTargetSizeKey(startKey []byte, endKey []byte, size uint64) (uint64, []byte, error) {
@@ -50,12 +58,20 @@ func (e *nemoDataEngine) GetTargetSizeKey(startKey []byte, endKey []byte, size u
 
 // CreateSnapshot create a snapshot file under the giving path
 func (e *nemoDataEngine) CreateSnapshot(path string, start, end []byte) error {
-	return e.db.RawScanSaveRange(path, start, end, true)
+	e.limiter.Wait(context.TODO())
+	err := e.db.RawScanSaveRange(path, start, end, true)
+	e.limiter.Release()
+
+	return err
 }
 
 // ApplySnapshot apply a snapshort file from giving path
 func (e *nemoDataEngine) ApplySnapshot(path string) error {
-	return e.db.IngestFile(path)
+	e.limiter.Wait(context.TODO())
+	err := e.db.IngestFile(path)
+	e.limiter.Release()
+
+	return err
 }
 
 func (e *nemoDataEngine) ScanIndexInfo(startKey []byte, endKey []byte, skipEmpty bool, handler func(key, idxInfo []byte) error) error {
@@ -72,7 +88,11 @@ func (e *nemoDataEngine) ScanIndexInfo(startKey []byte, endKey []byte, skipEmpty
 }
 
 func (e *nemoDataEngine) SetIndexInfo(key, idxInfo []byte) error {
-	return e.db.HSetIndexInfo(key, idxInfo)
+	e.limiter.Wait(context.TODO())
+	err := e.db.HSetIndexInfo(key, idxInfo)
+	e.limiter.Release()
+
+	return err
 }
 
 func (e *nemoDataEngine) GetIndexInfo(key []byte) (idxInfo []byte, err error) {

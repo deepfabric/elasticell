@@ -16,29 +16,45 @@
 package storage
 
 import (
+	"github.com/deepfabric/elasticell/pkg/util"
 	gonemo "github.com/deepfabric/go-nemo"
+	"golang.org/x/net/context"
 )
 
 type nemoSetEngine struct {
-	db *gonemo.NEMO
+	limiter *util.Limiter
+	db      *gonemo.NEMO
 }
 
-func newNemoSetEngine(db *gonemo.NEMO) SetEngine {
+func newNemoSetEngine(db *gonemo.NEMO, cfg *NemoCfg) SetEngine {
 	return &nemoSetEngine{
-		db: db,
+		limiter: util.NewLimiter(cfg.LimitConcurrencyWrite),
+		db:      db,
 	}
 }
 
 func (e *nemoSetEngine) SAdd(key []byte, members ...[]byte) (int64, error) {
-	return e.db.SAdd(key, members...)
+	e.limiter.Wait(context.TODO())
+	n, err := e.db.SAdd(key, members...)
+	e.limiter.Release()
+
+	return n, err
 }
 
 func (e *nemoSetEngine) SRem(key []byte, members ...[]byte) (int64, error) {
-	return e.db.SRem(key, members...)
+	e.limiter.Wait(context.TODO())
+	n, err := e.db.SRem(key, members...)
+	e.limiter.Release()
+
+	return n, err
 }
 
 func (e *nemoSetEngine) SCard(key []byte) (int64, error) {
-	return e.db.SCard(key)
+	e.limiter.Wait(context.TODO())
+	n, err := e.db.SCard(key)
+	e.limiter.Release()
+
+	return n, err
 }
 
 func (e *nemoSetEngine) SMembers(key []byte) ([][]byte, error) {
@@ -56,7 +72,10 @@ func (e *nemoSetEngine) SIsMember(key []byte, member []byte) (int64, error) {
 }
 
 func (e *nemoSetEngine) SPop(key []byte) ([]byte, error) {
+	e.limiter.Wait(context.TODO())
 	exists, value, err := e.db.SPop(key)
+	e.limiter.Release()
+
 	if !exists {
 		return nil, err
 	}
