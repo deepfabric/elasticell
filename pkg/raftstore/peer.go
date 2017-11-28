@@ -31,40 +31,39 @@ import (
 	"golang.org/x/net/context"
 )
 
+type action int
+
+const (
+	checkSplit = iota
+	checkCompact
+)
+
 // PeerReplicate is the cell's peer replicate. Every cell replicate has a PeerReplicate.
 type PeerReplicate struct {
-	cellID uint64
-	peer   metapb.Peer
-
-	rn    *raft.RawNode
-	store *Store
-	ps    *peerStorage
-
-	batch *proposeBatch
-
-	events       *queue.RingBuffer
-	ticks        *util.Queue
-	steps        *util.Queue
-	reports      *util.Queue
-	applyResults *util.Queue
-	requests     *util.Queue
-
-	stopRaftTick bool
-
+	cellID            uint64
+	peer              metapb.Peer
+	rn                *raft.RawNode
+	store             *Store
+	ps                *peerStorage
+	batch             *proposeBatch
+	events            *queue.RingBuffer
+	ticks             *util.Queue
+	steps             *util.Queue
+	reports           *util.Queue
+	applyResults      *util.Queue
+	requests          *util.Queue
+	actions           *util.Queue
+	stopRaftTick      bool
 	peerHeartbeatsMap *peerHeartbeatsMap
 	pendingReads      *readIndexQueue
-
-	lastHBJob *util.Job
-
-	writtenKeys     uint64
-	writtenBytes    uint64
-	sizeDiffHint    uint64
-	raftLogSizeHint uint64
-	deleteKeysHint  uint64
-
-	cancelTaskIds []uint64
-
-	metrics localMetrics
+	lastHBJob         *util.Job
+	writtenKeys       uint64
+	writtenBytes      uint64
+	sizeDiffHint      uint64
+	raftLogSizeHint   uint64
+	deleteKeysHint    uint64
+	cancelTaskIds     []uint64
+	metrics           localMetrics
 }
 
 func createPeerReplicate(store *Store, cell *metapb.Cell) (*PeerReplicate, error) {
@@ -126,6 +125,7 @@ func newPeerReplicate(store *Store, cell *metapb.Cell, peerID uint64) (*PeerRepl
 	pr.reports = &util.Queue{}
 	pr.applyResults = &util.Queue{}
 	pr.requests = &util.Queue{}
+	pr.actions = &util.Queue{}
 
 	pr.store = store
 	pr.pendingReads = &readIndexQueue{
@@ -201,6 +201,15 @@ func (pr *PeerReplicate) onReq(req *raftcmdpb.Request, cb func(*raftcmdpb.RaftCM
 			req.UUID,
 			pr.cellID)
 	}
+}
+
+func (pr *PeerReplicate) addAction(act action) {
+	err := pr.actions.Put(act)
+	if err != nil {
+		return
+	}
+
+	pr.addEvent()
 }
 
 func (pr *PeerReplicate) addRequest(req *reqCtx) {

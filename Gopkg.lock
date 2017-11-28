@@ -95,7 +95,7 @@
   branch = "master"
   name = "github.com/fagongzi/goetty"
   packages = [".","protocol/redis"]
-  revision = "db900362fdd71a1f03fc846afe847ec1b47e8730"
+  revision = "be30ec1d931e852f555da1e37114deda39174ec1"
 
 [[projects]]
   branch = "master"

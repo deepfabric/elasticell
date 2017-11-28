@@ -125,13 +125,6 @@ func (s *Server) Stop() {
 	s.stopOnce.Do(func() {
 		s.stopped = true
 		s.listener.Close()
-
-		for _, sessions := range s.sessionMaps {
-			for _, session := range sessions.sessions {
-				session.Close()
-			}
-		}
-
 		close(s.startCh)
 	})
 }

@@ -83,7 +83,7 @@ func (pr *PeerReplicate) readyToServeRaft(ctx context.Context) {
 		_, err := pr.events.Get()
 		if err != nil {
 			pr.metrics.flush()
-
+			pr.actions.Dispose()
 			pr.ticks.Dispose()
 			pr.steps.Dispose()
 			pr.reports.Dispose()
@@ -129,7 +129,148 @@ func (pr *PeerReplicate) readyToServeRaft(ctx context.Context) {
 		if pr.rn.HasReadySince(pr.ps.lastReadyIndex) {
 			pr.handleReady()
 		}
+
+		pr.handleAction(items)
 	}
+}
+
+func (pr *PeerReplicate) handleAction(items []interface{}) {
+	size := pr.actions.Len()
+	if size == 0 {
+		return
+	}
+
+	n, err := pr.actions.Get(batch, items)
+	if err != nil {
+		return
+	}
+
+	for i := int64(0); i < n; i++ {
+		a := items[i].(action)
+		switch a {
+		case checkSplit:
+			pr.handleCheckSplit()
+		case checkCompact:
+			pr.handleCheckCompact()
+		}
+	}
+
+	if pr.actions.Len() > 0 {
+		pr.addEvent()
+	}
+}
+
+func (pr *PeerReplicate) handleCheckCompact() {
+	// Leader will replicate the compact log command to followers,
+	// If we use current replicated_index (like 10) as the compact index,
+	// when we replicate this log, the newest replicated_index will be 11,
+	// but we only compact the log to 10, not 11, at that time,
+	// the first index is 10, and replicated_index is 11, with an extra log,
+	// and we will do compact again with compact index 11, in cycles...
+	// So we introduce a threshold, if replicated index - first index > threshold,
+	// we will try to compact log.
+	// raft log entries[..............................................]
+	//                  ^                                       ^
+	//                  |-----------------threshold------------ |
+	//              first_index                         replicated_index
+
+	var replicatedIdx uint64
+	for _, p := range pr.rn.Status().Progress {
+		if replicatedIdx == 0 {
+			replicatedIdx = p.Match
+		}
+
+		if p.Match < replicatedIdx {
+			replicatedIdx = p.Match
+		}
+	}
+
+	// When an election happened or a new peer is added, replicated_idx can be 0.
+	if replicatedIdx > 0 {
+		lastIdx := pr.rn.LastIndex()
+		if lastIdx < replicatedIdx {
+			log.Fatalf("raft-log-gc: expect last index >= replicated index, last=<%d> replicated=<%d>",
+				lastIdx,
+				replicatedIdx)
+		}
+
+		raftLogLagHistogram.Observe(float64(lastIdx - replicatedIdx))
+	}
+
+	var compactIdx uint64
+	appliedIdx := pr.ps.getAppliedIndex()
+	firstIdx, _ := pr.ps.FirstIndex()
+
+	if replicatedIdx < firstIdx ||
+		replicatedIdx-firstIdx <= globalCfg.ThresholdCompact {
+		return
+	}
+
+	if appliedIdx > firstIdx &&
+		appliedIdx-firstIdx >= globalCfg.LimitCompactCount {
+		compactIdx = appliedIdx
+	} else if pr.raftLogSizeHint >= globalCfg.LimitCompactBytes {
+		compactIdx = appliedIdx
+	} else {
+		compactIdx = replicatedIdx
+	}
+
+	// Have no idea why subtract 1 here, but original code did this by magic.
+	if compactIdx == 0 {
+		log.Fatal("raft-log-gc: unexpect compactIdx")
+	}
+
+	// avoid leader send snapshot to the a little lag peer.
+	if compactIdx > replicatedIdx {
+		if (compactIdx - replicatedIdx) <= globalCfg.LimitCompactLag {
+			compactIdx = replicatedIdx
+		} else {
+			log.Infof("raftstore[cell-%d]: peer lag is too large, maybe sent a snapshot later. lag=<%d>",
+				pr.cellID,
+				compactIdx-replicatedIdx)
+		}
+	}
+
+	compactIdx--
+	if compactIdx < firstIdx {
+		// In case compactIdx == firstIdx before subtraction.
+		return
+	}
+
+	var gcLogCount uint64
+	gcLogCount += compactIdx - firstIdx
+	raftLogCompactCounter.Add(float64(gcLogCount))
+
+	term, _ := pr.rn.Term(compactIdx)
+
+	pr.onAdminRequest(newCompactLogRequest(compactIdx, term))
+}
+
+func (pr *PeerReplicate) handleCheckSplit() {
+	for id, p := range pr.rn.Status().Progress {
+		// If a peer is apply snapshot, skip split, avoid sent snapshot again in future.
+		if p.State == raft.ProgressStateSnapshot {
+			log.Infof("raftstore-split[cell-%d]: peer is applying snapshot",
+				pr.cellID,
+				id)
+			return
+		}
+	}
+
+	log.Debugf("raftstore-split[cell-%d]: cell need to check whether should split, threshold=<%d> max=<%d>",
+		pr.cellID,
+		globalCfg.ThresholdSplitCheckBytes,
+		pr.sizeDiffHint)
+
+	err := pr.startSplitCheckJob()
+	if err != nil {
+		log.Errorf("raftstore-split[cell-%d]: add split check job failed, errors:\n %+v",
+			pr.cellID,
+			err)
+		return
+	}
+
+	pr.sizeDiffHint = 0
 }
 
 func (pr *PeerReplicate) handleTick(items []interface{}) {

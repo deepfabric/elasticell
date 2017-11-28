@@ -200,7 +200,7 @@ func (pr *PeerReplicate) doApplyingSnapshotJob() error {
 
 	err = pr.ps.applySnapshot(pr.ps.applySnapJob)
 	if err != nil {
-		log.Fatalf("raftstore[cell-%d]: apply snap snapshot failed, errors:\n %+v",
+		log.Errorf("raftstore[cell-%d]: apply snap snapshot failed, errors:\n %+v",
 			pr.cellID,
 			err)
 		return err

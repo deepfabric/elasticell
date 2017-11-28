@@ -168,12 +168,10 @@ func NewStore(clusterID uint64, pdClient *pd.Client, meta metapb.Store, engine s
 	s.queryRspChan = make(chan *querypb.QueryRsp, queryChanSize)
 
 	s.initRedisHandle()
-	s.init()
-
 	return s
 }
 
-func (s *Store) init() {
+func (s *Store) startCells() {
 	totalCount := 0
 	tomebstoneCount := 0
 	applyingCount := 0
@@ -257,6 +255,9 @@ func (s *Store) Start() {
 	go s.startTransfer()
 	<-s.trans.server.Started()
 	log.Infof("bootstrap: transfer started")
+
+	s.startCells()
+	log.Infof("bootstrap: cells started")
 
 	s.startStoreHeartbeatTask()
 	log.Infof("bootstrap: ready to handle store heartbeat")
@@ -1103,20 +1104,7 @@ func (s *Store) handleCellSplitCheck() {
 			return true, nil
 		}
 
-		log.Debugf("raftstore-split[cell-%d]: cell need to check whether should split, threshold=<%d> max=<%d>",
-			pr.cellID,
-			globalCfg.ThresholdSplitCheckBytes,
-			pr.sizeDiffHint)
-
-		err := pr.startSplitCheckJob()
-		if err != nil {
-			log.Errorf("raftstore-split[cell-%d]: add split check job failed, errors:\n %+v",
-				pr.cellID,
-				err)
-			return false, err
-		}
-
-		pr.sizeDiffHint = 0
+		pr.addAction(checkSplit)
 		return true, nil
 	})
 }
@@ -1139,95 +1127,13 @@ func (s *Store) handleCellReport() {
 }
 
 func (s *Store) handleRaftGCLog() {
-	var gcLogCount uint64
-
 	s.replicatesMap.foreach(func(pr *PeerReplicate) (bool, error) {
-		if !pr.isLeader() {
-			return true, nil
+		if pr.isLeader() {
+			pr.addAction(checkCompact)
 		}
-
-		// Leader will replicate the compact log command to followers,
-		// If we use current replicated_index (like 10) as the compact index,
-		// when we replicate this log, the newest replicated_index will be 11,
-		// but we only compact the log to 10, not 11, at that time,
-		// the first index is 10, and replicated_index is 11, with an extra log,
-		// and we will do compact again with compact index 11, in cycles...
-		// So we introduce a threshold, if replicated index - first index > threshold,
-		// we will try to compact log.
-		// raft log entries[..............................................]
-		//                  ^                                       ^
-		//                  |-----------------threshold------------ |
-		//              first_index                         replicated_index
-
-		var replicatedIdx uint64
-		for _, p := range pr.rn.Status().Progress {
-			if replicatedIdx == 0 {
-				replicatedIdx = p.Match
-			}
-
-			if p.Match < replicatedIdx {
-				replicatedIdx = p.Match
-			}
-		}
-
-		// When an election happened or a new peer is added, replicated_idx can be 0.
-		if replicatedIdx > 0 {
-			lastIdx := pr.rn.LastIndex()
-			if lastIdx < replicatedIdx {
-				log.Fatalf("raft-log-gc: expect last index >= replicated index, last=<%d> replicated=<%d>",
-					lastIdx,
-					replicatedIdx)
-			}
-
-			raftLogLagHistogram.Observe(float64(lastIdx - replicatedIdx))
-		}
-
-		var compactIdx uint64
-		appliedIdx := pr.ps.getAppliedIndex()
-		firstIdx, _ := pr.ps.FirstIndex()
-
-		if replicatedIdx < firstIdx ||
-			replicatedIdx-firstIdx <= globalCfg.ThresholdCompact {
-			return true, nil
-		}
-
-		if appliedIdx > firstIdx &&
-			appliedIdx-firstIdx >= globalCfg.LimitCompactCount {
-			compactIdx = appliedIdx
-		} else if pr.raftLogSizeHint >= globalCfg.LimitCompactBytes {
-			compactIdx = appliedIdx
-		} else {
-			compactIdx = replicatedIdx
-		}
-
-		// Have no idea why subtract 1 here, but original code did this by magic.
-		if compactIdx == 0 {
-			log.Fatal("raft-log-gc: unexpect compactIdx")
-		}
-
-		// avoid leader send snapshot to the a little lag peer.
-		if compactIdx > replicatedIdx && (compactIdx-replicatedIdx) <= globalCfg.LimitCompactLag {
-			compactIdx = replicatedIdx
-		}
-
-		compactIdx--
-		if compactIdx < firstIdx {
-			// In case compactIdx == firstIdx before subtraction.
-			return true, nil
-		}
-
-		gcLogCount += compactIdx - firstIdx
-
-		term, _ := pr.rn.Term(compactIdx)
-
-		pr.onAdminRequest(newCompactLogRequest(compactIdx, term))
 
 		return true, nil
 	})
-
-	if gcLogCount > 0 {
-		raftLogCompactCounter.Add(float64(gcLogCount))
-	}
 }
 
 // SetKeyConvertFun set key convert function

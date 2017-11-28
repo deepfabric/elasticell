@@ -141,7 +141,7 @@ func readCommandReply(in *goetty.ByteBuf) (bool, interface{}, error) {
 				return false, nil, nil
 			}
 
-			c, data, err := readLine(in)
+			c, data, err := in.ReadBytes(size + 2)
 			if err != nil {
 				return false, nil, err
 			}
