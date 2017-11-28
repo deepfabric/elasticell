@@ -21,7 +21,6 @@ var (
 	writeWeight    = flag.Int("w", 1, "write weight")
 	num            = flag.Int64("n", 0, "The total number.")
 	size           = flag.Int("v", 256, "The value size.")
-	batch          = flag.Int("b", 64, "The command batch size.")
 	readTimeout    = flag.Int("rt", 30, "The timeout for read in seconds")
 	writeTimeout   = flag.Int("wt", 30, "The timeout for read in seconds")
 	connectTimeout = flag.Int("ct", 10, "The timeout for connect to server")
@@ -109,8 +108,7 @@ func startG(total int64, wg, complate *sync.WaitGroup, ready chan struct{}, ans 
 	c := *readWeight * 100
 	start := time.Now()
 
-	for index := int64(0); index < total; index++ {
-		bs := time.Now()
+	for index := int64(0); index < total; index += *cn {
 		for k := int64(0); k < *cn; k++ {
 			key := fmt.Sprintf("%d", rand.Int63())
 
@@ -127,7 +125,7 @@ func startG(total int64, wg, complate *sync.WaitGroup, ready chan struct{}, ans 
 				redis.WriteCommand(conn, "get", key)
 			} else {
 				for i := 0; i < *size; i++ {
-					value[i] = byte(rand.Intn(255))
+					value[i] = byte((index + k) % 0xff)
 				}
 				redis.WriteCommand(conn, "set", key, value)
 			}
@@ -151,11 +149,6 @@ func startG(total int64, wg, complate *sync.WaitGroup, ready chan struct{}, ans 
 
 			ans.incrRecv()
 			ans.setLatency(time.Now().Sub(s).Nanoseconds())
-		}
-
-		wt := time.Second - time.Now().Sub(bs)
-		if wt > 0 {
-			time.Sleep(wt)
 		}
 	}
 
