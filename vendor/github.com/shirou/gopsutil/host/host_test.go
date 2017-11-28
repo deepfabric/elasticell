@@ -54,7 +54,7 @@ func TestUsers(t *testing.T) {
 	}
 	empty := UserStat{}
 	if len(v) == 0 {
-		t.Errorf("Users is empty")
+		t.Fatal("Users is empty")
 	}
 	for _, u := range v {
 		if u == empty {
@@ -102,4 +102,39 @@ func TestHostGuid(t *testing.T) {
 	} else {
 		t.Logf("Host id value: %v", hi.HostID)
 	}
+}
+
+func TestTemperatureStat_String(t *testing.T) {
+	v := TemperatureStat{
+		SensorKey:   "CPU",
+		Temperature: 1.1,
+	}
+	s := `{"sensorKey":"CPU","sensorTemperature":1.1}`
+	if s != fmt.Sprintf("%v", v) {
+		t.Errorf("TemperatureStat string is invalid")
+	}
+}
+
+func TestVirtualization(t *testing.T) {
+	system, role, err := Virtualization()
+	if err != nil {
+		t.Errorf("Virtualization() failed, %v", err)
+	}
+	if system == "" || role == "" {
+		t.Errorf("Virtualization() retuns empty system or role:  %s, %s", system, role)
+	}
+
+	t.Logf("Virtualization(): %s, %s", system, role)
+}
+
+func TestKernelVersion(t *testing.T) {
+	version, err := KernelVersion()
+	if err != nil {
+		t.Errorf("KernelVersion() failed, %v", err)
+	}
+	if version == "" {
+		t.Errorf("KernelVersion() retuns empty: %s", version)
+	}
+
+	t.Logf("KernelVersion(): %s", version)
 }

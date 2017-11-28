@@ -19,12 +19,12 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/push"
 	"github.com/prometheus/common/expfmt"
 	"github.com/prometheus/common/model"
 	"golang.org/x/net/context"
@@ -35,14 +35,16 @@ const contentTypeHeader = "Content-Type"
 // MetricCfg is the metric configuration.
 type MetricCfg struct {
 	Job          string
+	Instance     string
 	Address      string
 	DurationSync time.Duration
 }
 
 // NewMetricCfg returns metric cfg
-func NewMetricCfg(job string, address string, durationSync time.Duration) *MetricCfg {
+func NewMetricCfg(job, instance, address string, durationSync time.Duration) *MetricCfg {
 	return &MetricCfg{
 		Job:          job,
+		Instance:     instance,
 		Address:      address,
 		DurationSync: durationSync,
 	}
@@ -68,7 +70,7 @@ func InitMetric(runner *Runner, cfg *MetricCfg) {
 				t.Stop()
 				return
 			case <-t.C:
-				err := doPush(cfg.Job, push.HostnameGroupingKey(), cfg.Address, prometheus.DefaultGatherer, "PUT")
+				err := doPush(cfg.Job, instanceGroupingKey(cfg.Instance), cfg.Address, prometheus.DefaultGatherer, "PUT")
 
 				if err != nil {
 					log.Errorf("metric: could not push metrics to prometheus pushgateway: errors:\n%+v", err)
@@ -76,6 +78,18 @@ func InitMetric(runner *Runner, cfg *MetricCfg) {
 			}
 		}
 	})
+}
+
+// instanceGroupingKey returns a label map with the only entry
+// {instance="<instance>"}. If instance is empty, use hostname instead.
+func instanceGroupingKey(instance string) map[string]string {
+	if instance == "" {
+		var err error
+		if instance, err = os.Hostname(); err != nil {
+			instance = "unknown"
+		}
+	}
+	return map[string]string{"instance": instance}
 }
 
 func doPush(job string, grouping map[string]string, pushURL string, g prometheus.Gatherer, method string) error {

@@ -20,6 +20,7 @@
 #  name = "github.com/x/y"
 #  version = "2.4.0"
 
+ignored = ["github.com/deepfabric/go-nemo", "github.com/deepfabric/c-nemo"]
 
 [[constraint]]
   name = "github.com/Workiva/go-datastructures"
@@ -31,38 +32,43 @@
 
 [[constraint]]
   name = "github.com/coreos/pkg"
+  branch = "master"
 
 [[constraint]]
-  branch = "master"
   name = "github.com/deepfabric/bkdtree"
+  branch = "master"
 
 [[constraint]]
   name = "github.com/deepfabric/etcd"
+  branch = "elasticell"
 
 [[constraint]]
-  branch = "master"
   name = "github.com/deepfabric/go-datastructures"
+  branch = "master"
 
 [[constraint]]
-  branch = "master"
   name = "github.com/deepfabric/indexer"
+  branch = "master"
 
 [[constraint]]
-  branch = "master"
   name = "github.com/fagongzi/goetty"
+  branch = "master"
 
 [[constraint]]
   name = "github.com/garyburd/redigo"
+  branch = "master"
 
 [[constraint]]
   name = "github.com/gogo/protobuf"
+  branch = "master"
 
 [[constraint]]
   name = "github.com/golang/protobuf"
+  branch = "master"
 
 [[constraint]]
-  branch = "master"
   name = "github.com/google/btree"
+  branch = "master"
 
 [[constraint]]
   name = "github.com/gorilla/mux"
@@ -70,27 +76,35 @@
 
 [[constraint]]
   name = "github.com/montanaflynn/stats"
+  branch = "master"
 
 [[constraint]]
   name = "github.com/pingcap/check"
+  branch = "master"
 
 [[constraint]]
   name = "github.com/pkg/errors"
+  branch = "master"
 
 [[constraint]]
   name = "github.com/prometheus/client_golang"
+  branch = "master"
 
 [[constraint]]
   name = "github.com/prometheus/common"
+  branch = "master"
 
 [[constraint]]
   name = "github.com/shirou/gopsutil"
+  branch = "master"
 
 [[constraint]]
   name = "github.com/stretchr/testify"
+  branch = "master"
 
 [[constraint]]
   name = "github.com/unrolled/render"
+  branch = "master"
 
 [[constraint]]
   name = "github.com/urfave/negroni"
@@ -98,6 +112,7 @@
 
 [[constraint]]
   name = "golang.org/x/net"
+  branch = "master"
 
 [[constraint]]
   name = "google.golang.org/grpc"

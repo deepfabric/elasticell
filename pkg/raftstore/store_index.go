@@ -355,8 +355,12 @@ func (s *Store) handleIdxKeyReq(idxKeyReq *pdpb.IndexKeyRequest, wb storage.Writ
 		epochStale = true
 		cellEnd = encEndKey(cell)
 	}
+	var idxIsLive bool
+	s.rwlock.RLock()
+	_, idxIsLive = s.indices[idxKeyReq.GetIdxName()]
+	s.rwlock.RUnlock()
 	for _, key := range idxKeyReq.GetDataKeys() {
-		err = s.deleteIndexedKey(key, idxKeyReq.IsDel, wb, dirtyIndices)
+		err = s.deleteIndexedKey(key, idxKeyReq.IsDel || !idxIsLive, wb, dirtyIndices)
 		if idxKeyReq.IsDel {
 			if err != nil {
 				log.Errorf("store-index[%d.%d]: failed to delete indexed key %+v from index %s\n%+v",
@@ -365,7 +369,7 @@ func (s *Store) handleIdxKeyReq(idxKeyReq *pdpb.IndexKeyRequest, wb storage.Writ
 			}
 			log.Debugf("store-index[%d.%d]: deleted key %+v from index %s",
 				s.GetID(), idxKeyReq.CellID, key, idxKeyReq.GetIdxName())
-		} else {
+		} else if idxIsLive {
 			targetCellID := idxKeyReq.CellID
 			if epochStale && bytes.Compare(key, cellEnd) >= 0 {
 				item := s.keyRanges.Search(getOriginKey(key))
@@ -431,20 +435,20 @@ func (s *Store) addIndexedKey(cellID uint64, idxNameIn string, docID uint64, dat
 		if docID, err = s.allocateDocID(cellID); err != nil {
 			return
 		}
-		metaVal = &pdpb.KeyMetaVal{
-			IdxName: idxNameIn,
-			DocID:   docID,
-			CellID:  cellID,
-		}
-		if metaValB, err = metaVal.Marshal(); err != nil {
-			return
-		}
-		if err = s.engine.GetDataEngine().SetIndexInfo(dataKey, metaValB); err != nil {
-			return
-		}
 		if err = wb.Set(getDocIDKey(docID), dataKey); err != nil {
 			return
 		}
+	}
+	metaVal = &pdpb.KeyMetaVal{
+		IdxName: idxNameIn,
+		DocID:   docID,
+		CellID:  cellID,
+	}
+	if metaValB, err = metaVal.Marshal(); err != nil {
+		return
+	}
+	if err = s.engine.GetDataEngine().SetIndexInfo(dataKey, metaValB); err != nil {
+		return
 	}
 
 	var idxDef *pdpb.IndexDef
@@ -507,14 +511,23 @@ func (s *Store) indexSplitCell(cellIDL, cellIDR uint64, wb storage.WriteBatch, d
 		if err = metaVal.Unmarshal(metaValB); err != nil {
 			return
 		}
-		idxName, docID := metaVal.GetIdxName(), metaVal.GetDocID()
+		idxName, docID, cellID := metaVal.GetIdxName(), metaVal.GetDocID(), metaVal.GetCellID()
+		if cellID == cellIDR {
+			// handleIdxKeyReq has already put key into the target cell
+			return
+		}
 		if idxName != "" {
-			if _, err = idxerL.Del(idxName, docID); err != nil {
-				return
-			}
-
-			if err = s.addIndexedKey(cellIDR, idxName, docID, dataKey, wb, dirtyIndices); err != nil {
-				return
+			var idxIsLive bool
+			s.rwlock.RLock()
+			_, idxIsLive = s.indices[idxName]
+			s.rwlock.RUnlock()
+			if idxIsLive {
+				if _, err = idxerL.Del(idxName, docID); err != nil {
+					return
+				}
+				if err = s.addIndexedKey(cellIDR, idxName, docID, dataKey, wb, dirtyIndices); err != nil {
+					return
+				}
 			}
 			indexed++
 		}
