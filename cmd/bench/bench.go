@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	_ "net/http/pprof"
 	"os"
 	"strings"
 	"sync"
@@ -16,7 +17,7 @@ import (
 
 var (
 	con            = flag.Int64("c", 0, "The clients.")
-	cn             = flag.Int64("cn", 100, "The concurrency per client.")
+	cn             = flag.Int64("cn", 64, "The concurrency per client.")
 	readWeight     = flag.Int("r", 1, "read weight")
 	writeWeight    = flag.Int("w", 1, "write weight")
 	num            = flag.Int64("n", 0, "The total number.")
@@ -107,18 +108,23 @@ func startG(total int64, wg, complate *sync.WaitGroup, ready chan struct{}, ans 
 	doRead := true
 	c := *readWeight * 100
 	start := time.Now()
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	for index := int64(0); index < total; index += *cn {
 		for k := int64(0); k < *cn; k++ {
-			key := fmt.Sprintf("%d", rand.Int63())
+			key := fmt.Sprintf("%d", r.Int63())
 
-			if c == 0 {
-				doRead = !doRead
-				if doRead {
-					c = *readWeight * 100
-				} else {
-					c = *writeWeight * 100
+			for {
+				if c == 0 {
+					doRead = !doRead
+					if doRead {
+						c = *readWeight * 100
+					} else {
+						c = *writeWeight * 100
+					}
 				}
+
+				break
 			}
 
 			if doRead {
