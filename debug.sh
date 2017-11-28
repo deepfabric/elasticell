@@ -8,7 +8,7 @@ CFG_DIR=$ELASTICELL_DIR/cfg
 LOG_DIR=$ELASTICELL_DIR/log
 
 start_elasticell_pd() {
-    start-stop-daemon --start --oknodo --background --make-pidfile --pidfile $ELASTICELL_DIR/pd$1.pid --startas $ELASTICELL_DIR/pd -- --cfg=$CFG_DIR/pd$1.json --log-file=$LOG_DIR/pd$1.log --log-level=debug
+    start-stop-daemon --start --oknodo --background --make-pidfile --pidfile $ELASTICELL_DIR/pd$1.pid --startas $ELASTICELL_DIR/pd -- --name=pd$1 --data=$ELASTICELL_DIR/pd$1/data --addr-rpc=:2080$1 --urls-client=http://127.0.0.1:237$1 --urls-peer=http://127.0.0.1:238$1 --initial-cluster=pd1=http://127.0.0.1:2381,pd2=http://127.0.0.1:2382,pd3=http://127.0.0.1:2383 --log-file=$LOG_DIR/pd$1.log --log-level=debug
 }
 
 start_elasticell_cell() {
