@@ -282,6 +282,56 @@ func (s *RunS) TestFilterError(c *C) {
 }
 
 // -----------------------------------------------------------------------
+// Verify that Exclude works correctly.
+
+func (s *RunS) TestExcludeExact(c *C) {
+	helper := FixtureHelper{}
+	output := String{}
+	runConf := RunConf{Output: &output, Exclude: "Test1"}
+	Run(&helper, &runConf)
+	c.Check(helper.calls[0], Equals, "SetUpSuite")
+	c.Check(helper.calls[1], Equals, "SetUpTest")
+	c.Check(helper.calls[2], Equals, "Test2")
+	c.Check(helper.calls[3], Equals, "TearDownTest")
+	c.Check(helper.calls[4], Equals, "TearDownSuite")
+	c.Check(len(helper.calls), Equals, 5)
+}
+
+func (s *RunS) TestExcludePartialMatch(c *C) {
+	helper := FixtureHelper{}
+	output := String{}
+	runConf := RunConf{Output: &output, Exclude: "st2"}
+	Run(&helper, &runConf)
+	c.Check(helper.calls[0], Equals, "SetUpSuite")
+	c.Check(helper.calls[1], Equals, "SetUpTest")
+	c.Check(helper.calls[2], Equals, "Test1")
+	c.Check(helper.calls[3], Equals, "TearDownTest")
+	c.Check(helper.calls[4], Equals, "TearDownSuite")
+	c.Check(len(helper.calls), Equals, 5)
+}
+
+func (s *RunS) TestExcludeAll(c *C) {
+	helper := FixtureHelper{}
+	output := String{}
+	runConf := RunConf{Output: &output, Exclude: ".*"}
+	Run(&helper, &runConf)
+	c.Check(len(helper.calls), Equals, 0)
+}
+
+func (s *RunS) TestExcludeFilter(c *C) {
+	helper := FixtureHelper{}
+	output := String{}
+	runConf := RunConf{Output: &output, Filter: "est", Exclude: "st1"}
+	Run(&helper, &runConf)
+	c.Check(helper.calls[0], Equals, "SetUpSuite")
+	c.Check(helper.calls[1], Equals, "SetUpTest")
+	c.Check(helper.calls[2], Equals, "Test2")
+	c.Check(helper.calls[3], Equals, "TearDownTest")
+	c.Check(helper.calls[4], Equals, "TearDownSuite")
+	c.Check(len(helper.calls), Equals, 5)
+}
+
+// -----------------------------------------------------------------------
 // Verify that List works correctly.
 
 func (s *RunS) TestListFiltered(c *C) {

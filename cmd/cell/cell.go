@@ -86,6 +86,7 @@ var (
 
 	// metric
 	metricJob          = flag.String("metric-job", "", "prometheus job name")
+	metricInstance     = flag.String("metric-instance", "", "prometheus instance name")
 	metricAddress      = flag.String("metric-address", "", "prometheus proxy address")
 	metricIntervalSync = flag.Uint64("interval-metric-sync", 0, "Interval(sec): metric sync")
 )
@@ -208,7 +209,7 @@ func parseCfg() *server.Cfg {
 	cfg.Node.RaftStore.WorkerCountApply = *workerCountApply
 	cfg.Node.RaftStore.EnableMetricsRequest = *enableMetricsRequest
 
-	cfg.Metric = util.NewMetricCfg(*metricJob, *metricAddress, time.Second*time.Duration(*metricIntervalSync))
+	cfg.Metric = util.NewMetricCfg(*metricJob, *metricInstance, *metricAddress, time.Second*time.Duration(*metricIntervalSync))
 	return cfg
 }
 

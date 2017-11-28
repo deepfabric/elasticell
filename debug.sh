@@ -12,7 +12,7 @@ start_elasticell_pd() {
 }
 
 start_elasticell_cell() {
-    start-stop-daemon --start --oknodo --background --make-pidfile --pidfile $ELASTICELL_DIR/cell$1.pid --startas $ELASTICELL_DIR/cell -- --pd=127.0.0.1:20801,127.0.0.1:20802,127.0.0.1:20803 --addr=127.0.0.1:1080$1 --addr-cli=:637$1 --zone=zone-$1 --rack=rack-$1 --data=$ELASTICELL_DIR/cell$1/data --interval-heartbeat-store=5 --interval-heartbeat-cell=2 --addr-pprof=:638$1 --log-file=$LOG_DIR/cell$1.log --log-level=debug
+    start-stop-daemon --start --oknodo --background --make-pidfile --pidfile $ELASTICELL_DIR/cell$1.pid --startas $ELASTICELL_DIR/cell -- --pd=127.0.0.1:20801,127.0.0.1:20802,127.0.0.1:20803 --addr=127.0.0.1:1080$1 --addr-cli=:637$1 --zone=zone-$1 --rack=rack-$1 --data=$ELASTICELL_DIR/cell$1/data --interval-heartbeat-store=5 --interval-heartbeat-cell=2 --addr-pprof=:638$1 --metric-job=appid_cell --metric-instance=cell$1 --metric-address=127.0.0.1:9091 --interval-metric-sync=5 --log-file=$LOG_DIR/cell$1.log --log-level=debug
 }
 
 start_elasticell_proxy() {
@@ -159,6 +159,7 @@ do_build () {
     echo "building pd......" && go build -gcflags "-N -l"  -o $ELASTICELL_DIR/pd github.com/deepfabric/elasticell/cmd/pd &&
     echo "building cell......" && go build -gcflags "-N -l" -o $ELASTICELL_DIR/cell github.com/deepfabric/elasticell/cmd/cell &&
     echo "building redis-proxy......" && go build -gcflags "-N -l" -o $ELASTICELL_DIR/redis-proxy github.com/deepfabric/elasticell-proxy/cmd/redis &&
+    echo "building bench......" && go build -gcflags "-N -l" -o $ELASTICELL_DIR/bench github.com/deepfabric/elasticell/cmd/bench &&
     echo "building query......" && go build -gcflags "-N -l" -o $ELASTICELL_DIR/query github.com/deepfabric/elasticell/cmd/query &&
     echo "building fill......" && go build -gcflags "-N -l" -o $ELASTICELL_DIR/fill github.com/deepfabric/elasticell/cmd/fill
 }
