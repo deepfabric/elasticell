@@ -23,14 +23,16 @@ import (
 )
 
 type nemoDataEngine struct {
-	db      *gonemo.NEMO
-	limiter *util.Limiter
+	db                *gonemo.NEMO
+	limiter           *util.Limiter
+	limiterTargetScan *util.Limiter
 }
 
 func newNemoDataEngine(db *gonemo.NEMO, cfg *NemoCfg) DataEngine {
 	return &nemoDataEngine{
-		limiter: util.NewLimiter(cfg.LimitConcurrencyWrite),
-		db:      db,
+		limiter:           util.NewLimiter(cfg.LimitConcurrencyWrite),
+		limiterTargetScan: util.NewLimiter(1),
+		db:                db,
 	}
 }
 
@@ -46,6 +48,7 @@ func (e *nemoDataEngine) GetTargetSizeKey(startKey []byte, endKey []byte, size u
 	var currentSize uint64
 	var targetKey []byte
 
+	e.limiterTargetScan.Wait(context.TODO())
 	it := e.db.NewVolumeIterator(startKey, endKey)
 	if it.TargetScan(int64(size)) {
 		targetKey = it.TargetKey()
@@ -53,6 +56,7 @@ func (e *nemoDataEngine) GetTargetSizeKey(startKey []byte, endKey []byte, size u
 		currentSize = uint64(it.TotalVolume())
 	}
 	it.Free()
+	e.limiterTargetScan.Release()
 	return currentSize, targetKey, nil
 }
 

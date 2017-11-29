@@ -14,65 +14,28 @@
 package util
 
 import (
-	"sync"
-
 	"golang.org/x/net/context"
+	"golang.org/x/sync/semaphore"
 )
 
 // Limiter limiter implemention by token
 type Limiter struct {
-	sync.RWMutex
-
-	max    uint64
-	tokens uint64
-
-	cond *sync.Cond
+	limter *semaphore.Weighted
 }
 
 // NewLimiter return a limiter with max
 func NewLimiter(max uint64) *Limiter {
 	return &Limiter{
-		max:    max,
-		tokens: 0,
-		cond:   sync.NewCond(&sync.Mutex{}),
+		limter: semaphore.NewWeighted(int64(max)),
 	}
 }
 
 // Wait wait until get the token
 func (l *Limiter) Wait(ctx context.Context) error {
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	default:
-	}
-
-	if l.getToken() {
-		return nil
-	}
-
-	l.cond.L.Lock()
-	for !l.getToken() {
-		l.cond.Wait()
-	}
-	l.cond.L.Unlock()
-	return nil
+	return l.limter.Acquire(ctx, 1)
 }
 
 // Release release token
 func (l *Limiter) Release() {
-	l.Lock()
-	l.tokens--
-	l.Unlock()
-	l.cond.Signal()
-}
-
-func (l *Limiter) getToken() bool {
-	l.Lock()
-	succ := l.tokens < l.max
-	if succ {
-		l.tokens++
-	}
-	l.Unlock()
-
-	return succ
+	l.limter.Release(1)
 }

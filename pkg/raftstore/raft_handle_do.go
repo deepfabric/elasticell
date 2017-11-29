@@ -334,7 +334,7 @@ func (pr *PeerReplicate) doSplitCheck(epoch metapb.CellEpoch, startKey, endKey [
 		return nil
 	}
 
-	log.Debugf("raftstore-split[cell-%d]: try to split, size=<%d> splitKey=<%d>",
+	log.Infof("raftstore-split[cell-%d]: try to split, size=<%d> splitKey=<%d>",
 		pr.cellID,
 		size,
 		splitKey)

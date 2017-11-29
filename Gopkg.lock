@@ -290,6 +290,12 @@
   revision = "a6577fac2d73be281a500b310739095313165611"
 
 [[projects]]
+  branch = "master"
+  name = "golang.org/x/sync"
+  packages = ["semaphore"]
+  revision = "fd80eb99c8f653c847d294a001bdf2a3a6f768f5"
+
+[[projects]]
   name = "golang.org/x/sys"
   packages = ["unix"]
   revision = "99f16d856c9836c42d24e7ab64ea72916925fa97"
@@ -314,6 +320,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "e9d788082f674c319a126d850a2f342f6b6da290a3cf3078cedc95bf619d5518"
+  inputs-digest = "9ef8169c53adfb8260959c210d7306be3fa690e7d010ad3a8f944221a84bccc9"
   solver-name = "gps-cdcl"
   solver-version = 1

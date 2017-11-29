@@ -115,6 +115,10 @@ func startG(total int64, wg, complate *sync.WaitGroup, ready chan struct{}, ans 
 			key := fmt.Sprintf("%d", r.Int63())
 
 			for {
+				if c > 0 {
+					break
+				}
+
 				if c == 0 {
 					doRead = !doRead
 					if doRead {
@@ -123,8 +127,6 @@ func startG(total int64, wg, complate *sync.WaitGroup, ready chan struct{}, ans 
 						c = *writeWeight * 100
 					}
 				}
-
-				break
 			}
 
 			if doRead {
@@ -138,12 +140,12 @@ func startG(total int64, wg, complate *sync.WaitGroup, ready chan struct{}, ans 
 			c--
 		}
 
-		s := time.Now()
 		err := conn.WriteOutBuf()
 		if err != nil {
 			fmt.Printf("%+v\n", err)
 			os.Exit(1)
 		}
+		s := time.Now()
 		ans.incrSent(*cn)
 
 		for k := int64(0); k < *cn; k++ {
@@ -153,8 +155,7 @@ func startG(total int64, wg, complate *sync.WaitGroup, ready chan struct{}, ans 
 				os.Exit(1)
 			}
 
-			ans.incrRecv()
-			ans.setLatency(time.Now().Sub(s).Nanoseconds())
+			ans.incrRecv(time.Now().Sub(s).Nanoseconds())
 		}
 	}
 
@@ -164,10 +165,10 @@ func startG(total int64, wg, complate *sync.WaitGroup, ready chan struct{}, ans 
 
 type analysis struct {
 	sync.RWMutex
-	startAt                time.Time
-	recv, sent, prevRecv   int64
-	maxLatency, minLatency int64
-	totalCost, prevCost    int64
+	startAt                            time.Time
+	recv, sent, prevRecv               int64
+	avgLatency, maxLatency, minLatency int64
+	totalCost, prevCost                int64
 }
 
 func newAnalysis() *analysis {
@@ -175,7 +176,6 @@ func newAnalysis() *analysis {
 }
 
 func (a *analysis) setLatency(latency int64) {
-	a.Lock()
 	if a.minLatency == 0 || a.minLatency > latency {
 		a.minLatency = latency
 	}
@@ -185,7 +185,7 @@ func (a *analysis) setLatency(latency int64) {
 	}
 
 	a.totalCost += latency
-	a.Unlock()
+	a.avgLatency = a.totalCost / a.recv
 }
 
 func (a *analysis) reset() {
@@ -199,9 +199,10 @@ func (a *analysis) start() {
 	a.startAt = time.Now()
 }
 
-func (a *analysis) incrRecv() {
+func (a *analysis) incrRecv(latency int64) {
 	a.Lock()
 	a.recv++
+	a.setLatency(latency)
 	a.Unlock()
 }
 
@@ -209,14 +210,6 @@ func (a *analysis) incrSent(n int64) {
 	a.Lock()
 	a.sent += n
 	a.Unlock()
-}
-
-func (a *analysis) calc() int64 {
-	total := a.recv - a.prevRecv
-	if total != 0 {
-		return (a.totalCost - a.prevCost) / total
-	}
-	return 0
 }
 
 func (a *analysis) print() {
@@ -227,7 +220,7 @@ func (a *analysis) print() {
 		(a.sent - a.recv),
 		int(time.Now().Sub(a.startAt).Seconds()),
 		(a.recv - a.prevRecv),
-		time.Duration(a.calc()),
+		time.Duration(a.avgLatency),
 		time.Duration(a.minLatency),
 		time.Duration(a.maxLatency))
 	a.prevRecv = a.recv
