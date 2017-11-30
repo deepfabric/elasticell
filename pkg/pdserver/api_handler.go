@@ -197,6 +197,7 @@ func (s *Server) DeleteStore(id uint64, force bool) error {
 			store.Meta.State.String(),
 			store.Meta.Address)
 		cluster.cache.getStoreCache().updateStoreInfo(store)
+		cluster.cache.notifyStoreRange(id)
 	}
 
 	return nil

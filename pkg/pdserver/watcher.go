@@ -21,6 +21,7 @@ import (
 	"github.com/deepfabric/elasticell/pkg/codec"
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
+	"github.com/deepfabric/elasticell/pkg/pd"
 	"github.com/deepfabric/elasticell/pkg/util"
 	"github.com/fagongzi/goetty"
 )
@@ -43,7 +44,7 @@ type notify struct {
 	offset  uint64
 }
 
-func newWatcherState(watcher string) *watcherState {
+func newWatcherState(watcher pdpb.Watcher) *watcherState {
 	return &watcherState{
 		watcher: watcher,
 		state:   ready,
@@ -52,7 +53,7 @@ func newWatcherState(watcher string) *watcherState {
 }
 
 type watcherState struct {
-	watcher          string
+	watcher          pdpb.Watcher
 	state            int
 	hbTimeout        *goetty.Timeout
 	q                *util.OffsetQueue
@@ -64,14 +65,12 @@ func (state *watcherState) reset() {
 	state.state = ready
 	state.q = util.NewOffsetQueue()
 	state.lastNotifyOffset = 0
-
-	log.Debugf("notify: %s reseted", state.watcher)
 }
 
 func (state *watcherState) pause() {
 	state.reset()
 	state.state = paused
-	log.Debugf("notify: %s reset to pause", state.watcher)
+	log.Warnf("notify: %s reset to pause", state.watcher.String())
 }
 
 func (state *watcherState) isReady() bool {
@@ -82,8 +81,8 @@ func (state *watcherState) isPause() bool {
 	return state.state == paused
 }
 
-func (state *watcherState) addNotify(info *pdpb.Range) uint64 {
-	return state.q.Add(info)
+func (state *watcherState) addNotify(event *pdpb.WatchEvent) uint64 {
+	return state.q.Add(event)
 }
 
 func (state *watcherState) cancelTimeout() {
@@ -96,7 +95,7 @@ func (state *watcherState) cancelTimeout() {
 func (state *watcherState) resetTimeout(timeout time.Duration, fn func(interface{})) {
 	state.cancelTimeout()
 
-	t, _ := util.DefaultTimeoutWheel().Schedule(timeout, fn, state.watcher)
+	t, _ := util.DefaultTimeoutWheel().Schedule(timeout, fn, state.watcher.Addr)
 	state.hbTimeout = &t
 }
 
@@ -184,20 +183,24 @@ func (wn *watcherNotifier) removedAllWatcher() {
 }
 
 // addWatcher add a new watcher for notify the newest cells info.
-func (wn *watcherNotifier) addWatcher(addr string) {
+func (wn *watcherNotifier) addWatcher(watcher pdpb.Watcher) {
 	wn.Lock()
-
+	addr := watcher.Addr
 	if state, ok := wn.watchers[addr]; ok {
 		state.cancelTimeout()
 		state.reset()
 	} else {
-		wn.watchers[addr] = newWatcherState(addr)
+		wn.watchers[addr] = newWatcherState(watcher)
 	}
-
 	wn.resetTimeout(addr)
+
+	wn.notifyWithoutLock(wn.watchers[addr], &pdpb.WatchEvent{})
+	wn.notifyWithoutLock(wn.watchers[addr], &pdpb.WatchEvent{
+		Event: pd.EventInit,
+	})
 	wn.Unlock()
 
-	log.Warnf("notify: %s added", addr)
+	log.Infof("notify: %s added", watcher.String())
 }
 
 func (wn *watcherNotifier) resetTimeout(addr string) {
@@ -284,20 +287,22 @@ func (wn *watcherNotifier) resume(addr string) bool {
 	return false
 }
 
-func (wn *watcherNotifier) notify(info *pdpb.Range) {
+func (wn *watcherNotifier) notify(event *pdpb.WatchEvent) {
 	wn.Lock()
-
 	for _, state := range wn.watchers {
-		if state.isReady() {
-			nt := &notify{
-				watcher: state.watcher,
-				offset:  state.addNotify(info),
-			}
-			wn.notifies.PutOrUpdate(cmp, nt)
-		}
+		wn.notifyWithoutLock(state, event)
 	}
-
 	wn.Unlock()
+}
+
+func (wn *watcherNotifier) notifyWithoutLock(state *watcherState, event *pdpb.WatchEvent) {
+	if state.isReady() && pd.MatchEvent(event.Event, state.watcher.EventFlag) {
+		nt := &notify{
+			watcher: state.watcher.Addr,
+			offset:  state.addNotify(event),
+		}
+		wn.notifies.PutOrUpdate(cmp, nt)
+	}
 }
 
 func (wn *watcherNotifier) sync(addr string, offset uint64) *pdpb.WatcherNotifyRsp {
@@ -307,7 +312,7 @@ func (wn *watcherNotifier) sync(addr string, offset uint64) *pdpb.WatcherNotifyR
 		items, max := state.q.Get(offset)
 		rsp := new(pdpb.WatcherNotifyRsp)
 		for _, item := range items {
-			rsp.Ranges = append(rsp.Ranges, item.(*pdpb.Range))
+			rsp.Events = append(rsp.Events, item.(*pdpb.WatchEvent))
 		}
 		rsp.Offset = max
 		wn.Unlock()
@@ -320,7 +325,6 @@ func (wn *watcherNotifier) sync(addr string, offset uint64) *pdpb.WatcherNotifyR
 
 // ConnectFailed pool status handler
 func (wn *watcherNotifier) ConnectFailed(addr string, err error) {
-	wn.pause(addr, false)
 }
 
 // Connected pool status handler

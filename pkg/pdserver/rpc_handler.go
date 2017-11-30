@@ -14,17 +14,11 @@
 package pdserver
 
 import (
-	"errors"
-
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb"
 	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
 	"github.com/deepfabric/elasticell/pkg/pd"
 	"golang.org/x/net/context"
-)
-
-var (
-	errNotLeader = errors.New("not leader")
 )
 
 // RPCHandler it's a grpc interface implemention
@@ -363,7 +357,7 @@ func (h *RPCHandler) doHandle(name string, req pb.BaseReq, forwardFun func(*pd.C
 	if !h.server.IsLeader() {
 		proxy := h.server.GetLeaderProxy()
 		if nil == proxy {
-			return nil, errNotLeader
+			return nil, pd.ErrNotLeader
 		}
 
 		log.Debugf("rpc: forward a req<%s-%d>, target=<%s>",

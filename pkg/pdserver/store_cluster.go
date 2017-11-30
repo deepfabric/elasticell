@@ -24,6 +24,7 @@ import (
 
 	"github.com/coreos/etcd/clientv3"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
+	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
 	"github.com/deepfabric/elasticell/pkg/util"
 	"github.com/pkg/errors"
 )
@@ -257,9 +258,7 @@ func (s *pdStore) LoadCellMeta(clusterID uint64, limit int64, do func(metapb.Cel
 	return nil
 }
 
-func (s *pdStore) LoadWatchers(clusterID uint64, limit int64) ([]string, error) {
-	var watchers []string
-
+func (s *pdStore) LoadWatchers(clusterID uint64, limit int64, do func(pdpb.Watcher)) error {
 	start := s.getMinWatcher()
 	endKey := s.getMaxWatcherMetaKey(clusterID)
 
@@ -270,15 +269,22 @@ func (s *pdStore) LoadWatchers(clusterID uint64, limit int64) ([]string, error) 
 		startKey := s.getWatcherMetaKey(clusterID, start)
 		resp, err := s.get(startKey, withRange, withLimit)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		for _, item := range resp.Kvs {
-			watchers = append(watchers, string(item.Value))
-			value := item.Value
+			v := &pdpb.Watcher{}
+			err := v.Unmarshal(item.Value)
+			if err != nil {
+				return errors.Wrap(err, "")
+			}
+
+			value := []byte(v.Addr)
 			c := value[len(value)-1]
 			value[len(value)-1] = c + 1
 			start = string(value)
+
+			do(*v)
 		}
 
 		// read complete
@@ -287,7 +293,7 @@ func (s *pdStore) LoadWatchers(clusterID uint64, limit int64) ([]string, error) 
 		}
 	}
 
-	return watchers, nil
+	return nil
 }
 
 // SetStoreMeta returns nil if store is add or update succ
@@ -313,9 +319,14 @@ func (s *pdStore) SetCellMeta(clusterID uint64, cell metapb.Cell) error {
 }
 
 // SetWatchers returns nil if add or update succ
-func (s *pdStore) SetWatchers(clusterID uint64, watcher string) error {
-	key := s.getWatcherMetaKey(clusterID, watcher)
-	return s.save(key, watcher)
+func (s *pdStore) SetWatchers(clusterID uint64, watcher pdpb.Watcher) error {
+	key := s.getWatcherMetaKey(clusterID, watcher.Addr)
+	meta, err := watcher.Marshal()
+	if err != nil {
+		return errors.Wrap(err, "")
+	}
+
+	return s.save(key, string(meta))
 }
 
 func (s *pdStore) getClusterMetaKey(clusterID uint64) string {

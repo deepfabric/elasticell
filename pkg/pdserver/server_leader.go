@@ -94,14 +94,10 @@ func (s *Server) enableLeader() {
 	}
 
 	// load watchers
-	watchers, err := s.store.LoadWatchers(s.GetClusterID(), 256)
+	err = s.store.LoadWatchers(s.GetClusterID(), 256, s.notifier.addWatcher)
 	if err != nil {
 		log.Fatalf("leader-loop: load watchers failure, errors:\n %+v", err)
 		return
-	}
-
-	for _, watcher := range watchers {
-		s.notifier.addWatcher(watcher)
 	}
 
 	s.notifyElectionComplete()

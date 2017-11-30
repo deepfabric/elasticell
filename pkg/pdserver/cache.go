@@ -19,6 +19,7 @@ import (
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
+	"github.com/deepfabric/elasticell/pkg/pd"
 	"github.com/pkg/errors"
 )
 
@@ -99,7 +100,7 @@ func (c *cache) handleCellHeartbeat(source *CellInfo) error {
 			return err
 		}
 
-		c.notifyChangedRange(source.Meta.ID)
+		c.notifyChangedRange(source.Meta.ID, pd.EventCellCreated)
 		return nil
 	}
 
@@ -135,7 +136,9 @@ func (c *cache) handleCellHeartbeat(source *CellInfo) error {
 		}
 
 		if rangeChanged {
-			c.notifyChangedRange(source.Meta.ID)
+			c.notifyChangedRange(source.Meta.ID, pd.EventCellRangeChaned)
+		} else {
+			c.notifyChangedRange(source.Meta.ID, pd.EventCellPeersChaned)
 		}
 
 		return nil
@@ -154,7 +157,7 @@ func (c *cache) handleCellHeartbeat(source *CellInfo) error {
 	c.getCellCache().addOrUpdate(source)
 
 	if leaderChanged {
-		c.notifyChangedRange(source.Meta.ID)
+		c.notifyChangedRange(source.Meta.ID, pd.EventCellLeaderChanged)
 	}
 
 	return nil
@@ -170,7 +173,31 @@ func (c *cache) doSaveCellInfo(source *CellInfo) error {
 	return nil
 }
 
-func (c *cache) notifyChangedRange(id uint64) {
+func (c *cache) notifyStoreRange(id uint64) {
+	store := c.getStoreCache().getStore(id)
+	if store != nil {
+		et := pd.EventStoreUp
+		switch store.Meta.State {
+		case metapb.UP:
+			et = pd.EventStoreUp
+		case metapb.Down:
+			et = pd.EventStoreDown
+		case metapb.Tombstone:
+			et = pd.EventStoreTombstone
+		}
+
+		meta := &metapb.Store{}
+		*meta = store.Meta
+		c.notify.notify(&pdpb.WatchEvent{
+			Event: et,
+			StoreEvent: &pdpb.StoreEvent{
+				Store: meta,
+			},
+		})
+	}
+}
+
+func (c *cache) notifyChangedRange(id uint64, event uint32) {
 	cr := c.getCellCache().getCell(id)
 	r := &pdpb.Range{
 		Cell: cr.Meta,
@@ -179,7 +206,12 @@ func (c *cache) notifyChangedRange(id uint64) {
 		r.LeaderStore = c.getStoreCache().getStore(cr.LeaderPeer.StoreID).Meta
 	}
 
-	c.notify.notify(r)
+	c.notify.notify(&pdpb.WatchEvent{
+		Event: event,
+		CellEvent: &pdpb.CellEvent{
+			Range: r,
+		},
+	})
 }
 
 func randCell(cells map[uint64]*CellInfo) *CellInfo {

@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 #
 # Generate all elasticell protobuf bindings.
 # Run from repository root.

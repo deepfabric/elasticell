@@ -179,12 +179,12 @@ func (s *Server) getLastRanges(req *pdpb.GetLastRangesReq) (*pdpb.GetLastRangesR
 }
 
 func (s *Server) registerWatcher(req *pdpb.RegisterWatcherReq) (*pdpb.RegisterWatcherRsp, error) {
-	err := s.store.SetWatchers(s.GetClusterID(), req.Addr)
+	err := s.store.SetWatchers(s.GetClusterID(), req.Watcher)
 	if err != nil {
 		return nil, err
 	}
 
-	s.notifier.addWatcher(req.Addr)
+	s.notifier.addWatcher(req.Watcher)
 	return &pdpb.RegisterWatcherRsp{}, nil
 }
 
@@ -370,6 +370,7 @@ func (c *CellCluster) doPutStore(store metapb.Store) error {
 	}
 
 	c.cache.getStoreCache().updateStoreInfo(old)
+	c.cache.notifyStoreRange(old.Meta.ID)
 	return nil
 }
 

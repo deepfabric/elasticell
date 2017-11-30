@@ -53,10 +53,10 @@ type ClusterStore interface {
 	LoadClusterMeta(clusterID uint64) (*metapb.Cluster, error)
 	LoadStoreMeta(clusterID uint64, limit int64, do func(metapb.Store)) error
 	LoadCellMeta(clusterID uint64, limit int64, do func(metapb.Cell)) error
-	LoadWatchers(clusterID uint64, limit int64) ([]string, error)
+	LoadWatchers(clusterID uint64, limit int64, do func(pdpb.Watcher)) error
 	SetStoreMeta(clusterID uint64, store metapb.Store) error
 	SetCellMeta(clusterID uint64, cell metapb.Cell) error
-	SetWatchers(clusterID uint64, watcher string) error
+	SetWatchers(clusterID uint64, watcher pdpb.Watcher) error
 }
 
 // LeaderStore is the store interface for leader info

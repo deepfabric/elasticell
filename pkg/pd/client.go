@@ -28,22 +28,23 @@ import (
 
 var (
 	defaultConnectTimeout = 5 * time.Second
-	defaultTimeout        = 10 * time.Second
+	defaultTimeout        = 20 * time.Second
+
+	// ErrNotLeader pd is not leader
+	ErrNotLeader = errors.New("PD Server Not Leader")
 )
 
 // Client pd client
 type Client struct {
-	name string
+	sync.RWMutex
 
-	mut   sync.RWMutex
-	addrs []string
-
+	name                   string
+	addrs                  []string
 	continuousFailureCount int64
 	conn                   *grpc.ClientConn
 	pd                     pdpb.PDServiceClient
 	lastAddr               string
-
-	seq uint64
+	seq                    uint64
 }
 
 // NewClient create a pd client use init pd pdAddrs
@@ -72,8 +73,8 @@ func (c *Client) SetName(name string) {
 
 // Close close conn
 func (c *Client) Close() error {
-	c.mut.Lock()
-	defer c.mut.Unlock()
+	c.Lock()
+	defer c.Unlock()
 
 	if nil != c.conn {
 		return c.conn.Close()
@@ -84,14 +85,14 @@ func (c *Client) Close() error {
 
 //GetLastPD returns last pd server
 func (c *Client) GetLastPD() string {
-	c.mut.RLock()
-	defer c.mut.RUnlock()
+	c.RLock()
+	defer c.RUnlock()
 	return c.lastAddr
 }
 
 func (c *Client) resetConn() error {
-	c.mut.Lock()
-	defer c.mut.Unlock()
+	c.Lock()
+	defer c.Unlock()
 
 	if c.conn != nil {
 		c.conn.Close()
@@ -429,8 +430,6 @@ func (c *Client) GetLastRanges(ctx context.Context, req *pdpb.GetLastRangesReq) 
 }
 
 func (c *Client) proxyRPC(ctx context.Context, req pb.BaseReq, setFromFun func(), doRPC func(context.Context) (interface{}, error)) (interface{}, error) {
-	c.mut.RLock()
-
 	if req.GetFrom() == "" && req.GetID() == 0 {
 		setFromFun()
 		c.seq++
@@ -444,35 +443,34 @@ func (c *Client) proxyRPC(ctx context.Context, req pb.BaseReq, setFromFun func()
 	cc, cancel := context.WithTimeout(ctx, defaultTimeout)
 	defer cancel()
 
-	rsp, err := doRPC(cc)
-	if err != nil {
-		c.mut.RUnlock()
+	for {
+		c.RLock()
+		rsp, err := doRPC(cc)
+		c.RUnlock()
+
+		if err == nil {
+			log.Debugf("pd-client: rsp<%s-%d>, rsp=<%v>",
+				req.GetFrom(),
+				req.GetID(),
+				rsp)
+			return rsp, nil
+		}
+
 		if needRetry(err) {
 			err = c.resetConn()
 			if err != nil {
 				return nil, err
 			}
-
-			return c.proxyRPC(ctx, req, setFromFun, doRPC)
+		} else if grpc.ErrorDesc(err) == ErrNotLeader.Error() {
+			time.Sleep(time.Second)
+		} else {
+			return nil, err
 		}
-
-		return nil, err
 	}
-
-	c.mut.RUnlock()
-	if err == nil {
-		log.Debugf("pd-client: rsp<%s-%d>, rsp=<%v>",
-			req.GetFrom(),
-			req.GetID(),
-			rsp)
-	}
-
-	return rsp, nil
 }
 
 func needRetry(err error) bool {
 	code := grpc.Code(err)
-
 	return codes.Unavailable == code ||
 		codes.FailedPrecondition == code
 }
