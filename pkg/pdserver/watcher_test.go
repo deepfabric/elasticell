@@ -90,14 +90,14 @@ func (s *testWatcherSuite) TestNotify(c *C) {
 			Range: new(pdpb.Range),
 		},
 	})
-	c.Assert(wn.watchers[addr].q.GetMaxOffset() == 0, IsTrue)
+	c.Assert(wn.watchers[addr].q.GetMaxOffset() == 2, IsTrue)
 	wn.notify(&pdpb.WatchEvent{
 		Event: pd.EventCellCreated,
 		CellEvent: &pdpb.CellEvent{
 			Range: new(pdpb.Range),
 		},
 	})
-	c.Assert(wn.watchers[addr].q.GetMaxOffset() == 1, IsTrue)
+	c.Assert(wn.watchers[addr].q.GetMaxOffset() == 3, IsTrue)
 
 	// pause
 	wn.pause(addr, false)
