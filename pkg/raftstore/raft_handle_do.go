@@ -512,6 +512,13 @@ func (s *Store) doApplySplit(cellID uint64, result *splitResult) {
 			err)
 	}
 
+	s.keyRanges.Update(left)
+	s.keyRanges.Update(right)
+
+	newPR.sizeDiffHint = globalCfg.ThresholdSplitCheckBytes
+	newPR.startRegistrationJob()
+	s.replicatesMap.put(newPR.cellID, newPR)
+
 	// If this peer is the leader of the cell before split, it's intuitional for
 	// it to become the leader of new split cell.
 	// The ticks are accelerated here, so that the peer for the new split cell
@@ -553,13 +560,6 @@ func (s *Store) doApplySplit(cellID uint64, result *splitResult) {
 				err)
 		}
 	}
-
-	s.keyRanges.Update(left)
-	s.keyRanges.Update(right)
-
-	newPR.sizeDiffHint = globalCfg.ThresholdSplitCheckBytes
-	newPR.startRegistrationJob()
-	s.replicatesMap.put(newPR.cellID, newPR)
 
 	if err = s.notifySplitCellIndex(left.GetID(), right.GetID()); err != nil {
 		log.Errorf("raftstore-apply[cell-%d]: doExecSplitIndex failed\n%+v",
