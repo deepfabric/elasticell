@@ -529,16 +529,12 @@ func (s *Store) doApplySplit(cellID uint64, result *splitResult) {
 	// In this worst case scenario, the new split raft group will not be available
 	// since there is no leader established during one election timeout after the split.
 	if pr.isLeader() && len(right.Peers) > 1 {
-		succ, err := newPR.maybeCampaign()
+		_, err := newPR.maybeCampaign()
 		if err != nil {
 			log.Fatalf("raftstore-apply[cell-%d]: new split cell campaign failed, newCell=<%d> errors:\n %+v",
 				cellID,
 				right,
 				err)
-		}
-
-		if succ {
-			newPR.onRaftTick(nil)
 		}
 	}
 
@@ -551,7 +547,6 @@ func (s *Store) doApplySplit(cellID uint64, result *splitResult) {
 			pr.ps.applyState.String())
 
 		pr.doHeartbeat()
-		newPR.doHeartbeat()
 
 		err := s.startReportSpltJob(left, right)
 		if err != nil {
