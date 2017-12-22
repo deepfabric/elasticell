@@ -36,6 +36,7 @@ type action int
 const (
 	checkSplit = iota
 	checkCompact
+	doCampaign
 )
 
 // PeerReplicate is the cell's peer replicate. Every cell replicate has a PeerReplicate.

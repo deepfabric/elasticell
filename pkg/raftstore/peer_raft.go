@@ -152,6 +152,14 @@ func (pr *PeerReplicate) handleAction(items []interface{}) {
 			pr.handleCheckSplit()
 		case checkCompact:
 			pr.handleCheckCompact()
+		case doCampaign:
+			_, err := pr.maybeCampaign()
+			if err != nil {
+				log.Fatalf("raftstore[cell-%d]: new split cell campaign failed, newCell=<%d> errors:\n %+v",
+					pr.cellID,
+					pr.getCell(),
+					err)
+			}
 		}
 	}
 
