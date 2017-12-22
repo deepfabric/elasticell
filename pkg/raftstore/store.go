@@ -88,6 +88,9 @@ type Store struct {
 	queryStates        map[string]*QueryState // query UUID -> query state
 	queryReqChan       chan *QueryRequestCb
 	queryRspChan       chan *querypb.QueryRsp
+
+	droppedLock     sync.Mutex
+	droppedVoteMsgs map[uint64]raftpb.Message
 }
 
 // DocPtr is alias of querypb.Document
@@ -166,6 +169,8 @@ func NewStore(clusterID uint64, pdClient *pd.Client, meta metapb.Store, engine s
 	s.queryStates = make(map[string]*QueryState)
 	s.queryReqChan = make(chan *QueryRequestCb, queryChanSize)
 	s.queryRspChan = make(chan *querypb.QueryRsp, queryChanSize)
+
+	s.droppedVoteMsgs = make(map[uint64]raftpb.Message)
 
 	s.initRedisHandle()
 	return s
@@ -544,6 +549,29 @@ func (s *Store) onRaftMessage(msg *mraft.RaftMessage) {
 	pr.step(msg.Message)
 }
 
+// In some case, the vote raft msg maybe dropped, so follwer node can't response the vote msg
+// Cell a has 3 peers p1, p2, p3. The p1 split to new cell b
+// case 1: in most sence, p1 apply split raft log is before p2 and p3.
+//         At this time, if p2, p3 received the cell b's vote msg,
+//         and this vote will dropped by p2 and p3 node,
+//         because cell a and cell b has overlapped range at p2 and p3 node
+// case 2: p2 or p3 apply split log is before p1, we can't mock cell b's vote msg
+func (s *Store) cacheDroppedVoteMsg(cellID uint64, msg raftpb.Message) {
+	if msg.Type == raftpb.MsgVote {
+		s.droppedLock.Lock()
+		s.droppedVoteMsgs[cellID] = msg
+		s.droppedLock.Unlock()
+	}
+}
+
+func (s *Store) removeDroppedVoteMsg(cellID uint64) (raftpb.Message, bool) {
+	s.droppedLock.Lock()
+	value, ok := s.droppedVoteMsgs[cellID]
+	delete(s.droppedVoteMsgs, cellID)
+	s.droppedLock.Unlock()
+	return value, ok
+}
+
 func (s *Store) onSplitCheckResult(result *splitCheckResult) {
 	if len(result.splitKey) == 0 {
 		log.Errorf("raftstore-split[cell-%d]: split key must not be empty", result.cellID)
@@ -803,6 +831,9 @@ func (s *Store) tryToCreatePeerReplicate(cellID uint64, msg *mraft.RaftMessage) 
 					p.cellID,
 					p.ps.raftState.String(),
 					p.ps.applyState.String())
+
+				// Maybe split, but not registered yet.
+				s.cacheDroppedVoteMsg(cellID, msg.Message)
 			}
 
 			log.Infof("raftstore[cell-%d]: msg is overlapped with cell, cell=<%s> msg=<%s> state=<%s>",
@@ -810,6 +841,7 @@ func (s *Store) tryToCreatePeerReplicate(cellID uint64, msg *mraft.RaftMessage) 
 				item.String(),
 				msg.String(),
 				state)
+
 			return false
 		}
 	}

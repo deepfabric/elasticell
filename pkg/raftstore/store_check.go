@@ -83,6 +83,7 @@ func (s *Store) isMsgStale(msg *mraft.RaftMessage) (bool, error) {
 	if localState != nil {
 		if localState.State != mraft.Tombstone {
 			// Maybe split, but not registered yet.
+			s.cacheDroppedVoteMsg(cellID, msg.Message)
 			return false, fmt.Errorf("cell<%d> not exist but not tombstone, local state: %s",
 				cellID,
 				localState.String())

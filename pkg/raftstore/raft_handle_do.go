@@ -554,6 +554,10 @@ func (s *Store) doApplySplit(cellID uint64, result *splitResult) {
 				cellID,
 				err)
 		}
+	} else {
+		if vote, ok := pr.store.removeDroppedVoteMsg(newPR.cellID); ok {
+			newPR.step(vote)
+		}
 	}
 
 	if err = s.notifySplitCellIndex(left.GetID(), right.GetID()); err != nil {

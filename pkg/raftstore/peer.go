@@ -359,6 +359,7 @@ func (pr *PeerReplicate) destroy() error {
 	pr.stopEventLoop()
 
 	pr.store.removePendingSnapshot(pr.cellID)
+	pr.store.removeDroppedVoteMsg(pr.cellID)
 
 	wb := pr.store.engine.NewWriteBatch()
 
