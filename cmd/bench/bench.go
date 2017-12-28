@@ -32,7 +32,7 @@ var (
 )
 
 var (
-	idxWeightsSum []int64
+	idxWeightsSum []uint64
 )
 
 func main() {
@@ -52,15 +52,19 @@ func main() {
 		}
 		idxWeights = append(idxWeights, f)
 	}
-	idxWeightsSum = make([]int64, len(idxWeights))
+	idxWeightsSum = make([]uint64, len(idxWeights))
 	for i, f := range idxWeights {
-		val := int64(f * float64(1<<63))
+		val := uint64(f * float64(^uint64(0)))
 		if i != 0 {
 			val += idxWeightsSum[i-1]
+			if val < idxWeightsSum[i-1] {
+				//uint64 overflow
+				val = ^uint64(0)
+			}
 		}
 		idxWeightsSum[i] = val
 	}
-	fmt.Printf("idxWeightsSum: %v\n", idxWeightsSum)
+	fmt.Printf("idxWeights: %v, idxWeightsSum: %v\n", idxWeights, idxWeightsSum)
 
 	gCount := *con
 	total := *num
@@ -138,7 +142,7 @@ func startG(total int64, wg, complate *sync.WaitGroup, ready chan struct{}, ans 
 
 	for index := int64(0); index < total; index += *cn {
 		for k := int64(0); k < *cn; k++ {
-			rnd := r.Int63()
+			rnd := r.Uint64()
 			key := fmt.Sprintf("%d", rnd)
 
 			for {
@@ -159,7 +163,7 @@ func startG(total int64, wg, complate *sync.WaitGroup, ready chan struct{}, ans 
 			} else {
 				no := sort.Search(len(idxWeightsSum), func(i int) bool { return idxWeightsSum[i] > rnd })
 				if no < 2 {
-					rnd2 := r.Int63()
+					rnd2 := r.Uint64()
 					argInts := getIdxArgs(no, rnd2)
 					redis.WriteCommand(conn, "hmset", argInts...)
 				} else {
@@ -196,7 +200,7 @@ func startG(total int64, wg, complate *sync.WaitGroup, ready chan struct{}, ans 
 	fmt.Printf("%s sent %d reqs\n", end.Sub(start), total)
 }
 
-func getIdxArgs(no int, i int64) (argInts []interface{}) {
+func getIdxArgs(no int, i uint64) (argInts []interface{}) {
 	var args []string
 	switch no {
 	case 0:

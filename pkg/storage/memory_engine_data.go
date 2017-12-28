@@ -42,8 +42,8 @@ func (e *memoryDataEngine) GetTargetSizeKey(startKey []byte, endKey []byte, size
 	return 0, nil, nil
 }
 
-func (e *memoryDataEngine) ScanIndexInfo(start []byte, end []byte, skipEmpty bool, handler func(key, idxInfo []byte) error) error {
-	return errors.New("(*memoryDataEngine).ScanIndexInfo is not implemented")
+func (e *memoryDataEngine) ScanIndexInfo(start []byte, end []byte, skipEmpty bool, handler func(key, idxInfo []byte) error) (int, error) {
+	return 1, errors.New("(*memoryDataEngine).ScanIndexInfo is not implemented")
 }
 
 func (e *memoryDataEngine) SetIndexInfo(key, idxInfo []byte) error {

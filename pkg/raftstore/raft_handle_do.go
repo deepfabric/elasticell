@@ -555,7 +555,7 @@ func (s *Store) doApplySplit(cellID uint64, result *splitResult) {
 	}
 
 	if err = s.notifySplitCellIndex(left.GetID(), right.GetID()); err != nil {
-		log.Errorf("raftstore-apply[cell-%d]: doExecSplitIndex failed\n%+v",
+		log.Errorf("raftstore-apply[cell-%d]: notifySplitCellIndex failed\n%+v",
 			left.GetID(), err)
 	}
 

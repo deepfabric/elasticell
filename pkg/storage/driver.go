@@ -141,8 +141,8 @@ type DataEngine interface {
 	// ApplySnapshot apply a snapshort file from giving path
 	ApplySnapshot(path string) error
 
-	// ScanIndexInfo scans the range and execute the handler fun.
-	ScanIndexInfo(startKey []byte, endKey []byte, skipEmpty bool, handler func(key, idxInfo []byte) error) error
+	// ScanIndexInfo scans the range and execute the handler fun. Returens a tuple (error count, first error)
+	ScanIndexInfo(startKey []byte, endKey []byte, skipEmpty bool, handler func(key, idxInfo []byte) error) (int, error)
 	SetIndexInfo(key, idxInfo []byte) error
 	GetIndexInfo(key []byte) (idxInfo []byte, err error)
 }

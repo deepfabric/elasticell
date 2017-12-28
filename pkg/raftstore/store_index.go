@@ -16,6 +16,7 @@ package raftstore
 import (
 	"bytes"
 	"fmt"
+	"os"
 	"path/filepath"
 	"reflect"
 	"regexp"
@@ -57,16 +58,21 @@ func (s *Store) getCell(cellID uint64) (cell *metapb.Cell) {
 }
 
 func (s *Store) loadIndices() (err error) {
-	indicesFp := filepath.Join(globalCfg.DataPath, "index", "indices.json")
-	if err = util.FileUnmarshal(indicesFp, &s.indices); err != nil {
-		log.Errorf("store-index[%d]: failed to load indices definition\n%+v", s.GetID(), err)
+	if err = os.MkdirAll(filepath.Join(globalCfg.DataPath, "index"), 0700); err != nil {
+		err = errors.Wrap(err, "")
+		return
 	}
 	reExps := make(map[string]*regexp.Regexp)
+	s.reExps = reExps
+	docProts := make(map[string]*cql.Document)
+	s.docProts = docProts
+	indicesFp := filepath.Join(globalCfg.DataPath, "index", "indices.json")
+	if err = util.FileUnmarshal(indicesFp, &s.indices); err != nil {
+		return
+	}
 	for _, idxDef := range s.indices {
 		reExps[idxDef.GetName()] = regexp.MustCompile(idxDef.GetKeyPattern())
 	}
-	s.reExps = reExps
-	docProts := make(map[string]*cql.Document)
 	var docProt *cql.DocumentWithIdx
 	for _, idxDef := range s.indices {
 		if docProt, err = convertToDocProt(idxDef); err != nil {
@@ -74,14 +80,13 @@ func (s *Store) loadIndices() (err error) {
 		}
 		docProts[idxDef.GetName()] = &docProt.Document
 	}
-	s.docProts = docProts
 	return
 }
 
 func (s *Store) persistIndices() (err error) {
 	indicesFp := filepath.Join(globalCfg.DataPath, "index", "indices.json")
 	if err = util.FileMarshal(indicesFp, s.indices); err != nil {
-		log.Errorf("store-index[%d]: failed to persist indices definition\n%+v", s.GetID(), err)
+		log.Errorf("store-index: failed to persist indices definition\n%+v", err)
 	}
 	return
 }
@@ -157,7 +162,7 @@ func (s *Store) handleIndicesChange(rspIndices []*pdpb.IndexDef) (err error) {
 			}
 		}
 		delete(s.docProts, idxDef.GetName())
-		log.Infof("store-index[%d]: deleted index %+v", s.GetID(), idxDef)
+		log.Infof("store-index: deleted index %+v", idxDef)
 	}
 	var docProt *cql.DocumentWithIdx
 	for _, idxDef := range delta.toCreate {
@@ -171,14 +176,14 @@ func (s *Store) handleIndicesChange(rspIndices []*pdpb.IndexDef) (err error) {
 			}
 		}
 		s.docProts[idxDef.GetName()] = &docProt.Document
-		log.Infof("store-index[%d]: created index %+v", s.GetID(), idxDef)
+		log.Infof("store-index: created index %+v", idxDef)
 	}
 	if len(delta.toDelete) != 0 || len(delta.toCreate) != 0 {
 		s.indices = indicesNew
 		if err = s.persistIndices(); err != nil {
 			return
 		}
-		log.Infof("store-index[%d]: persisted index definion %+v", s.GetID(), indicesNew)
+		log.Infof("store-index: persisted index definion %+v", indicesNew)
 	}
 	return
 }
@@ -190,7 +195,7 @@ func (s *Store) readyToServeIndex(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			log.Infof("store-index[%d]: readyToServeIndex stopped", s.GetID())
+			log.Infof("store-index: readyToServeIndex stopped")
 			return
 		case <-tickChan:
 			for {
@@ -199,14 +204,14 @@ func (s *Store) readyToServeIndex(ctx context.Context) {
 				// - the queue becomes empty
 				// - ctx is done
 				if absorbed, err = s.handleIdxReqQueue(); err != nil {
-					log.Errorf("store-index[%d]: handleIdxReqQueue failed with error\n%+v", s.GetID(), err)
+					log.Errorf("store-index: handleIdxReqQueue failed with error\n%+v", err)
 					break
 				} else if absorbed {
 					break
 				}
 				select {
 				case <-ctx.Done():
-					log.Infof("store-index[%d]: readyToServeIndex stopped", s.GetID())
+					log.Infof("store-index: readyToServeIndex stopped")
 					return
 				default:
 				}
@@ -255,7 +260,7 @@ func (s *Store) handleIdxReqQueue() (absorbed bool, err error) {
 		if idxDestroyReq = idxReq.GetIdxDestroy(); idxDestroyReq != nil {
 			if i == 0 {
 				if err = s.indexDestroyCell(idxDestroyReq, wb); err != nil {
-					log.Errorf("store-index[%d]: failed to handle destroy %+v\n%+v", s.GetID(), idxDestroyReq, err)
+					log.Errorf("store-index: failed to handle destroy %+v\n%+v", idxDestroyReq, err)
 				}
 				numProcessed++
 			}
@@ -263,7 +268,7 @@ func (s *Store) handleIdxReqQueue() (absorbed bool, err error) {
 		} else if idxRebuildReq = idxReq.GetIdxRebuild(); idxRebuildReq != nil {
 			if i == 0 {
 				if err = s.indexRebuildCell(idxRebuildReq, wb, dirtyIndices); err != nil {
-					log.Errorf("store-index[%d]: failed to handle rebuild %+v\n%+v", s.GetID(), idxRebuildReq, err)
+					log.Errorf("store-index: failed to handle rebuild %+v\n%+v", idxRebuildReq, err)
 				}
 				numProcessed++
 			}
@@ -321,7 +326,7 @@ func (s *Store) handleIdxReqQueue() (absorbed bool, err error) {
 		}
 	}
 	if numIdxSplitReqs != 0 || numIdxKeyReqs != 0 {
-		log.Infof("store-index[%d]: done batch processing %d idxSplitReqs and %d idxKeyReqs", s.GetID(), numIdxSplitReqs, numIdxKeyReqs)
+		log.Infof("store-index: done batch processing %d idxSplitReqs and %d idxKeyReqs", numIdxSplitReqs, numIdxKeyReqs)
 	}
 
 	if err = s.engine.GetKVEngine().Write(wb); err != nil {
@@ -347,8 +352,8 @@ func (s *Store) handleIdxKeyReq(idxKeyReq *pdpb.IndexKeyRequest, wb storage.Writ
 	var cellEnd []byte
 	cell := s.getCell(idxKeyReq.CellID)
 	if cell == nil {
-		log.Debugf("store-index[%d.%d]: skipped handling idxKeyReq %+v since cell is gone",
-			s.GetID(), idxKeyReq.CellID, idxKeyReq)
+		log.Debugf("store-index[cell-%d]: skipped handling idxKeyReq %+v since cell is gone",
+			idxKeyReq.CellID, idxKeyReq)
 		return
 	}
 	if idxKeyReq.Epoch.CellVer != cell.Epoch.CellVer || idxKeyReq.Epoch.ConfVer != cell.Epoch.ConfVer {
@@ -363,12 +368,12 @@ func (s *Store) handleIdxKeyReq(idxKeyReq *pdpb.IndexKeyRequest, wb storage.Writ
 		err = s.deleteIndexedKey(key, idxKeyReq.IsDel || !idxIsLive, wb, dirtyIndices)
 		if idxKeyReq.IsDel {
 			if err != nil {
-				log.Errorf("store-index[%d.%d]: failed to delete indexed key %+v from index %s\n%+v",
-					s.GetID(), idxKeyReq.CellID, key, idxKeyReq.GetIdxName(), err)
+				log.Errorf("store-index[cell-%d]: failed to delete indexed key %+v from index %s\n%+v",
+					idxKeyReq.CellID, key, idxKeyReq.GetIdxName(), err)
 				continue
 			}
-			log.Debugf("store-index[%d.%d]: deleted key %+v from index %s",
-				s.GetID(), idxKeyReq.CellID, key, idxKeyReq.GetIdxName())
+			log.Debugf("store-index[cell-%d]: deleted key %+v from index %s",
+				idxKeyReq.CellID, key, idxKeyReq.GetIdxName())
 		} else if idxIsLive {
 			targetCellID := idxKeyReq.CellID
 			if epochStale && bytes.Compare(key, cellEnd) >= 0 {
@@ -376,13 +381,13 @@ func (s *Store) handleIdxKeyReq(idxKeyReq *pdpb.IndexKeyRequest, wb storage.Writ
 				if item.ID > 0 {
 					targetCellID = item.ID
 				} else {
-					log.Debugf("store-index[%d.%d]: skipped adding key %s since there's no responsive cell",
-						s.GetID(), idxKeyReq.CellID, key)
+					log.Debugf("store-index[cell-%d]: skipped adding key %s since there's no responsive cell",
+						idxKeyReq.CellID, key)
 					continue
 				}
 			}
 			if err = s.addIndexedKey(targetCellID, idxKeyReq.GetIdxName(), 0, key, wb, dirtyIndices); err != nil {
-				log.Errorf("store-index[%d]: failed to add key %s to index %s\n%+v", s.GetID(), key, idxKeyReq.GetIdxName(), err)
+				log.Errorf("store-index[cell-%d]: failed to add key %s to index %s\n%+v", targetCellID, key, idxKeyReq.GetIdxName(), err)
 				continue
 			}
 		}
@@ -472,19 +477,19 @@ func (s *Store) addIndexedKey(cellID uint64, idxNameIn string, docID uint64, dat
 		return
 	}
 	dirtyIndices[idxer] = 0
-	log.Debugf("store-index[%d.%d]: added dataKey %+v to index %s, docID %d, paris %+v",
-		s.GetID(), cellID, dataKey, idxNameIn, docID, pairs)
+	log.Debugf("store-index[cell-%d]: added dataKey %+v to index %s, docID %d, paris %+v",
+		cellID, dataKey, idxNameIn, docID, pairs)
 	return
 }
 
 func (s *Store) indexSplitCell(cellIDL, cellIDR uint64, wb storage.WriteBatch, dirtyIndices map[*indexer.Indexer]int) (err error) {
 	var cellL, cellR *metapb.Cell
 	if cellL = s.getCell(cellIDL); cellL == nil {
-		log.Infof("store-index[%d]: ignored %+v due to left cell %d is gone.", s.GetID(), cellIDL)
+		log.Infof("store-index[cell-%d]: ignored %+v due to left cell %d is gone.", cellIDL)
 		return
 	}
 	if cellR = s.getCell(cellIDR); cellR == nil {
-		log.Infof("store-index[%d]: ignored %+v due to right cell %d is gone.", s.GetID(), cellIDR)
+		log.Infof("store-index[cell-%d]: ignored %+v due to right cell %d is gone.", cellIDR)
 		return
 	}
 	//cellR could has been splitted after idxSplitReq creation.
@@ -501,8 +506,8 @@ func (s *Store) indexSplitCell(cellIDL, cellIDR uint64, wb storage.WriteBatch, d
 	}
 	dirtyIndices[idxerL] = 0
 
-	var scanned, indexed int
-	err = s.engine.GetDataEngine().ScanIndexInfo(start, end, true, func(dataKey, metaValB []byte) (err error) {
+	var scanned, indexed, cntErr int
+	cntErr, err = s.engine.GetDataEngine().ScanIndexInfo(start, end, true, func(dataKey, metaValB []byte) (err error) {
 		scanned++
 		if metaValB == nil || len(metaValB) == 0 {
 			return
@@ -533,14 +538,14 @@ func (s *Store) indexSplitCell(cellIDL, cellIDR uint64, wb storage.WriteBatch, d
 		}
 		return
 	})
-	log.Infof("store-index[%d]: done cell split for right cell %+v, has scanned %d dataKeys, has indexed %d dataKeys.", s.GetID(), cellR, scanned, indexed)
+	log.Infof("store-index[cell-%d]: done cell split for right cell %+v, has scanned %d dataKeys, has indexed %d dataKeys, %d errors.", cellIDL, cellR, scanned, indexed, cntErr)
 	return
 }
 
 func (s *Store) indexDestroyCell(idxDestroyReq *pdpb.IndexDestroyCellRequest, wb storage.WriteBatch) (err error) {
 	var cell *metapb.Cell
 	if cell = s.getCell(idxDestroyReq.CellID); cell == nil {
-		log.Infof("store-index[%d]: ignored %+v due to cell %d is gone.", s.GetID(), idxDestroyReq.CellID)
+		log.Infof("store-index[cell-%d]: ignored %+v due to cell %d is gone.", idxDestroyReq.CellID, idxDestroyReq.CellID)
 		return
 	}
 	start := encStartKey(cell)
@@ -558,8 +563,8 @@ func (s *Store) indexDestroyCell(idxDestroyReq *pdpb.IndexDestroyCellRequest, wb
 	if err = wb.Delete(getCellNextDocIDKey(cellID)); err != nil {
 		return
 	}
-	var scanned, indexed int
-	err = s.engine.GetDataEngine().ScanIndexInfo(start, end, true, func(dataKey, metaValB []byte) (err error) {
+	var scanned, indexed, cntErr int
+	cntErr, err = s.engine.GetDataEngine().ScanIndexInfo(start, end, true, func(dataKey, metaValB []byte) (err error) {
 		scanned++
 		if metaValB == nil || len(metaValB) == 0 {
 			return
@@ -576,14 +581,14 @@ func (s *Store) indexDestroyCell(idxDestroyReq *pdpb.IndexDestroyCellRequest, wb
 		indexed++
 		return
 	})
-	log.Infof("store-index[%d]: done cell destroy %+v, has scanned %d dataKeys, has indexed %d dataKeys.", s.GetID(), idxDestroyReq, scanned, indexed)
+	log.Infof("store-index[cell-%d]: done cell destroy %+v, has scanned %d dataKeys, has indexed %d dataKeys, %d errors.", idxDestroyReq.CellID, idxDestroyReq, scanned, indexed, cntErr)
 	return
 }
 
 func (s *Store) indexRebuildCell(idxRebuildReq *pdpb.IndexRebuildCellRequest, wb storage.WriteBatch, dirtyIndices map[*indexer.Indexer]int) (err error) {
 	var cell *metapb.Cell
 	if cell = s.getCell(idxRebuildReq.CellID); cell == nil {
-		log.Infof("store-index[%d]: ignored %+v due to cell %d is gone.", s.GetID(), idxRebuildReq.CellID)
+		log.Infof("store-index[cell-%d]: ignored %+v due to cell %d is gone.", idxRebuildReq.CellID, idxRebuildReq.CellID)
 		return
 	}
 	start := encStartKey(cell)
@@ -602,8 +607,8 @@ func (s *Store) indexRebuildCell(idxRebuildReq *pdpb.IndexRebuildCellRequest, wb
 		return
 	}
 
-	var scanned, indexed int
-	err = s.engine.GetDataEngine().ScanIndexInfo(start, end, false, func(dataKey, metaValB []byte) (err error) {
+	var scanned, indexed, cntErr int
+	cntErr, err = s.engine.GetDataEngine().ScanIndexInfo(start, end, false, func(dataKey, metaValB []byte) (err error) {
 		scanned++
 		if metaValB != nil || len(metaValB) != 0 {
 			metaVal := &pdpb.KeyMetaVal{}
@@ -631,7 +636,7 @@ func (s *Store) indexRebuildCell(idxRebuildReq *pdpb.IndexRebuildCellRequest, wb
 		}
 		return
 	})
-	log.Infof("store-index[%d]: done cell index rebuild %+v, has scanned %d dataKeys, has indexed %d dataKeys", s.GetID(), idxRebuildReq, scanned, indexed)
+	log.Infof("store-index[cell-%d]: done cell index rebuild %+v, has scanned %d dataKeys, has indexed %d dataKeys, %d errors", idxRebuildReq.CellID, idxRebuildReq, scanned, indexed, cntErr)
 	return
 }
 
