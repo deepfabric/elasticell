@@ -78,17 +78,20 @@ func (e *nemoDataEngine) ApplySnapshot(path string) error {
 	return err
 }
 
-func (e *nemoDataEngine) ScanIndexInfo(startKey []byte, endKey []byte, skipEmpty bool, handler func(key, idxInfo []byte) error) error {
+func (e *nemoDataEngine) ScanIndexInfo(startKey []byte, endKey []byte, skipEmpty bool, handler func(key, idxInfo []byte) error) (cnt int, firstErr error) {
 	var err error
 	it := e.db.HmeataScan(startKey, endKey, false, skipEmpty)
 	for ; it.Valid(); it.Next() {
 		if err = handler(it.Key(), it.IndexInfo()); err != nil {
-			break
+			if cnt == 0 {
+				firstErr = err
+			}
+			cnt++
 		}
 	}
 	it.Free()
 
-	return err
+	return
 }
 
 func (e *nemoDataEngine) SetIndexInfo(key, idxInfo []byte) error {
