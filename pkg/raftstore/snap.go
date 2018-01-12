@@ -120,7 +120,7 @@ func newDefaultSnapshotManager(cfg *Cfg, db storage.DataEngine) SnapshotManager 
 
 	return &defaultSnapshotManager{
 		cfg:      cfg,
-		limiter:  rate.NewLimiter(rate.Every(time.Second), int(cfg.LimitSnapChunkRate)),
+		limiter:  rate.NewLimiter(rate.Every(time.Second/time.Duration(cfg.LimitSnapChunkRate)), int(cfg.LimitSnapChunkRate)),
 		dir:      dir,
 		db:       db,
 		registry: make(map[string]struct{}),
