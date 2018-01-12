@@ -2,7 +2,7 @@
 ![architecture](../imgs/architecture.png)
 
 ### Why Multi-Raft
-In the raft, only the leader node provides read and write operation. This measns:
+In the raft, only the leader node provides read and write operation. This means:
 
 * The more nodes, the worse the performance
 * The system storage capacity depends on the size of the leader machine's disk
