@@ -31,10 +31,11 @@ import (
 
 	"crypto/tls"
 
+	"io/ioutil"
+
 	"github.com/pilosa/pilosa"
 	"github.com/pilosa/pilosa/gossip"
 	"github.com/pilosa/pilosa/statsd"
-	"io/ioutil"
 )
 
 func init() {
@@ -161,6 +162,7 @@ func (m *Command) SetupServer() error {
 	m.Server.MaxWritesPerRequest = m.Config.MaxWritesPerRequest
 
 	// Setup TLS
+	var TLSConfig *tls.Config
 	if uri.Scheme() == "https" {
 		if m.Config.TLS.CertificatePath == "" {
 			return errors.New("certificate path is required for TLS sockets")
@@ -176,8 +178,15 @@ func (m *Command) SetupServer() error {
 			Certificates:       []tls.Certificate{cert},
 			InsecureSkipVerify: m.Config.TLS.SkipVerify,
 		}
-		m.Server.Handler.ClientOptions = &pilosa.ClientOptions{TLS: m.Server.TLS}
+
+		// TODO Review this location
+
+		TLSConfig = m.Server.TLS
+
 	}
+	c := pilosa.GetHTTPClient(TLSConfig)
+	m.Server.RemoteClient = c
+	m.Server.Handler.RemoteClient = c
 
 	// Set internal port (string).
 	gossipPortStr := pilosa.DefaultGossipPort
@@ -212,14 +221,19 @@ func (m *Command) SetupServer() error {
 
 		// get the host portion of addr to use for binding
 		gossipHost := uri.Host()
-		gossipNodeSet := gossip.NewGossipNodeSet(uri.HostPort(), gossipHost, gossipPort, gossipSeed, m.Server, gossipKey)
+		gossipNodeSet, err := gossip.NewGossipNodeSet(uri.HostPort(), gossipHost, gossipPort, gossipSeed, m.Server, gossipKey)
+		if err != nil {
+			return err
+		}
 		m.Server.Cluster.NodeSet = gossipNodeSet
-		m.Server.Broadcaster = gossipNodeSet
+		m.Server.Broadcaster = m.Server
 		m.Server.BroadcastReceiver = gossipNodeSet
+		m.Server.Gossiper = gossipNodeSet
 	case pilosa.ClusterStatic, pilosa.ClusterNone:
 		m.Server.Broadcaster = pilosa.NopBroadcaster
 		m.Server.Cluster.NodeSet = pilosa.NewStaticNodeSet()
 		m.Server.BroadcastReceiver = pilosa.NopBroadcastReceiver
+		m.Server.Gossiper = pilosa.NopGossiper
 		err := m.Server.Cluster.NodeSet.(*pilosa.StaticNodeSet).Join(m.Server.Cluster.Nodes)
 		if err != nil {
 			return err

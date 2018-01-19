@@ -25,7 +25,6 @@ import (
 	"io/ioutil"
 	"log"
 	"math/rand"
-	"net"
 	"net/http"
 	"net/url"
 	"sort"
@@ -46,14 +45,13 @@ type ClientOptions struct {
 // InternalHTTPClient represents a client to the Pilosa cluster.
 type InternalHTTPClient struct {
 	defaultURI *URI
-	options    *ClientOptions
 
 	// The client to use for HTTP communication.
 	HTTPClient *http.Client
 }
 
 // NewInternalHTTPClient returns a new instance of InternalHTTPClient to connect to host.
-func NewInternalHTTPClient(host string, options *ClientOptions) (*InternalHTTPClient, error) {
+func NewInternalHTTPClient(host string, remoteClient *http.Client) (*InternalHTTPClient, error) {
 	if host == "" {
 		return nil, ErrHostRequired
 	}
@@ -63,34 +61,14 @@ func NewInternalHTTPClient(host string, options *ClientOptions) (*InternalHTTPCl
 		return nil, err
 	}
 
-	client := NewInternalHTTPClientFromURI(uri, options)
+	client := NewInternalHTTPClientFromURI(uri, remoteClient)
 	return client, nil
 }
 
-func NewInternalHTTPClientFromURI(defaultURI *URI, options *ClientOptions) *InternalHTTPClient {
-	if options == nil {
-		options = &ClientOptions{}
-	}
-	transport := &http.Transport{
-		Proxy: http.ProxyFromEnvironment,
-		DialContext: (&net.Dialer{
-			Timeout:   30 * time.Second,
-			KeepAlive: 30 * time.Second,
-			DualStack: true,
-		}).DialContext,
-		MaxIdleConns:          1000,
-		MaxIdleConnsPerHost:   200,
-		IdleConnTimeout:       90 * time.Second,
-		TLSHandshakeTimeout:   10 * time.Second,
-		ExpectContinueTimeout: 1 * time.Second,
-	}
-	if options.TLS != nil {
-		transport.TLSClientConfig = options.TLS
-	}
-	client := &http.Client{Transport: transport}
+func NewInternalHTTPClientFromURI(defaultURI *URI, remoteClient *http.Client) *InternalHTTPClient {
 	return &InternalHTTPClient{
 		defaultURI: defaultURI,
-		HTTPClient: client,
+		HTTPClient: remoteClient,
 	}
 }
 
@@ -1066,12 +1044,71 @@ func (c *InternalHTTPClient) RowAttrDiff(ctx context.Context, index, frame strin
 	return rsp.Attrs, nil
 }
 
+// SendMessage posts a message synchronously.
+func (c *InternalHTTPClient) SendMessage(ctx context.Context, pb proto.Message) error {
+	msg, err := MarshalMessage(pb)
+	if err != nil {
+		return fmt.Errorf("marshaling message: %v", err)
+	}
+
+	u := uriPathToURL(ctx.Value("uri").(*URI), "/cluster/message")
+	req, err := http.NewRequest("POST", u.String(), bytes.NewReader(msg))
+	req.Header.Set("Content-Type", "application/x-protobuf")
+	req.Header.Set("User-Agent", "pilosa/"+Version)
+
+	// Execute request.
+	resp, err := c.HTTPClient.Do(req.WithContext(ctx))
+	if err != nil {
+		return fmt.Errorf("executing http request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	// Read body.
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("reading response body: %v", err)
+	}
+
+	// Return error if status is not OK.
+	switch resp.StatusCode {
+	case http.StatusOK: // ok
+	default:
+		return fmt.Errorf("unexpected response status code: %d: %s", resp.StatusCode, body)
+	}
+
+	return nil
+}
+
 func (c *InternalHTTPClient) clientURI(ctx context.Context) *URI {
 	clientURI := c.defaultURI
 	if contextURI, ok := ctx.Value("uri").(*URI); ok {
 		clientURI = contextURI
 	}
 	return clientURI
+}
+
+func (c *InternalHTTPClient) NodeID(uri *URI) (string, error) {
+	u := uriPathToURL(uri, "/id")
+	req, err := http.NewRequest("GET", u.String(), nil)
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("executing http request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	// Read body.
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("reading response body: %v", err)
+	}
+
+	// Return error if status is not OK.
+	switch resp.StatusCode {
+	case http.StatusOK: // ok
+	default:
+		return "", fmt.Errorf("unexpected response status code: %d: %s", resp.StatusCode, body)
+	}
+	return string(body), nil
 }
 
 // Bit represents the location of a single bit.
@@ -1248,4 +1285,6 @@ type InternalClient interface {
 	BlockData(ctx context.Context, index, frame, view string, slice uint64, block int) ([]uint64, []uint64, error)
 	ColumnAttrDiff(ctx context.Context, index string, blks []AttrBlock) (map[uint64]map[string]interface{}, error)
 	RowAttrDiff(ctx context.Context, index, frame string, blks []AttrBlock) (map[uint64]map[string]interface{}, error)
+	SendMessage(ctx context.Context, pb proto.Message) error
+	NodeID(uri *URI) (string, error)
 }

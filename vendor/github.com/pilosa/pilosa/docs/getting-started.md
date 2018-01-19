@@ -59,21 +59,12 @@ curl localhost:10101/index/repository -X POST
 
 Let's create the `stargazer` frame which has user IDs of stargazers as its rows:
 ```
-curl localhost:10101/index/repository/frame/stargazer \
-     -X POST \
-     -d '{"options": {"timeQuantum": "YMD",
-                      "inverseEnabled": true}}'
+curl localhost:10101/index/repository/frame/stargazer -X POST
 ```
-
-Since our data contains time stamps for the time users starred repos, we set the *time quantum* for the `stargazer` frame in the options as well. Time quantum is the resolution of the time we want to use, and we set it to `YMD` (year, month, day) for `stargazer`.
-
-We set `inverseEnabled` to `true` in order to allow queries over columns as well as rows.
 
 Next up is the `language` frame, which will contain IDs for programming languages:
 ```
-curl localhost:10101/index/repository/frame/language \
-     -X POST \
-     -d '{"options": {"inverseEnabled": true}}'
+curl localhost:10101/index/repository/frame/language -X POST
 ```
 
 #### Import Data From CSV Files
@@ -100,7 +91,7 @@ docker cp language.csv pilosa:/language.csv
 docker exec -it pilosa /pilosa import -i repository -f language /language.csv
 ```
 
-Note that, both the user IDs and the repository IDs were remapped to sequential integers in the data files, they don't correspond to actual Github IDs anymore. You can check out `language.txt` to see the mapping for languages.
+Note that, both the user IDs and the repository IDs were remapped to sequential integers in the data files, they don't correspond to actual Github IDs anymore. You can check out `languages.txt` to see the mapping for languages.
 
 ### Input Definition
 Alternatively Pilosa can import JSON data using an [Input Definition](../input-definition/) describing the schema and ETL rules to process the data.  

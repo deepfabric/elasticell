@@ -729,8 +729,6 @@ func TestFragment_TopN_CacheSize(t *testing.T) {
 		t.Fatal(err)
 	} else if len(pairs) > int(cacheSize) {
 		t.Fatalf("TopN count cannot exceed cache size: %d", cacheSize)
-	} else if pairs[0] != (pilosa.Pair{ID: 104, Count: 7}) {
-		t.Fatalf("unexpected pair(0): %v", pairs)
 	} else if !reflect.DeepEqual(pairs, p) {
 		t.Fatalf("Invalid TopN result set: %s", spew.Sdump(pairs))
 	}

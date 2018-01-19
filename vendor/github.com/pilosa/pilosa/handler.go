@@ -51,14 +51,15 @@ import (
 
 // Handler represents an HTTP handler.
 type Handler struct {
-	Holder        *Holder
-	Broadcaster   Broadcaster
-	StatusHandler StatusHandler
+	Holder           *Holder
+	Broadcaster      Broadcaster
+	BroadcastHandler BroadcastHandler
+	StatusHandler    StatusHandler
 
 	// Local hostname & cluster configuration.
-	URI           *URI
-	Cluster       *Cluster
-	ClientOptions *ClientOptions
+	URI          *URI
+	Cluster      *Cluster
+	RemoteClient *http.Client
 
 	Router *mux.Router
 
@@ -136,6 +137,8 @@ func NewRouter(handler *Handler) *mux.Router {
 	router.HandleFunc("/status", handler.handleGetStatus).Methods("GET")
 	router.HandleFunc("/version", handler.handleGetVersion).Methods("GET")
 	router.HandleFunc("/recalculate-caches", handler.handleRecalculateCaches).Methods("POST")
+	router.HandleFunc("/cluster/message", handler.handlePostClusterMessage).Methods("POST")
+	router.HandleFunc("/id", handler.handleGetID).Methods("GET")
 
 	// TODO: Apply MethodNotAllowed statuses to all endpoints.
 	// Ideally this would be automatic, as described in this (wontfix) ticket:
@@ -483,6 +486,8 @@ func (h *Handler) handlePostIndex(w http.ResponseWriter, r *http.Request) {
 		})
 	if err != nil {
 		h.logger().Printf("problem sending CreateIndex message: %s", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 
 	// Encode response.
@@ -1506,7 +1511,7 @@ func (h *Handler) handlePostFrameRestore(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Create a client for the remote cluster.
-	client := NewInternalHTTPClientFromURI(host, h.ClientOptions)
+	client := NewInternalHTTPClientFromURI(host, h.RemoteClient)
 
 	// Determine the maximum number of slices.
 	maxSlices, err := client.MaxSliceByIndex(r.Context())
@@ -1585,10 +1590,15 @@ func (h *Handler) handleGetHosts(w http.ResponseWriter, r *http.Request) {
 
 // handleGetVersion handles /version requests.
 func (h *Handler) handleGetVersion(w http.ResponseWriter, r *http.Request) {
+	version := Version
+	if strings.HasPrefix(version, "v") {
+		// make the version string semver-compatible
+		version = version[1:]
+	}
 	if err := json.NewEncoder(w).Encode(struct {
 		Version string `json:"version"`
 	}{
-		Version: Version,
+		Version: version,
 	}); err != nil {
 		h.logger().Printf("write version response error: %s", err)
 	}
@@ -1987,3 +1997,46 @@ func GetTimeStamp(data map[string]interface{}, timeField string) (int64, error) 
 
 	return v.Unix(), nil
 }
+
+func (h *Handler) handlePostClusterMessage(w http.ResponseWriter, r *http.Request) {
+	// Verify that request is only communicating over protobufs.
+	if r.Header.Get("Content-Type") != "application/x-protobuf" {
+		fmt.Println("**unsupported media type**")
+		http.Error(w, "Unsupported media type", http.StatusUnsupportedMediaType)
+		return
+	}
+
+	// Read entire body.
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Marshal into request object.
+	pb, err := UnmarshalMessage(body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Forward the error message.
+	err = h.BroadcastHandler.ReceiveMessage(pb)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if err := json.NewEncoder(w).Encode(defaultClusterMessageResponse{}); err != nil {
+		h.logger().Printf("response encoding error: %s", err)
+	}
+}
+
+func (h *Handler) handleGetID(w http.ResponseWriter, r *http.Request) {
+	_, err := w.Write([]byte(h.Holder.LocalID))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+type defaultClusterMessageResponse struct{}

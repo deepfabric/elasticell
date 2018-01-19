@@ -22,19 +22,19 @@ import (
 	"io"
 	"io/ioutil"
 	"math/rand"
-	"net"
 	"net/http"
 	"os"
 	"reflect"
 	"runtime"
 	"sort"
-	"strconv"
 	"strings"
 	"testing"
 	"testing/quick"
+	"time"
 
 	"github.com/BurntSushi/toml"
 	"github.com/pilosa/pilosa"
+	"github.com/pilosa/pilosa/gossip"
 	"github.com/pilosa/pilosa/server"
 	"github.com/pilosa/pilosa/test"
 )
@@ -50,7 +50,7 @@ func TestMain_Set_Quick(t *testing.T) {
 		defer m.Close()
 
 		// Create client.
-		client, err := pilosa.NewInternalHTTPClient(m.Server.URI.HostPort(), nil)
+		client, err := pilosa.NewInternalHTTPClient(m.Server.URI.HostPort(), pilosa.GetHTTPClient(nil))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -278,24 +278,17 @@ func TestMain_SetColumnAttrsWithColumnOption(t *testing.T) {
 // Ensure program can set bits on one cluster and then restore to a second cluster.
 func TestMain_FrameRestore(t *testing.T) {
 	m0 := MustRunMain()
-	defer m0.Close()
-
-	m1 := MustRunMain()
-	defer m1.Close()
-
-	// Update cluster config.
-	m0.Server.Cluster.Nodes = []*pilosa.Node{
-		{Scheme: "http", Host: m0.Server.URI.HostPort()},
-		{Scheme: "http", Host: m1.Server.URI.HostPort()},
-	}
-	m1.Server.Cluster.Nodes = m0.Server.Cluster.Nodes
+	// TODO: this test used to start a two node cluster, but there was a race
+	// condition with anti-entropy. We need some general code for starting up
+	// arbitrarily sized Pilosa clusters for testing, and then we should
+	// re-instate the multi-node nature of this test.
 
 	// Create frames.
 	client := m0.Client()
 	if err := client.CreateIndex(context.Background(), "i", pilosa.IndexOptions{}); err != nil && err != pilosa.ErrIndexExists {
-		t.Fatal(err)
+		t.Fatal("create index:", err)
 	} else if err := client.CreateFrame(context.Background(), "i", "f", pilosa.FrameOptions{}); err != nil {
-		t.Fatal(err)
+		t.Fatal("create frame:", err)
 	}
 
 	// Write data on first cluster.
@@ -308,12 +301,12 @@ func TestMain_FrameRestore(t *testing.T) {
 		SetBit(rowID=1, frame="f", columnID=600000)
 		SetBit(rowID=1, frame="f", columnID=800000)
 	`); err != nil {
-		t.Fatal(err)
+		t.Fatal("setting bits:", err)
 	}
 
 	// Query row on first cluster.
 	if res, err := m0.Query("i", "", `Bitmap(rowID=1, frame="f")`); err != nil {
-		t.Fatal(err)
+		t.Fatal("bitmap query:", err)
 	} else if res != `{"results":[{"attrs":{},"bits":[100,1000,100000,200000,400000,600000,800000]}]}`+"\n" {
 		t.Fatalf("unexpected result: %s", res)
 	}
@@ -323,22 +316,22 @@ func TestMain_FrameRestore(t *testing.T) {
 	defer m2.Close()
 
 	// Import from first cluster.
-	client, err := pilosa.NewInternalHTTPClient(m2.Server.URI.HostPort(), nil)
+	client, err := pilosa.NewInternalHTTPClient(m2.Server.URI.HostPort(), pilosa.GetHTTPClient(nil))
 	if err != nil {
-		t.Fatal(err)
+		t.Fatal("new client:", err)
 	} else if err := m2.Client().CreateIndex(context.Background(), "i", pilosa.IndexOptions{}); err != nil && err != pilosa.ErrIndexExists {
-		t.Fatal(err)
+		t.Fatal("create new index:", err)
 	} else if err := m2.Client().CreateFrame(context.Background(), "i", "f", pilosa.FrameOptions{}); err != nil {
-		t.Fatal(err)
+		t.Fatal("create new frame:", err)
 	} else if err := client.RestoreFrame(context.Background(), m0.Server.URI.HostPort(), "i", "f"); err != nil {
-		t.Fatal(err)
+		t.Fatal("restore frame:", err)
 	}
 
 	// Query row on second cluster.
 	if res, err := m2.Query("i", "", `Bitmap(rowID=1, frame="f")`); err != nil {
-		t.Fatal(err)
+		t.Fatal("another bitmap query:", err)
 	} else if res != `{"results":[{"attrs":{},"bits":[100,1000,100000,200000,400000,600000,800000]}]}`+"\n" {
-		t.Fatalf("unexpected result: %s", res)
+		t.Fatalf("2unexpected result: %s", res)
 	}
 }
 
@@ -373,27 +366,27 @@ func tempMkdir(t *testing.T) string {
 func TestCountOpenFiles(t *testing.T) {
 	// Windows is not supported yet
 	if runtime.GOOS == "windows" {
-		return
+		t.Skip("Skipping unsupported CountOpenFiles test on Windows.")
 	}
-	if pilosa.CountOpenFiles() == 0 {
-		t.Error("Invalid open file handle count")
+	count, err := pilosa.CountOpenFiles()
+	if err != nil {
+		t.Errorf("CountOpenFiles failed: %s", err)
+	}
+	if count == 0 {
+		t.Error("CountOpenFiles returned invalid value 0.")
 	}
 }
 
-/* TODO: Fix this test. See #951.
 // Ensure program can send/receive broadcast messages.
 func TestMain_SendReceiveMessage(t *testing.T) {
+	t.SkipNow()
+	// TODO re-enable this test when we have a better way of
+	// creating a multi-node cluster that doesn't have data races.
 	m0 := MustRunMain()
 	defer m0.Close()
 
 	m1 := MustRunMain()
 	defer m1.Close()
-
-	// Get available ports for internal messaging
-	freePorts, err := availablePorts(2)
-	if err != nil {
-		t.Fatal(err)
-	}
 
 	// Update cluster config
 	m0.Server.Cluster.Nodes = []*pilosa.Node{
@@ -405,19 +398,17 @@ func TestMain_SendReceiveMessage(t *testing.T) {
 	// Configure node0
 
 	// get the host portion of addr to use for binding
-	gossipHost, _, err := net.SplitHostPort(m0.Server.URI.HostPort())
-	if err != nil {
-		gossipHost = m0.Server.URI.HostPort()
-	}
-	gossipPort, err := strconv.Atoi(freePorts[0])
+	gossipHost := m0.Server.URI.Host()
+	gossipPort := 0
+	gossipSeed := ""
+
+	gossipNodeSet0, err := gossip.NewGossipNodeSet(m0.Server.URI.HostPort(), gossipHost, gossipPort, gossipSeed, m0.Server, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	gossipSeed := gossipHost + ":" + freePorts[0]
-
-	gossipNodeSet0 := gossip.NewGossipNodeSet(m0.Server.URI.HostPort(), gossipHost, gossipPort, gossipSeed, m0.Server, nil)
 	m0.Server.Cluster.NodeSet = gossipNodeSet0
-	m0.Server.Broadcaster = gossipNodeSet0
+	m0.Server.Broadcaster = m0.Server
+	m0.Server.Gossiper = gossipNodeSet0
 	m0.Server.Handler.Broadcaster = m0.Server.Broadcaster
 	m0.Server.Holder.Broadcaster = m0.Server.Broadcaster
 	m0.Server.BroadcastReceiver = gossipNodeSet0
@@ -433,18 +424,17 @@ func TestMain_SendReceiveMessage(t *testing.T) {
 	// Configure node1
 
 	// get the host portion of addr to use for binding
-	gossipHost, _, err = net.SplitHostPort(m1.Server.URI.HostPort())
-	if err != nil {
-		gossipHost = m1.Server.URI.HostPort()
-	}
-	gossipPort, err = strconv.Atoi(freePorts[1])
+	gossipHost = m1.Server.URI.Host()
+	gossipPort = 0
+	gossipSeed = gossipNodeSet0.Seed()
+
+	gossipNodeSet1, err := gossip.NewGossipNodeSet(m1.Server.URI.HostPort(), gossipHost, gossipPort, gossipSeed, m1.Server, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	gossipNodeSet1 := gossip.NewGossipNodeSet(m1.Server.URI.HostPort(), gossipHost, gossipPort, gossipSeed, m1.Server, nil)
 	m1.Server.Cluster.NodeSet = gossipNodeSet1
-	m1.Server.Broadcaster = gossipNodeSet1
+	m1.Server.Broadcaster = m1.Server
+	m1.Server.Gossiper = gossipNodeSet1
 	m1.Server.Handler.Broadcaster = m1.Server.Broadcaster
 	m1.Server.Holder.Broadcaster = m1.Server.Broadcaster
 	m1.Server.BroadcastReceiver = gossipNodeSet1
@@ -562,37 +552,6 @@ func TestMain_SendReceiveMessage(t *testing.T) {
 		t.Fatal("frame not found")
 	}
 }
-*/
-
-// availablePorts returns a slice of ports that can be used for testing.
-func availablePorts(cnt int) ([]string, error) {
-	rtn := []string{}
-
-	for i := 0; i < cnt; i++ {
-		port, err := getPort()
-		if err != nil {
-			return nil, err
-		}
-		rtn = append(rtn, strconv.Itoa(port))
-	}
-	return rtn, nil
-}
-
-// Ask the kernel for a free open port that is ready to use
-func getPort() (int, error) {
-	addr, err := net.ResolveTCPAddr("tcp", "localhost:0")
-	if err != nil {
-		return 0, err
-	}
-
-	l, err := net.ListenTCP("tcp", addr)
-	if err != nil {
-		return 0, err
-	}
-	defer l.Close()
-
-	return l.Addr().(*net.TCPAddr).Port, nil
-}
 
 // Main represents a test wrapper for main.Main.
 type Main struct {
@@ -630,6 +589,7 @@ func NewMain() *Main {
 // MustRunMain returns a new, running Main. Panic on error.
 func MustRunMain() *Main {
 	m := NewMain()
+	m.Config.Metric.Diagnostics = false // Disable diagnostics.
 	if err := m.Run(); err != nil {
 		panic(err)
 	}
@@ -654,8 +614,6 @@ func (m *Main) Reopen() error {
 	m.Server.Network = *test.Network
 	m.Config = config
 
-	println("dbg/network", *test.Network)
-
 	// Run new program.
 	if err := m.Run(); err != nil {
 		return err
@@ -668,7 +626,7 @@ func (m *Main) URL() string { return "http://" + m.Server.Addr().String() }
 
 // Client returns a client to connect to the program.
 func (m *Main) Client() *pilosa.InternalHTTPClient {
-	client, err := pilosa.NewInternalHTTPClient(m.Server.URI.HostPort(), nil)
+	client, err := pilosa.NewInternalHTTPClient(m.Server.URI.HostPort(), pilosa.GetHTTPClient(nil))
 	if err != nil {
 		panic(err)
 	}

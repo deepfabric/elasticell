@@ -28,7 +28,7 @@ ignored = ["github.com/deepfabric/go-nemo", "github.com/deepfabric/c-nemo"]
 
 [[constraint]]
   name = "github.com/coreos/etcd"
-  version = "3.1.2"
+  version = "=3.1.2"
 
 [[constraint]]
   name = "github.com/coreos/pkg"
@@ -79,6 +79,11 @@ ignored = ["github.com/deepfabric/go-nemo", "github.com/deepfabric/c-nemo"]
   branch = "master"
 
 [[constraint]]
+  name = "github.com/pilosa/pilosa"
+  source = "github.com/deepfabric/pilosa"
+  branch = "master"
+
+[[constraint]]
   name = "github.com/pingcap/check"
   branch = "master"
 
@@ -96,7 +101,7 @@ ignored = ["github.com/deepfabric/go-nemo", "github.com/deepfabric/c-nemo"]
 
 [[constraint]]
   name = "github.com/shirou/gopsutil"
-  branch = "master"
+  version = "2.17.11"
 
 [[constraint]]
   name = "github.com/stretchr/testify"

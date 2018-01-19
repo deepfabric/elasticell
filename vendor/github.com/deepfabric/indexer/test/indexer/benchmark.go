@@ -86,7 +86,7 @@ func prepareIndexer(numDocs int, docProts []*cql.DocumentWithIdx) (ir *indexer.I
 
 func main() {
 	flag.Parse()
-	N := 100000
+	N := 1000000
 	S := 1000
 
 	if "" != *pprof {
