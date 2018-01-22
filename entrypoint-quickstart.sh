@@ -23,6 +23,8 @@ start_elasticell_pd 2
 start_elasticell_pd 3
 echo "pd cluster is started"
 
+sleep 2
+
 echo "begin to start cell cluster"
 start_elasticell_cell 1
 sleep 1
