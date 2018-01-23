@@ -115,7 +115,15 @@ func (s *Store) allocateDocID(cellID uint64) (docID uint64, err error) {
 func (s *Store) getIndexer(cellID uint64) (idxer *indexer.Indexer, err error) {
 	var ok bool
 	var docProt *cql.DocumentWithIdx
+	s.rwlock.RLock()
 	if idxer, ok = s.indexers[cellID]; ok {
+		s.rwlock.RUnlock()
+		return
+	}
+	s.rwlock.RUnlock()
+	s.rwlock.Lock()
+	if idxer, ok = s.indexers[cellID]; ok {
+		s.rwlock.Unlock()
 		return
 	}
 	indicesDir := filepath.Join(globalCfg.DataPath, "index", fmt.Sprintf("%d", cellID))
@@ -132,6 +140,7 @@ func (s *Store) getIndexer(cellID uint64) (idxer *indexer.Indexer, err error) {
 		}
 	}
 	s.indexers[cellID] = idxer
+	s.rwlock.Unlock()
 	return
 }
 
@@ -556,7 +565,9 @@ func (s *Store) indexDestroyCell(idxDestroyReq *pdpb.IndexDestroyCellRequest, wb
 	if idxer, err = s.getIndexer(cellID); err != nil {
 		return
 	}
+	s.rwlock.Lock()
 	delete(s.indexers, idxDestroyReq.GetCellID())
+	s.rwlock.Unlock()
 	if err = idxer.Destroy(); err != nil {
 		return
 	}
