@@ -20,6 +20,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/deepfabric/elasticell/pkg/log"
@@ -395,9 +396,13 @@ func (s *Store) startCellSplitCheckTask() {
 }
 
 func (s *Store) startServeIndexTask() {
-	s.runner.RunCancelableTask(func(ctx context.Context) {
-		s.readyToServeIndex(ctx)
-	})
+	var seq_auto uint64
+	for i := 0; i < globalCfg.NumIdxReqQueues; i++ {
+		s.runner.RunCancelableTask(func(ctx context.Context) {
+			seq := atomic.AddUint64(&seq_auto, 1) - 1
+			s.readyToServeIndex(ctx, seq)
+		})
+	}
 	s.runner.RunCancelableTask(func(ctx context.Context) {
 		s.readyToServeQuery(ctx)
 	})

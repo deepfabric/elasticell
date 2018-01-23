@@ -188,14 +188,14 @@ func (s *Store) handleIndicesChange(rspIndices []*pdpb.IndexDef) (err error) {
 	return
 }
 
-func (s *Store) readyToServeIndex(ctx context.Context) {
+func (s *Store) readyToServeIndex(ctx context.Context, seq uint64) {
 	tickChan := time.Tick(10 * time.Second)
 	var absorbed bool
 	var err error
 	for {
 		select {
 		case <-ctx.Done():
-			log.Infof("store-index: readyToServeIndex stopped")
+			log.Infof("store-index[seq-%d]: readyToServeIndex stopped", seq)
 			return
 		case <-tickChan:
 			for {
@@ -203,15 +203,15 @@ func (s *Store) readyToServeIndex(ctx context.Context) {
 				// - an error
 				// - the queue becomes empty
 				// - ctx is done
-				if absorbed, err = s.handleIdxReqQueue(); err != nil {
-					log.Errorf("store-index: handleIdxReqQueue failed with error\n%+v", err)
+				if absorbed, err = s.handleIdxReqQueue(seq); err != nil {
+					log.Errorf("store-index[seq-%d]: handleIdxReqQueue failed with error\n%+v", seq, err)
 					break
 				} else if absorbed {
 					break
 				}
 				select {
 				case <-ctx.Done():
-					log.Infof("store-index: readyToServeIndex stopped")
+					log.Infof("store-index[seq-%d]: readyToServeIndex stopped", seq)
 					return
 				default:
 				}
@@ -225,9 +225,9 @@ func (s *Store) readyToServeIndex(ctx context.Context) {
 // - one idxRebuildReq
 // - mixed multiple (at max IdxSplitReqBatch) idxSplitReqs and multiple idxKeyReqs (total at max IdxReqBatch)
 // For the third case, reorder requests so that idxSplitReqs occur before idxKeyReqs.
-func (s *Store) handleIdxReqQueue() (absorbed bool, err error) {
+func (s *Store) handleIdxReqQueue(seq uint64) (absorbed bool, err error) {
 	listEng := s.getListEngine()
-	idxReqQueueKey := getIdxReqQueueKey()
+	idxReqQueueKey := getIdxReqQueueKey(uint64(seq))
 	var idxKeyReq, lastIdxKeyReq *pdpb.IndexKeyRequest
 	var idxKeyReqList []*pdpb.IndexKeyRequest
 	var idxSplitReq *pdpb.IndexSplitRequest
@@ -260,7 +260,7 @@ func (s *Store) handleIdxReqQueue() (absorbed bool, err error) {
 		if idxDestroyReq = idxReq.GetIdxDestroy(); idxDestroyReq != nil {
 			if i == 0 {
 				if err = s.indexDestroyCell(idxDestroyReq, wb); err != nil {
-					log.Errorf("store-index: failed to handle destroy %+v\n%+v", idxDestroyReq, err)
+					log.Errorf("store-index[seq-%d]: failed to handle destroy %+v\n%+v", seq, idxDestroyReq, err)
 				}
 				numProcessed++
 			}
@@ -268,7 +268,7 @@ func (s *Store) handleIdxReqQueue() (absorbed bool, err error) {
 		} else if idxRebuildReq = idxReq.GetIdxRebuild(); idxRebuildReq != nil {
 			if i == 0 {
 				if err = s.indexRebuildCell(idxRebuildReq, wb, dirtyIndices); err != nil {
-					log.Errorf("store-index: failed to handle rebuild %+v\n%+v", idxRebuildReq, err)
+					log.Errorf("store-index[seq-%d]: failed to handle rebuild %+v\n%+v", seq, idxRebuildReq, err)
 				}
 				numProcessed++
 			}
@@ -326,7 +326,7 @@ func (s *Store) handleIdxReqQueue() (absorbed bool, err error) {
 		}
 	}
 	if numIdxSplitReqs != 0 || numIdxKeyReqs != 0 {
-		log.Infof("store-index: done batch processing %d idxSplitReqs and %d idxKeyReqs", numIdxSplitReqs, numIdxKeyReqs)
+		log.Infof("store-index[seq-%d]: done batch processing %d idxSplitReqs and %d idxKeyReqs", seq, numIdxSplitReqs, numIdxKeyReqs)
 	}
 
 	if err = s.engine.GetKVEngine().Write(wb); err != nil {
@@ -660,7 +660,7 @@ func convertToDocProt(idxDef *pdpb.IndexDef) (docProt *cql.DocumentWithIdx, err 
 		case pdpb.Float64:
 			uintProps = append(uintProps, cql.UintProp{Name: f.GetName(), ValLen: 8, IsFloat: true})
 		default:
-			err = errors.Errorf("invalid filed type %+v of idxDef %+v", f.GetType().String(), idxDef)
+			err = errors.Errorf("invalid field type %+v of idxDef %+v", f.GetType().String(), idxDef)
 			return
 		}
 	}
@@ -727,7 +727,7 @@ func convertToDocument(idxDef *pdpb.IndexDef, docID uint64, pairs []*raftcmdpb.F
 				}
 				doc.Document.UintProps = append(doc.Document.UintProps, cql.UintProp{Name: f.GetName(), Val: val, ValLen: 8, IsFloat: true})
 			default:
-				err = errors.Errorf("invalid filed type %+v of idxDef %+v", f.GetType().String(), idxDef)
+				err = errors.Errorf("invalid field type %+v of idxDef %+v", f.GetType().String(), idxDef)
 				return
 			}
 		}

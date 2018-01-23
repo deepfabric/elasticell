@@ -51,6 +51,7 @@ type Cfg struct {
 	WorkerCountSentSnap       uint64
 	WorkerCountApply          uint64
 	EnableMetricsRequest      bool
+	NumIdxReqQueues           int
 }
 
 // NewCfg return default cfg

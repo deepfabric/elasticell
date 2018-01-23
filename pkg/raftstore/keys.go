@@ -217,8 +217,13 @@ func getDocIDKey(docID uint64) []byte {
 	return data
 }
 
-func getIdxReqQueueKey() []byte {
-	return idxReqQueueKey
+func getIdxReqQueueKey(seq uint64) []byte {
+	buf := acquireBuf()
+	buf.Write(idxReqQueueKey)
+	buf.WriteInt64(int64(seq))
+	_, data, _ := buf.ReadBytes(buf.Readable())
+	releaseBuf(buf)
+	return data
 }
 
 func getRaftLogIndex(key []byte) (uint64, error) {

@@ -868,7 +868,7 @@ func (ps *peerStorage) setApplySnapJob(job *util.Job) {
 
 func (s *Store) notifySplitCellIndex(leftCellID uint64, rightCellID uint64) (err error) {
 	listEng := s.getListEngine()
-	idxReqQueueKey := getIdxReqQueueKey()
+	idxReqQueueKey := getIdxReqQueueKey(rightCellID % uint64(globalCfg.NumIdxReqQueues))
 	idxReq := &pdpb.IndexRequest{
 		IdxSplit: &pdpb.IndexSplitRequest{
 			LeftCellID:  leftCellID,
@@ -886,7 +886,7 @@ func (s *Store) notifySplitCellIndex(leftCellID uint64, rightCellID uint64) (err
 
 func (s *Store) notifyDestroyCellIndex(cell *metapb.Cell) (err error) {
 	listEng := s.getListEngine()
-	idxReqQueueKey := getIdxReqQueueKey()
+	idxReqQueueKey := getIdxReqQueueKey(cell.ID % uint64(globalCfg.NumIdxReqQueues))
 	idxReq := &pdpb.IndexRequest{
 		IdxDestroy: &pdpb.IndexDestroyCellRequest{
 			CellID: cell.GetID(),
@@ -903,7 +903,7 @@ func (s *Store) notifyDestroyCellIndex(cell *metapb.Cell) (err error) {
 
 func (s *Store) notifyRebuildCellIndex(cell *metapb.Cell) (err error) {
 	listEng := s.getListEngine()
-	idxReqQueueKey := getIdxReqQueueKey()
+	idxReqQueueKey := getIdxReqQueueKey(cell.ID % uint64(globalCfg.NumIdxReqQueues))
 	idxReq := &pdpb.IndexRequest{
 		IdxRebuild: &pdpb.IndexRebuildCellRequest{
 			CellID: cell.GetID(),

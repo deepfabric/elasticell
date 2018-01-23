@@ -8,6 +8,6 @@ This document defines the roadmap for Elasticell development.
 - [ ] DELETE
 
 ##### __Redis strings commands__
-- [ ] APPEND 
+- [ ] APPEND
 - [ ] BITCOUNT
-- [ ] BITFILED 
+- [ ] BITFIELD
