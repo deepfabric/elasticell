@@ -1,0 +1,25 @@
+- hosts: pd
+  remote_user: root
+  tasks:
+  - name: pd mkdir
+    shell: "{{ item }}"
+    with_items: 
+    - mkdir -p {{ ELASTICELL_DIR }}/pd/data
+    - mkdir -p {{ ELASTICELL_DIR }}/log
+
+- hosts: cell
+  remote_user: root
+  tasks:
+  - name: cell mkdir
+    shell: "{{ item }}"
+    with_items: 
+    - mkdir -p {{ ELASTICELL_DIR }}/cell/data
+    - mkdir -p {{ ELASTICELL_DIR }}/log
+
+- hosts: proxy
+  remote_user: root
+  tasks:
+  - name: proxy mkdir
+    shell: "{{ item }}"
+    with_items: 
+    - mkdir -p {{ ELASTICELL_DIR }}/log
