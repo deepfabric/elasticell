@@ -333,7 +333,7 @@ message IndexKeyRequest {
 	optional uint64 cellID   = 1 [(gogoproto.nullable) = false];
     optional metapb.CellEpoch epoch = 2 [(gogoproto.nullable) = false];
     optional string idxName  = 3 [(gogoproto.nullable) = false];
-	repeated bytes dataKeys  = 4;
+	repeated bytes cmdArgs   = 4;
 	optional bool isDel      = 5 [(gogoproto.nullable) = false];
 }
 

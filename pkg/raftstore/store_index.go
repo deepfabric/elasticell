@@ -229,23 +229,18 @@ func (s *Store) readyToServeIndex(ctx context.Context, seq uint64) {
 	}
 }
 
-// handleIdxReqQueue handles:
-// - one idxDestroyReq
-// - one idxRebuildReq
-// - mixed multiple (at max IdxSplitReqBatch) idxSplitReqs and multiple idxKeyReqs (total at max IdxReqBatch)
-// For the third case, reorder requests so that idxSplitReqs occur before idxKeyReqs.
+// handleIdxReqQueue handles idxReqs in batch (up-limit is IdxReqBatch) inside given persistent queue.
 func (s *Store) handleIdxReqQueue(seq uint64) (absorbed bool, err error) {
 	listEng := s.getListEngine()
 	idxReqQueueKey := getIdxReqQueueKey(uint64(seq))
-	var idxKeyReq, lastIdxKeyReq *pdpb.IndexKeyRequest
-	var idxKeyReqList []*pdpb.IndexKeyRequest
+	var idxKeyReq *pdpb.IndexKeyRequest
 	var idxSplitReq *pdpb.IndexSplitRequest
 	var idxDestroyReq *pdpb.IndexDestroyCellRequest
 	var idxRebuildReq *pdpb.IndexRebuildCellRequest
 	var numProcessed int
-	var ok bool
 	var idxReqBs [][]byte
-	var numIdxSplitReqs, numIdxKeyReqs int
+	var numIdxDestroyReqs, numIdxRebuildReqs, numIdxSplitReqs, numIdxKeyReqs int
+	begin := time.Now()
 	if idxReqBs, err = listEng.LRange(idxReqQueueKey, 0, IdxReqBatch-1); err != nil {
 		return
 	}
@@ -256,86 +251,38 @@ func (s *Store) handleIdxReqQueue(seq uint64) (absorbed bool, err error) {
 	}
 	wb := s.engine.GetKVEngine().NewWriteBatch()
 	dirtyIndices := make(map[*indexer.Indexer]int)
-	splits := CellSplits{
-		ancestorCell:   make(map[uint64]uint64),
-		offspringCells: make(map[uint64][]uint64),
-	}
-	idxKeyReqLists := make(map[uint64][]*pdpb.IndexKeyRequest)
 	for i := 0; i < numIdxReq; i++ {
 		idxReq := &pdpb.IndexRequest{}
 		if err = idxReq.Unmarshal(idxReqBs[i]); err != nil {
 			return
 		}
 		if idxDestroyReq = idxReq.GetIdxDestroy(); idxDestroyReq != nil {
-			if i == 0 {
-				if err = s.indexDestroyCell(idxDestroyReq, wb); err != nil {
-					log.Errorf("store-index[seq-%d]: failed to handle destroy %+v\n%+v", seq, idxDestroyReq, err)
-				}
-				numProcessed++
+			if err = s.indexDestroyCell(idxDestroyReq, wb); err != nil {
+				log.Errorf("store-index[seq-%d]: failed to handle idxDestroyReq %+v\n%+v", seq, idxDestroyReq, err)
 			}
-			break
+			numProcessed++
+			numIdxDestroyReqs++
 		} else if idxRebuildReq = idxReq.GetIdxRebuild(); idxRebuildReq != nil {
-			if i == 0 {
-				if err = s.indexRebuildCell(idxRebuildReq, wb, dirtyIndices); err != nil {
-					log.Errorf("store-index[seq-%d]: failed to handle rebuild %+v\n%+v", seq, idxRebuildReq, err)
-				}
-				numProcessed++
+			if err = s.indexRebuildCell(idxRebuildReq, wb, dirtyIndices); err != nil {
+				log.Errorf("store-index[seq-%d]: failed to handle idxRebuildReq %+v\n%+v", seq, idxRebuildReq, err)
 			}
-			break
+			numProcessed++
+			numIdxRebuildReqs++
 		} else if idxSplitReq = idxReq.GetIdxSplit(); idxSplitReq != nil {
 			left := idxSplitReq.LeftCellID
 			right := idxSplitReq.RightCellID
-			var ancestor uint64
-			var offspring []uint64
-			if ancestor, ok = splits.ancestorCell[left]; ok {
-				splits.ancestorCell[right] = ancestor
-				splits.offspringCells[ancestor] = append(splits.offspringCells[ancestor], right)
-			} else {
-				splits.ancestorCell[right] = left
-				if offspring, ok = splits.offspringCells[left]; ok {
-					splits.offspringCells[left] = append(offspring, right)
-				} else {
-					splits.offspringCells[left] = []uint64{right}
-				}
+			if err = s.indexSplitCell(left, right, wb, dirtyIndices); err != nil {
+				log.Errorf("store-index[seq-%d]: failed to handle idxSplitReq %+v\n%+v", seq, idxSplitReq, err)
 			}
 			numProcessed++
 			numIdxSplitReqs++
-			if numIdxSplitReqs >= IdxSplitReqBatch {
-				break
-			}
 		} else if idxKeyReq = idxReq.GetIdxKey(); idxKeyReq != nil {
-			if idxKeyReqList, ok = idxKeyReqLists[idxKeyReq.CellID]; ok {
-				lastIdxKeyReq = idxKeyReqList[len(idxKeyReqList)-1]
-				if idxKeyReq.Epoch.CellVer == lastIdxKeyReq.Epoch.CellVer && idxKeyReq.Epoch.ConfVer == lastIdxKeyReq.Epoch.ConfVer {
-					lastIdxKeyReq.DataKeys = append(lastIdxKeyReq.DataKeys, idxKeyReq.DataKeys...)
-				} else {
-					idxKeyReqList = append(idxKeyReqList, idxKeyReq)
-					idxKeyReqLists[idxKeyReq.CellID] = idxKeyReqList
-				}
-			} else {
-				idxKeyReqLists[idxKeyReq.CellID] = []*pdpb.IndexKeyRequest{idxKeyReq}
+			if err = s.handleIdxKeyReq(idxKeyReq, wb, dirtyIndices); err != nil {
+				log.Errorf("store-index[seq-%d]: failed to handle idxKeyReq %+v\n%+v", seq, idxKeyReq, err)
 			}
 			numProcessed++
 			numIdxKeyReqs++
 		}
-	}
-
-	for ancestor, offspring := range splits.offspringCells {
-		for _, right := range offspring {
-			if err = s.indexSplitCell(ancestor, right, wb, dirtyIndices); err != nil {
-				return
-			}
-		}
-	}
-	for _, idxKeyReqList = range idxKeyReqLists {
-		for _, idxKeyReq = range idxKeyReqList {
-			if err = s.handleIdxKeyReq(idxKeyReq, wb, dirtyIndices); err != nil {
-				return
-			}
-		}
-	}
-	if numIdxSplitReqs != 0 || numIdxKeyReqs != 0 {
-		log.Infof("store-index[seq-%d]: done batch processing %d idxSplitReqs and %d idxKeyReqs", seq, numIdxSplitReqs, numIdxKeyReqs)
 	}
 
 	if err = s.engine.GetKVEngine().Write(wb); err != nil {
@@ -347,12 +294,14 @@ func (s *Store) handleIdxReqQueue(seq uint64) (absorbed bool, err error) {
 			return
 		}
 	}
-	for i := 0; i < numProcessed; i++ {
+	for i := 0; i < numIdxReq; i++ {
 		if _, err = listEng.LPop(idxReqQueueKey); err != nil {
 			err = errors.Wrap(err, "")
 			return
 		}
 	}
+	duration := time.Now().Sub(begin)
+	log.Infof("store-index[seq-%d]: done batch processing idxReqs %d-%d-%d-%d in %v", seq, numIdxDestroyReqs, numIdxRebuildReqs, numIdxSplitReqs, numIdxKeyReqs, duration)
 	return
 }
 
@@ -373,38 +322,47 @@ func (s *Store) handleIdxKeyReq(idxKeyReq *pdpb.IndexKeyRequest, wb storage.Writ
 	s.rwlock.RLock()
 	_, idxIsLive = s.indices[idxKeyReq.GetIdxName()]
 	s.rwlock.RUnlock()
-	for _, key := range idxKeyReq.GetDataKeys() {
-		err = s.deleteIndexedKey(key, idxKeyReq.IsDel || !idxIsLive, wb, dirtyIndices)
-		if idxKeyReq.IsDel {
-			if err != nil {
-				log.Errorf("store-index[cell-%d]: failed to delete indexed key %+v from index %s\n%+v",
-					idxKeyReq.CellID, key, idxKeyReq.GetIdxName(), err)
-				continue
-			}
-			log.Debugf("store-index[cell-%d]: deleted key %+v from index %s",
-				idxKeyReq.CellID, key, idxKeyReq.GetIdxName())
-		} else if idxIsLive {
-			targetCellID := idxKeyReq.CellID
-			if epochStale && bytes.Compare(key, cellEnd) >= 0 {
-				item := s.keyRanges.Search(getOriginKey(key))
-				if item.ID > 0 {
-					targetCellID = item.ID
-				} else {
-					log.Debugf("store-index[cell-%d]: skipped adding key %s since there's no responsive cell",
-						idxKeyReq.CellID, key)
-					continue
-				}
-			}
-			if err = s.addIndexedKey(targetCellID, idxKeyReq.GetIdxName(), 0, key, wb, dirtyIndices); err != nil {
-				log.Errorf("store-index[cell-%d]: failed to add key %s to index %s\n%+v", targetCellID, key, idxKeyReq.GetIdxName(), err)
-				continue
+	key := idxKeyReq.CmdArgs[0]
+	var changed bool
+	var pairs []string
+	changed, err = s.deleteIndexedKey(key, idxKeyReq.IsDel || !idxIsLive, wb, dirtyIndices)
+	if idxKeyReq.IsDel {
+		if err != nil {
+			log.Errorf("store-index[cell-%d]: failed to delete indexed key %+v from index %s\n%+v",
+				idxKeyReq.CellID, key, idxKeyReq.GetIdxName(), err)
+			return
+		}
+		log.Debugf("store-index[cell-%d]: deleted key %+v from index %s",
+			idxKeyReq.CellID, key, idxKeyReq.GetIdxName())
+	} else if idxIsLive {
+		targetCellID := idxKeyReq.CellID
+		if epochStale && bytes.Compare(key, cellEnd) >= 0 {
+			item := s.keyRanges.Search(getOriginKey(key))
+			if item.ID > 0 {
+				targetCellID = item.ID
+			} else {
+				log.Debugf("store-index[cell-%d]: skipped adding key %s since there's no responsive cell",
+					idxKeyReq.CellID, key)
+				return
 			}
 		}
+		if !changed {
+			// It's an insert instead of update. Needn't invoke HGetAll.
+			pairs = make([]string, len(idxKeyReq.CmdArgs)-1)
+			for i := 1; i < len(idxKeyReq.CmdArgs); i++ {
+				pairs[i-1] = string(idxKeyReq.CmdArgs[i])
+			}
+		}
+		if err = s.addIndexedKey(targetCellID, idxKeyReq.GetIdxName(), 0, key, pairs, wb, dirtyIndices); err != nil {
+			log.Errorf("store-index[cell-%d]: failed to add key %s to index %s\n%+v", targetCellID, key, idxKeyReq.GetIdxName(), err)
+			return
+		}
 	}
+
 	return
 }
 
-func (s *Store) deleteIndexedKey(dataKey []byte, isDel bool, wb storage.WriteBatch, dirtyIndices map[*indexer.Indexer]int) (err error) {
+func (s *Store) deleteIndexedKey(dataKey []byte, isDel bool, wb storage.WriteBatch, dirtyIndices map[*indexer.Indexer]int) (changed bool, err error) {
 	var idxer *indexer.Indexer
 	var metaValB []byte
 	if metaValB, err = s.engine.GetDataEngine().GetIndexInfo(dataKey); err != nil || len(metaValB) == 0 {
@@ -424,6 +382,7 @@ func (s *Store) deleteIndexedKey(dataKey []byte, isDel bool, wb storage.WriteBat
 		return
 	}
 	dirtyIndices[idxer] = 0
+	changed = true
 	if err = wb.Delete(getDocIDKey(docID)); err != nil {
 		return
 	}
@@ -437,7 +396,7 @@ func (s *Store) deleteIndexedKey(dataKey []byte, isDel bool, wb storage.WriteBat
 	return
 }
 
-func (s *Store) addIndexedKey(cellID uint64, idxNameIn string, docID uint64, dataKey []byte, wb storage.WriteBatch, dirtyIndices map[*indexer.Indexer]int) (err error) {
+func (s *Store) addIndexedKey(cellID uint64, idxNameIn string, docID uint64, dataKey []byte, pairs []string, wb storage.WriteBatch, dirtyIndices map[*indexer.Indexer]int) (err error) {
 	var idxer *indexer.Indexer
 	var metaVal *pdpb.KeyMetaVal
 	var metaValB []byte
@@ -466,10 +425,17 @@ func (s *Store) addIndexedKey(cellID uint64, idxNameIn string, docID uint64, dat
 	}
 
 	var idxDef *pdpb.IndexDef
-	var pairs []*raftcmdpb.FVPair
-	hashEng := s.engine.GetHashEngine()
-	if pairs, err = hashEng.HGetAll(dataKey); err != nil {
-		return
+	if len(pairs) == 0 {
+		var fvPairs []*raftcmdpb.FVPair
+		hashEng := s.engine.GetHashEngine()
+		if fvPairs, err = hashEng.HGetAll(dataKey); err != nil {
+			return
+		}
+		pairs = make([]string, 2*len(fvPairs))
+		for i, fvPair := range fvPairs {
+			pairs[2*i] = string(fvPair.GetField())
+			pairs[2*i+1] = string(fvPair.GetValue())
+		}
 	}
 	if idxDef, ok = s.indices[idxNameIn]; !ok {
 		err = errors.Errorf("index %s doesn't exist", idxNameIn)
@@ -539,7 +505,7 @@ func (s *Store) indexSplitCell(cellIDL, cellIDR uint64, wb storage.WriteBatch, d
 				if _, err = idxerL.Del(idxName, docID); err != nil {
 					return
 				}
-				if err = s.addIndexedKey(cellIDR, idxName, docID, dataKey, wb, dirtyIndices); err != nil {
+				if err = s.addIndexedKey(cellIDR, idxName, docID, dataKey, []string{}, wb, dirtyIndices); err != nil {
 					return
 				}
 			}
@@ -631,16 +597,9 @@ func (s *Store) indexRebuildCell(idxRebuildReq *pdpb.IndexRebuildCellRequest, wb
 				return
 			}
 		}
-		var idxName string
-		for name, reExp := range s.reExps {
-			matched := reExp.Match(getOriginKey(dataKey))
-			if matched {
-				idxName = name
-				break
-			}
-		}
+		idxName := s.matchIndex(getOriginKey(dataKey))
 		if idxName != "" {
-			if err = s.addIndexedKey(cellID, idxName, 0, dataKey, wb, dirtyIndices); err != nil {
+			if err = s.addIndexedKey(cellID, idxName, 0, dataKey, []string{}, wb, dirtyIndices); err != nil {
 				return
 			}
 			indexed++
@@ -648,6 +607,19 @@ func (s *Store) indexRebuildCell(idxRebuildReq *pdpb.IndexRebuildCellRequest, wb
 		return
 	})
 	log.Infof("store-index[cell-%d]: done cell index rebuild %+v, has scanned %d dataKeys, has indexed %d dataKeys, %d errors", idxRebuildReq.CellID, idxRebuildReq, scanned, indexed, cntErr)
+	return
+}
+
+func (s *Store) matchIndex(key []byte) (idxName string) {
+	s.rwlock.RLock()
+	for name, reExp := range s.reExps {
+		matched := reExp.Match(key)
+		if matched {
+			idxName = name
+			break
+		}
+	}
+	s.rwlock.RUnlock()
 	return
 }
 
@@ -686,7 +658,7 @@ func convertToDocProt(idxDef *pdpb.IndexDef) (docProt *cql.DocumentWithIdx, err 
 	return
 }
 
-func convertToDocument(idxDef *pdpb.IndexDef, docID uint64, pairs []*raftcmdpb.FVPair) (doc *cql.DocumentWithIdx, err error) {
+func convertToDocument(idxDef *pdpb.IndexDef, docID uint64, pairs []string) (doc *cql.DocumentWithIdx, err error) {
 	doc = &cql.DocumentWithIdx{
 		Document: cql.Document{
 			DocID:     docID,
@@ -696,9 +668,9 @@ func convertToDocument(idxDef *pdpb.IndexDef, docID uint64, pairs []*raftcmdpb.F
 		Index: idxDef.GetName(),
 	}
 	log.Debugf("store-index: idxDef %+v, docID %+v, pairs %+v", idxDef, docID, pairs)
-	for _, pair := range pairs {
-		field := string(pair.GetField())
-		valS := string(pair.GetValue())
+	for i := 0; i < len(pairs); i += 2 {
+		field := pairs[i]
+		valS := pairs[i+1]
 		var val uint64
 		for _, f := range idxDef.Fields {
 			if f.GetName() != field {

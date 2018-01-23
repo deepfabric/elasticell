@@ -876,8 +876,7 @@ func (s *Store) notifySplitCellIndex(leftCellID uint64, rightCellID uint64) (err
 		},
 	}
 	var idxReqB []byte
-	idxReqB, err = idxReq.Marshal()
-	if err != nil {
+	if idxReqB, err = idxReq.Marshal(); err != nil {
 		return
 	}
 	_, err = listEng.RPush(idxReqQueueKey, idxReqB)
