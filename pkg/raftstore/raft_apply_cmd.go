@@ -427,7 +427,7 @@ func (d *applyDelegate) execWriteRequestIndex(req *raftcmdpb.Request, rsp *raftc
 			end = len(args)
 		}
 		listEng := d.store.getListEngine()
-		idxReqQueueKey := getIdxReqQueueKey()
+		idxReqQueueKey := getIdxReqQueueKey(d.cell.ID % uint64(globalCfg.NumIdxReqQueues))
 		for i := 0; i < end; i++ {
 			key := args[i]
 			var idxName string
