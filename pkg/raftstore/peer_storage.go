@@ -240,7 +240,7 @@ func (ps *peerStorage) setAppliedIndexTerm(appliedIndexTerm uint64) {
 }
 
 func (ps *peerStorage) validateSnap(snap *raftpb.Snapshot) bool {
-	idx := snap.Metadata.Index
+	/*idx := snap.Metadata.Index
 
 	if idx < ps.getTruncatedIndex() {
 		// stale snapshot, should generate again.
@@ -249,7 +249,7 @@ func (ps *peerStorage) validateSnap(snap *raftpb.Snapshot) bool {
 			idx,
 			ps.getTruncatedIndex())
 		return false
-	}
+	}*/
 
 	snapData := &mraft.SnapshotMessage{}
 	err := snapData.Unmarshal(snap.Data)
