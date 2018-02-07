@@ -111,7 +111,7 @@ func (d *memoryDriver) NewWriteBatch() WriteBatch {
 	return newMemoryWriteBatch()
 }
 
-func (d *memoryDriver) Write(wb WriteBatch) error {
+func (d *memoryDriver) Write(wb WriteBatch, sync bool) error {
 	mwb := wb.(*memoryWriteBatch)
 
 	for _, opt := range mwb.opts {

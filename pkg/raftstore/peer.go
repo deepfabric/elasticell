@@ -374,7 +374,7 @@ func (pr *PeerReplicate) destroy() error {
 		return err
 	}
 
-	err = pr.store.engine.Write(wb)
+	err = pr.store.engine.Write(wb, false)
 	if err != nil {
 		return err
 	}

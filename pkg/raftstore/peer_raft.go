@@ -543,7 +543,7 @@ func (pr *PeerReplicate) handleRaftReadyAppend(ctx *readyContext, rd *raft.Ready
 	pr.handleSaveRaftState(ctx)
 	pr.handleSaveApplyState(ctx)
 
-	err := pr.store.engine.Write(ctx.wb)
+	err := pr.store.engine.Write(ctx.wb, globalCfg.EnableSyncRaftLog)
 	if err != nil {
 		log.Fatalf("raftstore[cell-%d]: handle raft ready failure, errors\n %+v",
 			pr.getCell().ID,

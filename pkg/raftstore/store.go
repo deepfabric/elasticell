@@ -236,7 +236,7 @@ func (s *Store) startCells() {
 		log.Fatalf("bootstrap: init store failed, errors:\n %+v", err)
 	}
 
-	err = s.engine.Write(wb)
+	err = s.engine.Write(wb, false)
 	if err != nil {
 		log.Fatalf("bootstrap: init store failed, errors:\n %+v", err)
 	}

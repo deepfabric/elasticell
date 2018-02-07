@@ -31,7 +31,7 @@ type Driver interface {
 	GetZSetEngine() ZSetEngine
 	GetListEngine() ListEngine
 	NewWriteBatch() WriteBatch
-	Write(wb WriteBatch) error
+	Write(wb WriteBatch, sync bool) error
 }
 
 // KVEngine is the storage of KV

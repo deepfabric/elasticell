@@ -136,7 +136,7 @@ func (s *storeTestSuite) TestClearMeta(c *C) {
 	wb := store.engine.NewWriteBatch()
 	store.clearMeta(c1.ID, wb)
 	store.clearMeta(c2.ID, wb)
-	store.engine.Write(wb)
+	store.engine.Write(wb, false)
 
 	data, err := store.engine.GetEngine().Get(getCellStateKey(c1.ID))
 	c.Assert(err, IsNil)

@@ -50,6 +50,7 @@ type Cfg struct {
 	WorkerCountSent           uint64
 	WorkerCountSentSnap       uint64
 	WorkerCountApply          uint64
+	EnableSyncRaftLog         bool
 	EnableMetricsRequest      bool
 }
 

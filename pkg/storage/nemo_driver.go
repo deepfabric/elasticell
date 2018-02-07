@@ -107,8 +107,7 @@ func (n *nemoDrvier) NewWriteBatch() WriteBatch {
 	return newNemoWriteBatch(wb)
 }
 
-func (n *nemoDrvier) Write(wb WriteBatch) error {
+func (n *nemoDrvier) Write(wb WriteBatch, sync bool) error {
 	nwb := wb.(*nemoWriteBatch)
-	// TODO: cfg
-	return n.db.BatchWrite(n.db.GetMetaHandle(), nwb.wb, false)
+	return n.db.BatchWrite(n.db.GetMetaHandle(), nwb.wb, sync)
 }

@@ -130,7 +130,7 @@ func (d *applyDelegate) doApplyRaftCMD(ctx *applyContext) *execResult {
 		}
 	}
 
-	err = d.store.engine.Write(ctx.wb)
+	err = d.store.engine.Write(ctx.wb, false)
 	if err != nil {
 		log.Fatalf("raftstore-apply[cell-%d]: commit apply result failed, errors:\n %+v",
 			d.cell.ID,
