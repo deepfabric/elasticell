@@ -48,7 +48,7 @@ func (s *testNemoWBSuite) TestWB(c *C) {
 	s.set(wb, key3, c)
 	s.delete(wb, key1, c)
 
-	err := s.driver.Write(wb)
+	err := s.driver.Write(wb, false)
 	c.Assert(err, IsNil)
 
 	s.checkNotExists(key1, c)

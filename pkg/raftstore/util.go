@@ -173,7 +173,7 @@ func SaveCell(driver storage.Driver, cell metapb.Cell) error {
 	}
 
 	log.Infof("bootstrap: begin to write first cell to local")
-	return driver.Write(wb)
+	return driver.Write(wb, false)
 }
 
 // DeleteCell delete cell with state, raft state and apply state.
