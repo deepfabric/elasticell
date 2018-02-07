@@ -1,9 +1,0 @@
-- hosts: n1 n5 n6
-  remote_user: root
-  tasks:
-  - name: start pd
-    shell: "{{ item }}"
-    async: 1
-    poll: 0
-    with_items:
-    - /opt/apps/elasticell/bin/start-pd.sh debug

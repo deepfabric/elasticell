@@ -1,0 +1,89 @@
+- hosts: pd1
+  remote_user: root
+  tasks:
+  - name: start pd1
+    shell: >
+      {{ ELASTICELL_DIR }}/pd 
+      --log-file={{ ELASTICELL_DIR }}/log/pd.log 
+      --name=pd1
+      --data={{ ELASTICELL_DIR }}/pd/data
+      --addr-rpc={{ pdIP1 }}:{{ pdRpcPort }}
+      --urls-client=http://{{ pdIP1 }}:{{ clientPort }}
+      --urls-peer=http://{{ pdIP1 }}:{{ peerPort }}
+      --initial-cluster=pd1=http://{{ pdIP1 }}:{{ peerPort }},pd2=http://{{ pdIP2 }}:{{ peerPort }},pd3=http://{{ pdIP3 }}:{{ peerPort }}
+      &
+    async: 1
+    poll: 0
+  - pause:
+      seconds: 2
+
+- hosts: pd2
+  remote_user: root
+  tasks:
+  - name: start pd2
+    shell: >
+      {{ ELASTICELL_DIR }}/pd 
+      --log-file={{ ELASTICELL_DIR }}/log/pd.log 
+      --name=pd2
+      --data={{ ELASTICELL_DIR }}/pd/data
+      --addr-rpc={{ pdIP2 }}:{{ pdRpcPort }}
+      --urls-client=http://{{ pdIP2 }}:{{ clientPort }}
+      --urls-peer=http://{{ pdIP2 }}:{{ peerPort }}
+      --initial-cluster=pd1=http://{{ pdIP1 }}:{{ peerPort }},pd2=http://{{ pdIP2 }}:{{ peerPort }},pd3=http://{{ pdIP3 }}:{{ peerPort }}
+      &
+    async: 1
+    poll: 0
+  - pause:
+      seconds: 2
+
+- hosts: pd3
+  remote_user: root
+  tasks:
+  - name: start pd3
+    shell: >
+      {{ ELASTICELL_DIR }}/pd 
+      --log-file={{ ELASTICELL_DIR }}/log/pd.log 
+      --name=pd3
+      --data={{ ELASTICELL_DIR }}/pd/data
+      --addr-rpc={{ pdIP2 }}:{{ pdRpcPort }}
+      --urls-client=http://{{ pdIP3 }}:{{ clientPort }}
+      --urls-peer=http://{{ pdIP3 }}:{{ peerPort }}
+      --initial-cluster=pd1=http://{{ pdIP1 }}:{{ peerPort }},pd2=http://{{ pdIP2 }}:{{ peerPort }},pd3=http://{{ pdIP3 }}:{{ peerPort }}
+      &
+    async: 1
+    poll: 0
+  - pause:
+      seconds: 2
+
+- hosts: cell
+  remote_user: root
+  tasks:
+  - name: start cell
+    shell: >
+      {{ ELASTICELL_DIR }}/cell
+      --log-file={{ ELASTICELL_DIR }}/log/cell.log
+      --pd={{ pdIP1 }}:{{ pdRpcPort }},{{ pdIP2 }}:{{ pdRpcPort }},{{ pdIP3 }}:{{ pdRpcPort }}
+      --addr={{ addr }}:{{ Port }}
+      --addr-cli={{ addr }}:{{ cliPort }}
+      --zone={{ zone }}
+      --rack={{ rack }}
+      --data={{ ELASTICELL_DIR }}/cell/data
+      --interval-heartbeat-store=5
+      --interval-heartbeat-cell=2
+      &
+    async: 1
+    poll: 0
+  - pause:
+      seconds: 2
+
+- hosts: proxy
+  remote_user: root
+  tasks:
+  - name: start proxy
+    shell: >
+      {{ ELASTICELL_DIR }}/redis-proxy 
+      --cfg={{ ELASTICELL_DIR }}/cfg/proxy.json
+    async: 1
+    poll: 0
+  - pause:
+      seconds: 2

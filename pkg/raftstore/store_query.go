@@ -45,10 +45,10 @@ func (s *Store) readyToServeQuery(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			log.Infof("store-query[%d]: readyToServeQuery stopped", s.GetID())
+			log.Infof("store-query: readyToServeQuery stopped")
 			return
 		case qrc = <-s.queryReqChan:
-			log.Debugf("store-query[%d]: got request %+v", s.GetID(), qrc)
+			log.Debugf("store-query: got request %+v", qrc)
 			if qrc.cb != nil { //qrc from elasticell-proxy
 				// TODO(yzc): make default limit config-able?
 				limit := int(qrc.qr.Limit)
@@ -88,7 +88,7 @@ func (s *Store) readyToServeQuery(ctx context.Context) {
 						OrderBy:   qrc.qr.OrderBy,
 					}
 					s.trans.sendQuery(req)
-					log.Debugf("store-query[%d]: sent querypb.QueryReq %+v", s.GetID(), req)
+					log.Debugf("store-query: sent querypb.QueryReq %+v", req)
 				}
 			} else { //qrc from store
 				// query on local cells
@@ -119,7 +119,7 @@ func (s *Store) readyToServeQuery(ctx context.Context) {
 						},
 					}
 					s.trans.sendQuery(rsp)
-					log.Debugf("store-query[%d]: sent querypb.QueryRsp %+v", s.GetID(), rsp)
+					log.Debugf("store-query: sent querypb.QueryRsp %+v", rsp)
 				}
 				if len(idxers) != 0 {
 					var storeQR, cellQR *indexer.QueryResult
@@ -127,7 +127,7 @@ func (s *Store) readyToServeQuery(ctx context.Context) {
 					cs := convertToCql(qrc.qr)
 					for _, idxer := range idxers {
 						if cellQR, err = idxer.Select(cs); err != nil {
-							log.Errorf("store-query[%d]: indexer.Select failed under %+v with error %+v", s.GetID(), idxer.MainDir, err)
+							log.Errorf("store-query: indexer.Select failed under %+v with error %+v", idxer.MainDir, err)
 							continue
 						}
 						storeQR.Merge(cellQR)
@@ -144,7 +144,7 @@ func (s *Store) readyToServeQuery(ctx context.Context) {
 						for i := 0; i < cnt; i++ {
 							docID := bits[i]
 							if doc, err = s.readDocument(docID); err != nil {
-								log.Errorf("store-query[%d]: readDocument(%+v) failed with error %+v", s.GetID(), docID, err)
+								log.Errorf("store-query: readDocument(%+v) failed with error %+v", docID, err)
 								continue
 							}
 							docs = append(docs, doc)
@@ -154,7 +154,7 @@ func (s *Store) readyToServeQuery(ctx context.Context) {
 							point := item.(bkdtree.Point)
 							docID := point.UserData
 							if doc, err = s.readDocument(docID); err != nil {
-								log.Errorf("store-query[%d]: readDocument(%+v) failed with error %+v", s.GetID(), docID, err)
+								log.Errorf("store-query: readDocument(%+v) failed with error %+v", docID, err)
 								continue
 							}
 							doc.Order = point.Vals
@@ -169,18 +169,18 @@ func (s *Store) readyToServeQuery(ctx context.Context) {
 						Docs:      docs,
 					}
 					s.trans.sendQuery(rsp)
-					log.Debugf("store-query[%d]: sent querypb.QueryRsp %+v", s.GetID(), rsp)
+					log.Debugf("store-query: sent querypb.QueryRsp %+v", rsp)
 				}
 			}
 		case rsp := <-s.queryRspChan:
-			log.Debugf("store-query[%d]: got response %+v", s.GetID(), rsp)
+			log.Debugf("store-query: got response %+v", rsp)
 			if state, ok = s.queryStates[string(rsp.UUID)]; !ok {
-				log.Infof("store-query[%d]: invalid UUID of rsp %+v", s.GetID(), rsp)
+				log.Infof("store-query: invalid UUID of rsp %+v", rsp)
 			} else if rsp.Error != nil {
-				log.Infof("store-query[%d]: query failed on store %d cells %+v, error %+v", s.GetID(), rsp.FromStore, rsp.Cells, rsp.Error)
+				log.Infof("store-query: query failed on store %d cells %+v, error %+v", rsp.FromStore, rsp.Cells, rsp.Error)
 				for _, cellID := range rsp.Cells {
 					if storeIDs, ok = state.cellIDToStores[cellID]; !ok {
-						log.Errorf("store-query[%d]: unknown cell %d", s.GetID(), cellID)
+						log.Errorf("store-query: unknown cell %d", cellID)
 					} else if len(storeIDs) > 0 {
 						// try to query this cell on another store
 						storeID = storeIDs[0]
@@ -198,12 +198,12 @@ func (s *Store) readyToServeQuery(ctx context.Context) {
 							OrderBy:   state.qrc.qr.OrderBy,
 						}
 						s.trans.sendQuery(req)
-						log.Debugf("store-query[%d]: sent querypb.QueryReq %+v", s.GetID(), req)
+						log.Debugf("store-query: sent querypb.QueryReq %+v", req)
 					} else {
 						errMsg := fmt.Sprintf("cell %d failed on all stores", cellID)
 						state.errorResults = append(state.errorResults, []byte(errMsg))
 						state.doneCells = append(state.doneCells, cellID)
-						log.Infof("store-query[%d]: query cell %d failed on all stores", s.GetID(), cellID)
+						log.Infof("store-query: query cell %d failed on all stores", cellID)
 					}
 				}
 			} else {
@@ -246,7 +246,7 @@ func (s *Store) readyToServeQuery(ctx context.Context) {
 				resp := pool.AcquireRaftCMDResponse()
 				resp.Responses = append(resp.Responses, rsp)
 				buildUUID(state.qrc.qr.UUID, resp)
-				log.Debugf("store-query[%d]: sent final response %+v", s.GetID(), rsp)
+				log.Debugf("store-query: sent final response %+v", rsp)
 				state.qrc.cb(resp)
 				delete(s.queryStates, string(state.qrc.qr.UUID))
 			}
@@ -274,7 +274,7 @@ func (s *Store) readDocument(docID uint64) (doc *querypb.Document, err error) {
 		doc.FvPairs = append(doc.FvPairs, fv.Field)
 		doc.FvPairs = append(doc.FvPairs, fv.Value)
 	}
-	log.Debugf("store-query[%d]: readDocument(%d) returned %+v", s.GetID(), docID, doc)
+	log.Debugf("store-query: readDocument(%d) returned %+v", docID, doc)
 	return
 }
 
@@ -296,11 +296,11 @@ func (s *Store) refreshRangesLoop(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			log.Infof("store-query[%d]: refreshRangesLoop stopped", s.GetID())
+			log.Infof("store-query: refreshRangesLoop stopped")
 			return
 		case <-tickChan:
 			if err := s.refreshRanges(); err != nil {
-				log.Errorf("store-query[%d]: refreshRanges failed with error\n%+v", s.GetID(), err)
+				log.Errorf("store-query: refreshRanges failed with error\n%+v", err)
 			}
 		}
 	}
@@ -311,12 +311,12 @@ func (s *Store) refreshRanges() (err error) {
 	var glrRsp *pdpb.GetLastRangesRsp
 	var ok bool
 	old := s.getSyncEpoch()
-	log.Debugf("store-query[%d]: try to sync, epoch=<%d>", s.GetID(), old)
+	log.Debugf("store-query: try to sync, epoch=<%d>", old)
 
 	s.rwlock.Lock()
 	defer s.rwlock.Unlock()
 	if old < s.syncEpoch {
-		log.Infof("store-query[%d]: already sync, skip, old=<%d> new=<%d>", s.GetID(), old, s.syncEpoch)
+		log.Infof("store-query: already sync, skip, old=<%d> new=<%d>", old, s.syncEpoch)
 		return
 	}
 
@@ -348,7 +348,7 @@ func (s *Store) refreshRanges() (err error) {
 
 	s.syncEpoch++
 
-	log.Debugf("store-query[%d]: sync complete, epoch=%d", s.GetID(), s.syncEpoch)
+	log.Debugf("store-query: sync complete, epoch=%d", s.syncEpoch)
 	return
 }
 

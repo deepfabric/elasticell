@@ -1,100 +1,40 @@
-- hosts: n1 n5 n6
+- hosts: pd
   remote_user: root
   tasks:
-  - name: stop pd,clear pd
-    shell: "{{ item }}"
-    ignore_errors: yes
-    with_items: 
-    - kill -9 `ps -ef|grep pd.json|grep -v grep|awk '{print $2}'`
-    - /opt/apps/elasticell/bin/clean.sh
-
-- hosts: n2 n3 n4
-  remote_user: root
-  tasks:
-  - name: stop cell,clear cell
-    shell: "{{ item }}"
-    ignore_errors: yes
-    with_items: 
-    - kill -9 `ps -ef|grep cell|grep capacity-cell|grep -v grep|awk '{print $2}'`
-    - /opt/apps/elasticell/bin/clean.sh
-
-- hosts: n5
-  remote_user: root
-  tasks:
-  - name: stop proxy
-    shell: "{{ item }}"
-    ignore_errors: yes
-    with_items: 
-    - kill -9 `ps -ef|grep proxy.json|grep -v grep|awk '{print $2}'`
-
-- hosts: n1
-  remote_user: root
-  tasks:
-  - name: start pd
-    async: 1
-    poll: 0
+  - name: find pd pid
+    shell: ps -ef|grep pd.json|grep -v grep|awk '{print $2}'
+    register: pd_pid
+  - name: kill pd pid
+    shell: kill -9 {{ item }} 
+    with_items: "{{ pd_pid.stdout.split() }}"
+  - name: clear local store
     shell: "{{ item }}"
     with_items: 
-    - /opt/apps/elasticell/bin/pd --log-level=info --cfg=/opt/apps/elasticell/bin/pd.json > /opt/apps/elasticell/logs/pd.log 2>&1 &
-  - pause:
-      seconds: 2
+    - rm -rf {{ ELASTICELL_DIR }}/pd/data/*
+    - rm -rf {{ ELASTICELL_DIR }}/log/*
 
-- hosts: n5 n6
+- hosts: cell
   remote_user: root
   tasks:
-  - name: start pd
-    async: 1
-    poll: 0
-    shell: "{{ item }}"
-    with_items:
-    - /opt/apps/elasticell/bin/pd --log-level=info --cfg=/opt/apps/elasticell/bin/pd.json > /opt/apps/elasticell/logs/pd.log 2>&1 &
-  - pause:
-      seconds: 2
-
-- hosts: n2
-  remote_user: root
-  tasks:
-  - name: start cell
-    async: 1
-    poll: 0
+  - name: find cell pid
+    shell: ps -ef|grep cell.json|grep -v grep|awk '{print $2}'
+    register: cell_pid
+  - name: kill cell pid
+    shell: kill -9 {{ item }} 
+    with_items: "{{ cell_pid.stdout.split() }}"
+  - name: clear local store
     shell: "{{ item }}"
     with_items: 
-    - /opt/apps/elasticell/bin/cell --pd=172.16.22.6:20800,172.16.22.7:20800,172.16.22.19:20800 --addr=172.16.22.4:10800 --addr-cli=172.16.22.4:6379 --zone=zone-2 --rack=rack-2 --data=/opt/apps/elasticell/kv/data --interval-heartbeat-cell=5 --interval-heartbeat-store=10 --capacity-cell=1 --log-level=info > /opt/apps/elasticell/logs/cell.log 2>&1 &
-  - pause:
-      seconds: 2
+    - rm -rf {{ ELASTICELL_DIR }}/log/*
+    - rm -rf {{ ELASTICELL_DIR }}/cell/data/*
 
-- hosts: n3
+- hosts: proxy
   remote_user: root
   tasks:
-  - name: start cell
-    async: 1
-    poll: 0
-    shell: "{{ item }}"
-    with_items:
-    - /opt/apps/elasticell/bin/cell --pd=172.16.22.6:20800,172.16.22.7:20800,172.16.22.19:20800 --addr=172.16.22.10:10800 --addr-cli=172.16.22.10:6379 --zone=zone-3 --rack=rack-3 --data=/opt/apps/elasticell/kv/data --interval-heartbeat-cell=5 --interval-heartbeat-store=10 --capacity-cell=1 --log-level=info > /opt/apps/elasticell/logs/cell.log 2>&1 &
-  - pause:
-      seconds: 2
+  - name: find proxy pid
+    shell: ps -ef|grep proxy.json|grep -v grep|awk '{print $2}'
+    register: proxy_pid
+  - name: kill proxy pid
+    shell: kill -9 {{ item }} 
+    with_items: "{{ proxy_pid.stdout.split() }}"
 
-- hosts: n4
-  remote_user: root
-  tasks: 
-  - name: start cell
-    async: 1
-    poll: 0
-    shell: "{{ item }}"
-    with_items:
-    - /opt/apps/elasticell/bin/cell --pd=172.16.22.6:20800,172.16.22.7:20800,172.16.22.19:20800 --addr=172.16.22.9:10800 --addr-cli=172.16.22.9:6379 --zone=zone-4 --rack=rack-4 --data=/opt/apps/elasticell/kv/data --interval-heartbeat-cell=3 --interval-heartbeat-store=5 --capacity-cell=1 --log-level=info > /opt/apps/elasticell/logs/cell.log 2>&1 &
-  - pause:
-      seconds: 2
-
-- hosts: n5
-  remote_user: root
-  tasks:
-  - name: start proxy
-    async: 1
-    poll: 0
-    shell: "{{ item }}"
-    with_items: 
-    - /opt/apps/elasticell/bin/redis-proxy --log-level=debug --cfg=/opt/apps/elasticell/bin/proxy.json > /opt/apps/elasticell/logs/proxy.log 2>&1 &
-  - pause:
-      seconds: 2

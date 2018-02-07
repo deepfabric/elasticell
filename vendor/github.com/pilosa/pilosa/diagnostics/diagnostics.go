@@ -13,6 +13,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/shirou/gopsutil/host"
+	"github.com/shirou/gopsutil/mem"
 	"github.com/sony/gobreaker"
 )
 
@@ -94,7 +96,7 @@ func (d *Diagnostics) schedule() {
 // Flush sends the current metrics.
 func (d *Diagnostics) Flush() error {
 	d.mu.Lock()
-	d.metrics["uptime"] = (time.Now().Unix() - d.startTime)
+	d.metrics["Uptime"] = (time.Now().Unix() - d.startTime)
 	buf, _ := d.Encode()
 	d.mu.Unlock()
 
@@ -172,9 +174,9 @@ func (d *Diagnostics) CompareVersion(value string) error {
 
 	if localVersion[0] < currentVersion[0] { //Major
 		return fmt.Errorf("Warning: You are running Pilosa %s. A newer version (%s) is available: https://github.com/pilosa/pilosa/releases", d.version, value)
-	} else if localVersion[1] < currentVersion[1] { // Minor
+	} else if localVersion[1] < currentVersion[1] && localVersion[0] == currentVersion[0] { // Minor
 		return fmt.Errorf("Warning: You are running Pilosa %s. The latest Minor release is %s: https://github.com/pilosa/pilosa/releases", d.version, value)
-	} else if localVersion[2] < currentVersion[2] { // Patch
+	} else if localVersion[2] < currentVersion[2] && localVersion[0] == currentVersion[0] && localVersion[1] == currentVersion[1] { // Patch
 		return fmt.Errorf("There is a new patch release of Pilosa available: %s: https://github.com/pilosa/pilosa/releases", value)
 	}
 
@@ -201,6 +203,41 @@ func (d *Diagnostics) SetLogger(logger io.Writer) {
 // logger returns a logger that writes to LogOutput.
 func (d *Diagnostics) logger() *log.Logger {
 	return log.New(d.logOutput, "", log.LstdFlags)
+}
+
+// EnrichWithOSInfo adds OS information to the diagnostics payload.
+func (d *Diagnostics) EnrichWithOSInfo() {
+	osInfo, err := host.Info()
+	if err != nil {
+		d.logOutput.Write([]byte(err.Error()))
+	}
+	d.Set("HostUptime", osInfo.Uptime)
+
+	platform, family, version, err := host.PlatformInformation()
+	if err != nil {
+		d.logOutput.Write([]byte(err.Error()))
+	}
+	d.Set("OSPlatform", platform)
+	d.Set("OSFamily", family)
+	d.Set("OSVersion", version)
+
+	kernelVersion, err := host.KernelVersion()
+	if err != nil {
+		d.logOutput.Write([]byte(err.Error()))
+	}
+	d.Set("OSKernelVersion", kernelVersion)
+}
+
+// EnrichWithMemoryInfo adds memory information to the diagnostics payload.
+func (d *Diagnostics) EnrichWithMemoryInfo() {
+	memory, err := mem.VirtualMemory()
+	if err != nil {
+		d.logOutput.Write([]byte(err.Error()))
+	}
+	d.Set("MemFree", memory.Free)
+	d.Set("MemTotal", memory.Total)
+	d.Set("MemUsed", memory.Used)
+
 }
 
 // VersionSegments returns the numeric segments of the version as a slice of ints.

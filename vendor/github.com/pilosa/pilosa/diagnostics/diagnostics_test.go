@@ -49,7 +49,7 @@ func TestDiagnosticsClient(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	output2 := []byte(`{"gg":10,"ss":"ss","uptime":0}`)
+	output2 := []byte(`{"gg":10,"ss":"ss","Uptime":0}`)
 	if eq, err = compareJSON(data, output2); err != nil {
 		t.Fatal(err)
 	}
@@ -95,6 +95,11 @@ func TestDiagnosticsVersion_Compare(t *testing.T) {
 	err = d.CompareVersion("0.1.1")
 	if err != nil {
 		t.Fatalf("Versions should match")
+	}
+	d.SetVersion("v1.7.0")
+	err = d.CompareVersion("0.7.2")
+	if err != nil {
+		t.Fatalf("Local version is greater")
 	}
 }
 

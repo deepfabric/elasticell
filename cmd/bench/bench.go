@@ -7,6 +7,8 @@ import (
 	"math/rand"
 	_ "net/http/pprof"
 	"os"
+	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -26,6 +28,11 @@ var (
 	writeTimeout   = flag.Int("wt", 30, "The timeout for read in seconds")
 	connectTimeout = flag.Int("ct", 10, "The timeout for connect to server")
 	addrs          = flag.String("addrs", "127.0.0.1:6379", "The target address.")
+	indexWeight    = flag.String("indexWeight", "0.0,0.0", "The weight of keys which match the index definion. Supported indices are orders and books.")
+)
+
+var (
+	idxWeightsSum []uint64
 )
 
 func main() {
@@ -35,6 +42,29 @@ func main() {
 		fmt.Printf("read and write cann't be both zero")
 		os.Exit(1)
 	}
+
+	idxWeights := make([]float64, 0)
+	var f float64
+	var err error
+	for _, strF := range strings.Split(*indexWeight, ",") {
+		if f, err = strconv.ParseFloat(strF, 64); err != nil {
+			panic(fmt.Sprintf("failed to parse %s as float64", strF))
+		}
+		idxWeights = append(idxWeights, f)
+	}
+	idxWeightsSum = make([]uint64, len(idxWeights))
+	for i, f := range idxWeights {
+		val := uint64(f * float64(^uint64(0)))
+		if i != 0 {
+			val += idxWeightsSum[i-1]
+			if val < idxWeightsSum[i-1] {
+				//uint64 overflow
+				val = ^uint64(0)
+			}
+		}
+		idxWeightsSum[i] = val
+	}
+	fmt.Printf("idxWeights: %v, idxWeightsSum: %v\n", idxWeights, idxWeightsSum)
 
 	gCount := *con
 	total := *num
@@ -112,14 +142,13 @@ func startG(total int64, wg, complate *sync.WaitGroup, ready chan struct{}, ans 
 
 	for index := int64(0); index < total; index += *cn {
 		for k := int64(0); k < *cn; k++ {
-			key := fmt.Sprintf("%d", r.Int63())
+			rnd := r.Uint64()
+			key := fmt.Sprintf("%d", rnd)
 
 			for {
 				if c > 0 {
 					break
-				}
-
-				if c == 0 {
+				} else {
 					doRead = !doRead
 					if doRead {
 						c = *readWeight * 100
@@ -132,10 +161,18 @@ func startG(total int64, wg, complate *sync.WaitGroup, ready chan struct{}, ans 
 			if doRead {
 				redis.WriteCommand(conn, "get", key)
 			} else {
-				for i := 0; i < *size; i++ {
-					value[i] = byte((index + k) % 0xff)
+				no := sort.Search(len(idxWeightsSum), func(i int) bool { return idxWeightsSum[i] > rnd })
+				if no < 2 {
+					rnd2 := r.Uint64()
+					argInts := getIdxArgs(no, rnd2)
+					redis.WriteCommand(conn, "hmset", argInts...)
+				} else {
+					for i := 0; i < *size; i++ {
+						value[i] = byte((index + k) % 0xff)
+					}
+					redis.WriteCommand(conn, "set", key, value)
 				}
-				redis.WriteCommand(conn, "set", key, value)
+
 			}
 			c--
 		}
@@ -161,6 +198,33 @@ func startG(total int64, wg, complate *sync.WaitGroup, ready chan struct{}, ans 
 
 	end := time.Now()
 	fmt.Printf("%s sent %d reqs\n", end.Sub(start), total)
+}
+
+func getIdxArgs(no int, i uint64) (argInts []interface{}) {
+	var args []string
+	switch no {
+	case 0:
+		args = []string{
+			fmt.Sprintf("book_%08d", i),
+			"price", fmt.Sprintf("%v", 0.3+float32(i)),
+			"count", fmt.Sprintf("%d", i),
+			"author", "Mark Chen",
+		}
+	case 1:
+		args = []string{
+			fmt.Sprintf("order_%08d", i),
+			"product", fmt.Sprintf("%v", i),
+			"count", fmt.Sprintf("%d", i*2),
+			"description", fmt.Sprintf("order_%08d", i),
+		}
+	default:
+		panic(fmt.Sprintf("invalid no %v", no))
+	}
+	argInts = make([]interface{}, len(args))
+	for i, v := range args {
+		argInts[i] = v
+	}
+	return
 }
 
 type analysis struct {

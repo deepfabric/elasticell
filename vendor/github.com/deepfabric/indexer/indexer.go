@@ -20,6 +20,22 @@ type Indexer struct {
 	indices  map[string]*Index               //index data, need to persist
 }
 
+type ErrIdxNotExist struct {
+	idxName string
+}
+
+func (e *ErrIdxNotExist) Error() string {
+	return fmt.Sprintf("index %s doesn't exist", e.idxName)
+}
+
+type ErrIdxExist struct {
+	idxName string
+}
+
+func (e *ErrIdxExist) Error() string {
+	return fmt.Sprintf("index %s already exist", e.idxName)
+}
+
 //NewIndexer creates an Indexer.
 func NewIndexer(mainDir string, overwirte bool) (ir *Indexer, err error) {
 	ir = &Indexer{
@@ -161,7 +177,8 @@ func (ir *Indexer) Select(q *cql.CqlSelect) (qr *QueryResult, err error) {
 	var found bool
 	ir.rwlock.RLock()
 	if ind, found = ir.indices[q.Index]; !found {
-		err = errors.Errorf("failed to select %v from non-existing index %v", q, q.Index)
+		err = &ErrIdxNotExist{idxName: q.Index}
+		err = errors.Wrap(err, "")
 		ir.rwlock.RUnlock()
 		return
 	}
@@ -189,7 +206,8 @@ func (ir *Indexer) Summary() (sum string, err error) {
 // createIndex creates index without holding the lock
 func (ir *Indexer) createIndex(docProt *cql.DocumentWithIdx) (err error) {
 	if _, found := ir.docProts[docProt.Index]; found {
-		err = errors.New("CreateIndex conflict with existing index")
+		err = &ErrIdxExist{idxName: docProt.Index}
+		err = errors.Wrap(err, "")
 		return
 	}
 	if err = indexWriteConf(ir.MainDir, docProt); err != nil {

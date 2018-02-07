@@ -84,6 +84,8 @@ func main() {
 		if frag, ok = fragments[sliceID]; !ok {
 			fp := fragmentPath(sliceID)
 			frag = pilosa.NewFragment(fp, "index", "frame", pilosa.ViewStandard, uint64(sliceID))
+			frag.MaxOpN = frag.MaxOpN * 100
+			frag.CacheType = pilosa.CacheTypeNone
 			frag.LogOutput = logOutput
 			if err = frag.Open(); err != nil {
 				log.Fatal(err)

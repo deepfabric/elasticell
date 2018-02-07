@@ -1,0 +1,37 @@
+[roles:children]
+pd
+cell
+proxy
+
+[roles:vars]
+ELASTICELL_DIR=/apps/deepfabric
+pdRpcPort=20001
+pdIP1=n1
+pdIP2=n2
+pdIP3=n3
+
+[pd:children]
+pd1
+pd2
+pd3
+[pd:vars]
+clientPort=2371
+peerPort=2381
+
+[pd1]
+n1
+[pd2]
+n2
+[pd3]
+n3
+
+[cell]
+n4 no=1 zone=z1 rack=r1 addr=n2
+n5 no=2 zone=z1 rack=r1 addr=n3
+n6 no=3 zone=z1 rack=r1 addr=n4
+[cell:vars]
+Port=10001
+cliPort=6371
+
+[proxy]
+n7

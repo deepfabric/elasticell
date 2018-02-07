@@ -28,6 +28,7 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"net/http"
 	"os"
 	"sort"
 	"sync"
@@ -237,7 +238,7 @@ func (f *Fragment) openStorage() error {
 	}
 
 	// Attach the file to the bitmap to act as a write-ahead log.
-	f.storage.OpWriter = f.file
+	f.storage.OpWriter = nil
 	f.rowCache = &SimpleCache{make(map[uint64]*Bitmap)}
 
 	return nil
@@ -299,14 +300,22 @@ func (f *Fragment) close() error {
 		return err
 	}
 
-	// Close underlying storage.
-	if err := f.closeStorage(); err != nil {
-		f.logger().Printf("fragment: error closing storage: err=%s, path=%s", err, f.path)
-		return err
-	}
-
 	// Remove checksums.
 	f.checksums = nil
+
+	if f.storage.OpWriter == nil {
+		// Need to snapshot if WAL is disabled.
+		if err := f.snapshot(false); err != nil {
+			f.logger().Printf("fragment: error closing storage: err=%s, path=%s", err, f.path)
+			return err
+		}
+	} else {
+		// Close underlying storage.
+		if err := f.closeStorage(); err != nil {
+			f.logger().Printf("fragment: error closing storage: err=%s, path=%s", err, f.path)
+			return err
+		}
+	}
 
 	return nil
 }
@@ -415,12 +424,13 @@ func (f *Fragment) setBit(rowID, columnID uint64) (changed bool, err error) {
 		return false, err
 	}
 
-	// Get the row from row cache or fragment.storage.
-	bm := f.row(rowID, true, true)
-	bm.SetBit(columnID)
-
-	// Update the cache.
-	f.cache.Add(rowID, bm.Count())
+	// Update row if it's already in row cache.
+	bm, ok := f.rowCache.Fetch(rowID)
+	if ok && bm != nil {
+		bm.SetBit(columnID)
+		// Update the cache.
+		f.cache.Add(rowID, bm.Count())
+	}
 
 	f.stats.Count("setBit", 1, 0.001)
 
@@ -467,12 +477,13 @@ func (f *Fragment) clearBit(rowID, columnID uint64) (changed bool, err error) {
 		return false, err
 	}
 
-	// Get the row from cache or fragment.storage.
-	bm := f.row(rowID, true, true)
-	bm.ClearBit(columnID)
-
-	// Update the cache.
-	f.cache.Add(rowID, bm.Count())
+	// Update row if it's already in row cache.
+	bm, ok := f.rowCache.Fetch(rowID)
+	if ok && bm != nil {
+		bm.ClearBit(columnID)
+		// Update the cache.
+		f.cache.Add(rowID, bm.Count())
+	}
 
 	f.stats.Count("clearBit", 1, 1.0)
 
@@ -492,7 +503,7 @@ func (f *Fragment) FieldValue(columnID uint64, bitDepth uint) (value uint64, exi
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
-	// If existance bit is unset then ignore remaining bits.
+	// If existence bit is unset then ignore remaining bits.
 	if v, err := f.bit(uint64(bitDepth), columnID); err != nil {
 		return 0, false, err
 	} else if !v {
@@ -586,7 +597,7 @@ func (f *Fragment) importSetFieldValue(columnID uint64, bitDepth uint, value uin
 // FieldSum returns the sum of a given field as well as the number of columns involved.
 // A bitmap can be passed in to optionally filter the computed columns.
 func (f *Fragment) FieldSum(filter *Bitmap, bitDepth uint) (sum, count uint64, err error) {
-	// Compute count based on the existance bit.
+	// Compute count based on the existence bit.
 	row := f.Row(uint64(bitDepth))
 	if filter != nil {
 		count = row.IntersectionCount(filter)
@@ -615,6 +626,7 @@ func (f *Fragment) FieldSum(filter *Bitmap, bitDepth uint) (sum, count uint64, e
 	return sum, count, nil
 }
 
+// FieldRange returns bitmaps with a field value encoding matching the predicate.
 func (f *Fragment) FieldRange(op pql.Token, bitDepth uint, predicate uint64) (*Bitmap, error) {
 	switch op {
 	case pql.EQ:
@@ -753,6 +765,7 @@ func (f *Fragment) FieldNotNull(bitDepth uint) (*Bitmap, error) {
 	return f.Row(uint64(bitDepth)), nil
 }
 
+// FieldRangeBetween returns bitmaps with a field value encoding matching any value between predicateMin and predicateMax.
 func (f *Fragment) FieldRangeBetween(bitDepth uint, predicateMin, predicateMax uint64) (*Bitmap, error) {
 	b := f.Row(uint64(bitDepth))
 	keep1 := NewBitmap() // GTE
@@ -1320,7 +1333,7 @@ func (f *Fragment) Import(rowIDs, columnIDs []uint64) error {
 	}
 
 	// Write the storage to disk and reload.
-	if err := f.snapshot(); err != nil {
+	if err := f.snapshot(true); err != nil {
 		return err
 	}
 
@@ -1354,7 +1367,7 @@ func (f *Fragment) ImportValue(columnIDs, values []uint64, bitDepth uint) error 
 		_ = f.openStorage()
 		return err
 	}
-	if err := f.snapshot(); err != nil {
+	if err := f.snapshot(true); err != nil {
 		return err
 	}
 	return nil
@@ -1368,7 +1381,7 @@ func (f *Fragment) incrementOpN() error {
 		return nil
 	}
 
-	if err := f.snapshot(); err != nil {
+	if err := f.snapshot(true); err != nil {
 		return fmt.Errorf("snapshot: %s", err)
 	}
 	return nil
@@ -1378,7 +1391,7 @@ func (f *Fragment) incrementOpN() error {
 func (f *Fragment) Snapshot() error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return f.snapshot()
+	return f.snapshot(true)
 }
 func track(start time.Time, message string, stats StatsClient, logger *log.Logger) {
 	elapsed := time.Since(start)
@@ -1386,7 +1399,7 @@ func track(start time.Time, message string, stats StatsClient, logger *log.Logge
 	stats.Histogram("snapshot", elapsed.Seconds(), 1.0)
 }
 
-func (f *Fragment) snapshot() error {
+func (f *Fragment) snapshot(reopen bool) error {
 	logger := f.logger()
 	logger.Printf("fragment: snapshotting %s/%s/%s/%d", f.index, f.frame, f.view, f.slice)
 	completeMessage := fmt.Sprintf("fragment: snapshot complete %s/%s/%s/%d", f.index, f.frame, f.view, f.slice)
@@ -1421,9 +1434,11 @@ func (f *Fragment) snapshot() error {
 		return fmt.Errorf("rename snapshot: %s", err)
 	}
 
-	// Reopen storage.
-	if err := f.openStorage(); err != nil {
-		return fmt.Errorf("open storage: %s", err)
+	if reopen {
+		// Reopen storage.
+		if err := f.openStorage(); err != nil {
+			return fmt.Errorf("open storage: %s", err)
+		}
 	}
 
 	// Reset operation count.
@@ -1677,9 +1692,9 @@ func (h *blockHasher) WriteValue(v uint64) {
 type FragmentSyncer struct {
 	Fragment *Fragment
 
-	Host          string
-	Cluster       *Cluster
-	ClientOptions *ClientOptions
+	Host         string
+	Cluster      *Cluster
+	RemoteClient *http.Client
 
 	Closing <-chan struct{}
 }
@@ -1714,7 +1729,7 @@ func (s *FragmentSyncer) SyncFragment() error {
 		}
 
 		// Retrieve remote blocks.
-		client, err := NewInternalHTTPClient(node.Host, s.ClientOptions)
+		client, err := NewInternalHTTPClient(node.Host, s.RemoteClient)
 		if err != nil {
 			return err
 		}
@@ -1793,7 +1808,7 @@ func (s *FragmentSyncer) syncBlock(id int) error {
 			return nil
 		}
 
-		client, err := NewInternalHTTPClient(node.Host, s.ClientOptions)
+		client, err := NewInternalHTTPClient(node.Host, s.RemoteClient)
 		if err != nil {
 			return err
 		}
@@ -1825,36 +1840,43 @@ func (s *FragmentSyncer) syncBlock(id int) error {
 	// Write updates to remote blocks.
 	for i := 0; i < len(clients); i++ {
 		set, clear := sets[i], clears[i]
+		count := 0
 
 		// Ignore if there are no differences.
 		if len(set.ColumnIDs) == 0 && len(clear.ColumnIDs) == 0 {
 			continue
 		}
 
-		// Generate query with sets & clears.
-		var buf bytes.Buffer
+		// Generate query with sets & clears, and group the requests to not exceed MaxWritesPerRequest.
+		total := len(set.ColumnIDs) + len(clear.ColumnIDs)
+		buffers := make([]bytes.Buffer, int(math.Ceil(float64(total)/float64(s.Cluster.MaxWritesPerRequest))))
 
 		// Only sync the standard block.
 		for j := 0; j < len(set.ColumnIDs); j++ {
-			fmt.Fprintf(&buf, "SetBit(frame=%q, rowID=%d, columnID=%d)\n", f.Frame(), set.RowIDs[j], (f.Slice()*SliceWidth)+set.ColumnIDs[j])
+			fmt.Fprintf(&(buffers[count/s.Cluster.MaxWritesPerRequest]), "SetBit(frame=%q, rowID=%d, columnID=%d)\n", f.Frame(), set.RowIDs[j], (f.Slice()*SliceWidth)+set.ColumnIDs[j])
+			count++
 		}
 		for j := 0; j < len(clear.ColumnIDs); j++ {
-			fmt.Fprintf(&buf, "ClearBit(frame=%q, rowID=%d, columnID=%d)\n", f.Frame(), clear.RowIDs[j], (f.Slice()*SliceWidth)+clear.ColumnIDs[j])
+			fmt.Fprintf(&(buffers[count/s.Cluster.MaxWritesPerRequest]), "ClearBit(frame=%q, rowID=%d, columnID=%d)\n", f.Frame(), clear.RowIDs[j], (f.Slice()*SliceWidth)+clear.ColumnIDs[j])
+			count++
 		}
 
-		// Verify sync is not prematurely closing.
-		if s.isClosing() {
-			return nil
-		}
+		// Iterate over the buffers.
+		for k := 0; k < len(buffers); k++ {
+			// Verify sync is not prematurely closing.
+			if s.isClosing() {
+				return nil
+			}
 
-		// Execute query.
-		queryRequest := &internal.QueryRequest{
-			Query:  buf.String(),
-			Remote: true,
-		}
-		_, err := clients[i].ExecuteQuery(context.Background(), f.Index(), queryRequest)
-		if err != nil {
-			return err
+			// Execute query.
+			queryRequest := &internal.QueryRequest{
+				Query:  buffers[k].String(),
+				Remote: true,
+			}
+			_, err := clients[i].ExecuteQuery(context.Background(), f.Index(), queryRequest)
+			if err != nil {
+				return err
+			}
 		}
 	}
 

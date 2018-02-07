@@ -36,6 +36,7 @@ import (
 	"github.com/pilosa/pilosa/diagnostics"
 	"github.com/pilosa/pilosa/internal"
 	"golang.org/x/net/context"
+	"golang.org/x/sync/errgroup"
 )
 
 // Default server settings.
@@ -44,6 +45,11 @@ const (
 	DefaultPollingInterval     = 60 * time.Second
 	DefaultDiagnosticServer    = "https://diagnostics.pilosa.com/v0/diagnostics"
 )
+
+// Ensure Server implements interfaces.
+var _ Broadcaster = &Server{}
+var _ BroadcastHandler = &Server{}
+var _ StatusHandler = &Server{}
 
 // Server represents a holder wrapped by a running HTTP server.
 type Server struct {
@@ -58,6 +64,8 @@ type Server struct {
 	Handler           *Handler
 	Broadcaster       Broadcaster
 	BroadcastReceiver BroadcastReceiver
+	Gossiper          Gossiper
+	RemoteClient      *http.Client
 
 	// Cluster configuration.
 	// Host is replaced with actual host after opening if port is ":0".
@@ -65,6 +73,7 @@ type Server struct {
 	URI         *URI
 	Cluster     *Cluster
 	diagnostics *diagnostics.Diagnostics
+	ClusterID   string
 
 	// Background monitoring intervals.
 	AntiEntropyInterval time.Duration
@@ -79,6 +88,7 @@ type Server struct {
 	MaxWritesPerRequest int
 
 	LogOutput io.Writer
+	logger    *log.Logger
 
 	defaultClient InternalClient
 }
@@ -103,9 +113,9 @@ func NewServer() *Server {
 
 		LogOutput: os.Stderr,
 	}
+	s.logger = log.New(s.LogOutput, "", log.LstdFlags)
 
 	s.Handler.Holder = s.Holder
-
 	return s
 }
 
@@ -167,18 +177,20 @@ func (s *Server) Open() error {
 	}
 
 	// Create default HTTP client
-	s.createDefaultClient()
+	s.createDefaultClient(s.RemoteClient)
 
 	// Create executor for executing queries.
-	e := NewExecutor(&ClientOptions{TLS: s.TLS})
+	e := NewExecutor(s.RemoteClient)
 	e.Holder = s.Holder
 	e.Scheme = s.URI.Scheme()
 	e.Host = s.URI.HostPort()
 	e.Cluster = s.Cluster
 	e.MaxWritesPerRequest = s.MaxWritesPerRequest
+	s.Cluster.MaxWritesPerRequest = s.MaxWritesPerRequest
 
 	// Initialize HTTP handler.
 	s.Handler.Broadcaster = s.Broadcaster
+	s.Handler.BroadcastHandler = s
 	s.Handler.StatusHandler = s
 	s.Handler.URI = s.URI
 	s.Handler.Cluster = s.Cluster
@@ -190,11 +202,25 @@ func (s *Server) Open() error {
 
 	// Serve HTTP.
 	go func() {
-		err := http.Serve(ln, s.Handler)
-		if err != nil {
+		server := &http.Server{Handler: s.Handler}
+		go func() {
+			<-s.closing
+			server.Close()
+		}()
+		err := server.Serve(ln)
+		if err != nil && err.Error() != "http: Server closed" {
 			s.Logger().Printf("HTTP handler terminated with error: %s\n", err)
 		}
 	}()
+
+	// load local ID
+	if err := s.Holder.loadLocalID(); err != nil {
+		s.Logger().Println(err)
+	}
+
+	if err := s.loadClusterID(); err != nil {
+		s.Logger().Println(err)
+	}
 
 	// Start background monitoring.
 	s.wg.Add(4)
@@ -229,9 +255,28 @@ func (s *Server) Addr() net.Addr {
 	}
 	return s.ln.Addr()
 }
+func GetHTTPClient(t *tls.Config) *http.Client {
+	transport := &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
+		DialContext: (&net.Dialer{
+			Timeout:   30 * time.Second,
+			KeepAlive: 30 * time.Second,
+			DualStack: true,
+		}).DialContext,
+		MaxIdleConns:          1000,
+		MaxIdleConnsPerHost:   200,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+	}
+	if t != nil {
+		transport.TLSClientConfig = t
+	}
+	return &http.Client{Transport: transport}
+}
 
 // Logger returns a logger that writes to LogOutput
-func (s *Server) Logger() *log.Logger { return log.New(s.LogOutput, "", log.LstdFlags) }
+func (s *Server) Logger() *log.Logger { return s.logger }
 
 func (s *Server) monitorAntiEntropy() {
 	ticker := time.NewTicker(s.AntiEntropyInterval)
@@ -256,7 +301,8 @@ func (s *Server) monitorAntiEntropy() {
 		syncer.URI = s.URI
 		syncer.Cluster = s.Cluster
 		syncer.Closing = s.closing
-		syncer.ClientOptions = &ClientOptions{TLS: s.TLS}
+		syncer.RemoteClient = s.RemoteClient
+		syncer.Stats = s.Holder.Stats.WithTags("HolderSyncer")
 
 		// Sync holders.
 		if err := syncer.SyncHolder(); err != nil {
@@ -381,6 +427,34 @@ func (s *Server) ReceiveMessage(pb proto.Message) error {
 		}
 	}
 	return nil
+}
+
+// SendSync represents an implementation of Broadcaster.
+func (s *Server) SendSync(pb proto.Message) error {
+	var eg errgroup.Group
+	for _, node := range s.Cluster.Nodes {
+		uri, err := node.URI()
+		if err != nil {
+			return err
+		}
+
+		// Don't forward the message to ourselves.
+		if *s.URI == *uri {
+			continue
+		}
+
+		ctx := context.WithValue(context.Background(), "uri", uri)
+		eg.Go(func() error {
+			return s.defaultClient.SendMessage(ctx, pb)
+		})
+	}
+
+	return eg.Wait()
+}
+
+// SendAsync represents an implementation of Broadcaster.
+func (s *Server) SendAsync(pb proto.Message) error {
+	return s.Gossiper.SendAsync(pb)
 }
 
 // LocalStatus returns the state of the local node as well as the
@@ -512,30 +586,19 @@ func (s *Server) monitorDiagnostics() {
 	s.diagnostics.Set("Cluster", strings.Join(s.Cluster.NodeSetHosts(), ","))
 	s.diagnostics.Set("NumNodes", len(s.Cluster.Nodes))
 	s.diagnostics.Set("NumCPU", runtime.NumCPU())
-	// TODO: unique cluster ID
+	s.diagnostics.Set("LocalID", s.Holder.LocalID)
+	s.diagnostics.Set("ClusterID", s.ClusterID)
+	s.diagnostics.EnrichWithOSInfo()
 
 	// Flush the diagnostics metrics at startup, then on each tick interval
 	flush := func() {
-		numFrames := 0
-		numSlices := uint64(0)
-		for _, index := range s.Holder.Indexes() {
-			numSlices += index.MaxSlice() + 1
-			for _, f := range index.Frames() {
-				numFrames++
-				if f.rangeEnabled {
-					s.diagnostics.Set("BSIEnabled", true)
-				}
-				if f.timeQuantum != "" {
-					s.diagnostics.Set("TimeQuantumEnabled", true)
-				}
-			}
+		enrichDiagnosticsWithSchemaProperties(s.diagnostics, s.Holder)
+		openFiles, err := CountOpenFiles()
+		if err == nil {
+			s.diagnostics.Set("OpenFiles", openFiles)
 		}
-
-		s.diagnostics.Set("NumIndexes", len(s.Holder.Indexes()))
-		s.diagnostics.Set("NumFrames", numFrames)
-		s.diagnostics.Set("NumSlices", numSlices)
-		s.diagnostics.Set("OpenFiles", CountOpenFiles())
 		s.diagnostics.Set("GoRoutines", runtime.NumGoroutine())
+		s.diagnostics.EnrichWithMemoryInfo()
 		s.diagnostics.CheckVersion()
 		s.diagnostics.Flush()
 	}
@@ -584,8 +647,11 @@ func (s *Server) monitorRuntime() {
 		// Record the number of go routines.
 		s.Holder.Stats.Gauge("goroutines", float64(runtime.NumGoroutine()), 1.0)
 
+		openFiles, err := CountOpenFiles()
 		// Open File handles.
-		s.Holder.Stats.Gauge("OpenFiles", float64(CountOpenFiles()), 1.0)
+		if err == nil {
+			s.Holder.Stats.Gauge("OpenFiles", float64(openFiles), 1.0)
+		}
 
 		// Runtime memory metrics.
 		runtime.ReadMemStats(&m)
@@ -597,35 +663,48 @@ func (s *Server) monitorRuntime() {
 	}
 }
 
-func (s *Server) createDefaultClient() {
-	transport := &http.Transport{}
-	if s.TLS != nil {
-		transport.TLSClientConfig = s.TLS
+func (s *Server) createDefaultClient(remoteClient *http.Client) {
+	s.defaultClient = NewInternalHTTPClientFromURI(nil, remoteClient)
+}
+
+func (s *Server) loadClusterID() error {
+	// If this is the first node in the cluster, set the ClusterID to its ID
+	node0URI, err := s.Cluster.Nodes[0].URI()
+	if err == nil {
+		if s.URI.Equals(node0URI) {
+			s.ClusterID = s.Holder.LocalID
+			return nil
+		}
+	} else {
+		return err
 	}
-	s.defaultClient = NewInternalHTTPClientFromURI(nil, &ClientOptions{TLS: s.TLS})
+	if clusterID, err := s.defaultClient.NodeID(node0URI); err == nil {
+		s.ClusterID = clusterID
+		return nil
+	} else {
+		return err
+	}
 }
 
 // CountOpenFiles on operating systems that support lsof.
-func CountOpenFiles() int {
-	count := 0
-
+func CountOpenFiles() (int, error) {
 	switch runtime.GOOS {
 	case "darwin", "linux", "unix", "freebsd":
 		// -b option avoid kernel blocks
 		pid := os.Getpid()
 		out, err := exec.Command("/bin/sh", "-c", fmt.Sprintf("lsof -b -p %v", pid)).Output()
 		if err != nil {
-			log.Fatal(err)
+			return 0, fmt.Errorf("calling lsof: %s", err)
 		}
 		// only count lines with our pid, avoiding warning messages from -b
 		lines := strings.Split(string(out), strconv.Itoa(pid))
-		count = len(lines)
+		return len(lines), nil
 	case "windows":
 		// TODO: count open file handles on windows
+		return 0, errors.New("CountOpenFiles() on Windows is not supported")
 	default:
-
+		return 0, errors.New("CountOpenFiles() on this OS is not supported")
 	}
-	return count
 }
 
 // StatusHandler specifies two methods which an object must implement to share
@@ -635,4 +714,40 @@ type StatusHandler interface {
 	LocalStatus() (proto.Message, error)
 	ClusterStatus() (proto.Message, error)
 	HandleRemoteStatus(proto.Message) error
+}
+
+type diagnosticsFrameProperties struct {
+	BSIFieldCount      int
+	TimeQuantumEnabled bool
+}
+
+func enrichDiagnosticsWithSchemaProperties(d *diagnostics.Diagnostics, holder *Holder) {
+	// NOTE: this function is not in the diagnostics package, since circular imports are not allowed.
+	var numSlices uint64
+	numFrames := 0
+	numIndexes := 0
+	bsiFieldCount := 0
+	timeQuantumEnabled := false
+
+	for _, index := range holder.Indexes() {
+		numSlices += index.MaxSlice() + 1
+		numIndexes += 1
+		for _, frame := range index.Frames() {
+			numFrames += 1
+			if frame.rangeEnabled {
+				if fields, err := frame.GetFields(); err == nil {
+					bsiFieldCount += len(fields.Fields)
+				}
+			}
+			if frame.TimeQuantum() != "" {
+				timeQuantumEnabled = true
+			}
+		}
+	}
+
+	d.Set("NumIndexes", numIndexes)
+	d.Set("NumFrames", numFrames)
+	d.Set("NumSlices", numSlices)
+	d.Set("BSIFieldCount", bsiFieldCount)
+	d.Set("TimeQuantumEnabled", timeQuantumEnabled)
 }
