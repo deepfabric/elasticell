@@ -23,7 +23,7 @@ func main() {
 			log.Fatalf("path %s doesn't exists", fp)
 		}
 
-		if ir, err = indexer.NewIndexer(fp, false); err != nil {
+		if ir, err = indexer.NewIndexer(fp, false, false); err != nil {
 			log.Fatalf("%+v", err)
 		}
 

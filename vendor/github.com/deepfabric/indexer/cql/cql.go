@@ -23,35 +23,6 @@ const (
 	TypeStr
 )
 
-type UintProp struct {
-	Name    string
-	IsFloat bool
-	ValLen  int //one of 1, 2, 4, 8
-	Val     uint64
-}
-
-type EnumProp struct {
-	Name string
-	Val  int
-}
-
-type StrProp struct {
-	Name string
-	Val  string
-}
-
-type Document struct {
-	DocID     uint64
-	UintProps []UintProp
-	EnumProps []EnumProp
-	StrProps  []StrProp
-}
-
-type DocumentWithIdx struct {
-	Document
-	Index string
-}
-
 type UintPred struct {
 	Name      string
 	Low, High uint64
@@ -154,19 +125,19 @@ func (v *myCqlVisitor) VisitCreate(ctx *parser.CreateContext) (err interface{}) 
 		if err = v.VisitUintPropDef(popDef.(*parser.UintPropDefContext)); err != nil {
 			return
 		}
-		q.UintProps = append(q.UintProps, v.res.(UintProp))
+		q.Doc.UintProps = append(q.Doc.UintProps, v.res.(*UintProp))
 	}
 	for _, popDef := range ctx.AllEnumPropDef() {
 		if err = v.VisitEnumPropDef(popDef.(*parser.EnumPropDefContext)); err != nil {
 			return
 		}
-		q.EnumProps = append(q.EnumProps, v.res.(EnumProp))
+		q.Doc.EnumProps = append(q.Doc.EnumProps, v.res.(*EnumProp))
 	}
 	for _, popDef := range ctx.AllStrPropDef() {
 		if err = v.VisitStrPropDef(popDef.(*parser.StrPropDefContext)); err != nil {
 			return
 		}
-		q.StrProps = append(q.StrProps, v.res.(StrProp))
+		q.Doc.StrProps = append(q.Doc.StrProps, v.res.(*StrProp))
 	}
 	v.res = q
 	return
@@ -193,21 +164,21 @@ func (v *myCqlVisitor) VisitUintPropDef(ctx *parser.UintPropDefContext) (err int
 	} else {
 		panic(fmt.Sprintf("invalid uintType: %v\n", ctx.UintType().GetText()))
 	}
-	v.res = pop
+	v.res = &pop
 	return
 }
 
 func (v *myCqlVisitor) VisitEnumPropDef(ctx *parser.EnumPropDefContext) (err interface{}) {
 	var pop EnumProp
 	pop.Name = ctx.Property().GetText()
-	v.res = pop
+	v.res = &pop
 	return
 }
 
 func (v *myCqlVisitor) VisitStrPropDef(ctx *parser.StrPropDefContext) (err interface{}) {
 	var pop StrProp
 	pop.Name = ctx.Property().GetText()
-	v.res = pop
+	v.res = &pop
 	return
 }
 
@@ -258,7 +229,7 @@ func (v *myCqlVisitor) VisitDocument(ctx *parser.DocumentContext) (err interface
 		err = errors.Wrap(err.(error), "")
 		return
 	}
-	doc.DocID = tmpU64
+	doc.Doc.DocID = tmpU64
 
 	vals := ctx.AllValue()
 	for i := 0; i < len(docProt.UintProps); i++ {
@@ -267,7 +238,7 @@ func (v *myCqlVisitor) VisitDocument(ctx *parser.DocumentContext) (err interface
 		}
 		uintProp := docProt.UintProps[i]
 		uintProp.Val = tmpU64
-		doc.UintProps = append(doc.UintProps, uintProp)
+		doc.Doc.UintProps = append(doc.Doc.UintProps, uintProp)
 	}
 	for i := 0; i < len(docProt.EnumProps); i++ {
 		tmpInt, err = strconv.Atoi(vals[i+len(docProt.UintProps)].GetText())
@@ -276,13 +247,13 @@ func (v *myCqlVisitor) VisitDocument(ctx *parser.DocumentContext) (err interface
 			return
 		}
 		enumProp := docProt.EnumProps[i]
-		enumProp.Val = tmpInt
-		doc.EnumProps = append(doc.EnumProps, enumProp)
+		enumProp.Val = uint64(tmpInt)
+		doc.Doc.EnumProps = append(doc.Doc.EnumProps, enumProp)
 	}
 	for i := 0; i < len(docProt.StrProps); i++ {
 		strProp := docProt.StrProps[i]
 		strProp.Val = vals[i+len(docProt.UintProps)+len(docProt.EnumProps)].GetText()
-		doc.StrProps = append(doc.StrProps, strProp)
+		doc.Doc.StrProps = append(doc.Doc.StrProps, strProp)
 	}
 	v.res = doc
 	return
@@ -388,7 +359,7 @@ func stripQuote(s string) string {
 func (v *myCqlVisitor) VisitUintPred(ctx *parser.UintPredContext) (err interface{}) {
 	var val uint64
 	var docProt *Document
-	var uintProp UintProp
+	var uintProp *UintProp
 	var ok bool
 	pred := &UintPred{Low: 0, High: ^uint64(0)}
 	pred.Name = ctx.Property().GetText()
@@ -434,7 +405,7 @@ func (v *myCqlVisitor) VisitEnumPred(ctx *parser.EnumPredContext) (err interface
 	pred := &EnumPred{}
 	pred.Name = ctx.Property().GetText()
 	var docProt *Document
-	var enumProp EnumProp
+	var enumProp *EnumProp
 	var ok bool
 	if docProt, ok = v.docProts[v.index]; !ok {
 		err = errors.Errorf("cannot find docProt for index %s", v.index)
@@ -479,7 +450,7 @@ func (v *myCqlVisitor) VisitStrPred(ctx *parser.StrPredContext) (err interface{}
 	pred := &StrPred{}
 	pred.Name = ctx.Property().GetText()
 	var docProt *Document
-	var strProp StrProp
+	var strProp *StrProp
 	var ok bool
 	if docProt, ok = v.docProts[v.index]; !ok {
 		err = errors.Errorf("cannot find docProt for index %s", v.index)
@@ -559,7 +530,7 @@ func Float64ToSortableUint64(valS string) (val uint64, err error) {
 }
 
 //ParseUintProp parses valS
-func ParseUintProp(uintProp UintProp, valS string) (val uint64, err error) {
+func ParseUintProp(uintProp *UintProp, valS string) (val uint64, err error) {
 	if uintProp.IsFloat {
 		if uintProp.ValLen == 4 {
 			if val, err = Float32ToSortableUint64(valS); err != nil {
