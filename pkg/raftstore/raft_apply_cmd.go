@@ -422,53 +422,35 @@ func (d *applyDelegate) execWriteRequestIndex(req *raftcmdpb.Request, rsp *raftc
 	if (req.Type == raftcmdpb.HMSet || req.Type == raftcmdpb.HSet || req.Type == raftcmdpb.Del) && (rsp.ErrorResult == nil && len(rsp.ErrorResults) == 0) {
 		cmd := redis.Command(req.Cmd)
 		args := cmd.Args()
-		listEng := d.store.getListEngine()
-		idxReqQueueKey := getIdxReqQueueKey(d.cell.ID % uint64(globalCfg.NumIdxReqQueues))
 		if req.Type == raftcmdpb.Del {
 			for i := 0; i < len(args); i++ {
 				key := args[i]
 				idxName := d.store.matchIndex(key)
 				if idxName != "" {
-					idxReq := &pdpb.IndexRequest{}
-					idxReq.IdxKey = &pdpb.IndexKeyRequest{
+					idxKeyReq := &pdpb.IndexKeyRequest{
 						CellID:  d.cell.ID,
-						Epoch:   d.cell.Epoch,
 						IdxName: idxName,
 						CmdArgs: [][]byte{key},
 						IsDel:   true,
 					}
-					var idxReqB []byte
-					if idxReqB, err = idxReq.Marshal(); err != nil {
+					if err = d.store.handleIdxKeyReq(idxKeyReq); err != nil {
 						return
 					}
-					if _, err = listEng.RPush(idxReqQueueKey, idxReqB); err != nil {
-						return
-					}
-					log.Debugf("raftstore-apply[cell-%d]: will update index %s for key %s",
-						d.cell.ID, idxName, key)
 				}
 			}
 		} else {
 			key := args[0]
 			idxName := d.store.matchIndex(key)
 			if idxName != "" {
-				idxReq := &pdpb.IndexRequest{}
-				idxReq.IdxKey = &pdpb.IndexKeyRequest{
+				idxKeyReq := &pdpb.IndexKeyRequest{
 					CellID:  d.cell.ID,
-					Epoch:   d.cell.Epoch,
 					IdxName: idxName,
 					CmdArgs: args,
 					IsDel:   false,
 				}
-				var idxReqB []byte
-				if idxReqB, err = idxReq.Marshal(); err != nil {
+				if err = d.store.handleIdxKeyReq(idxKeyReq); err != nil {
 					return
 				}
-				if _, err = listEng.RPush(idxReqQueueKey, idxReqB); err != nil {
-					return
-				}
-				log.Debugf("raftstore-apply[cell-%d]: will update index %s for key %s",
-					d.cell.ID, idxName, key)
 			}
 		}
 	}

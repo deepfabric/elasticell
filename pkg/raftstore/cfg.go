@@ -52,7 +52,6 @@ type Cfg struct {
 	WorkerCountApply          uint64
 	EnableSyncRaftLog         bool
 	EnableMetricsRequest      bool
-	NumIdxReqQueues           int
 }
 
 // NewCfg return default cfg

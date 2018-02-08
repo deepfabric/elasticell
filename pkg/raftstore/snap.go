@@ -25,6 +25,7 @@ import (
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
 	"github.com/deepfabric/elasticell/pkg/storage"
 	"github.com/deepfabric/elasticell/pkg/util"
+	"github.com/deepfabric/indexer"
 	"github.com/fagongzi/goetty"
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
@@ -55,12 +56,13 @@ type defaultSnapshotManager struct {
 
 	cfg *Cfg
 	db  storage.DataEngine
+	s   *Store
 	dir string
 
 	registry map[string]struct{}
 }
 
-func newDefaultSnapshotManager(cfg *Cfg, db storage.DataEngine) SnapshotManager {
+func newDefaultSnapshotManager(cfg *Cfg, db storage.DataEngine, s *Store) SnapshotManager {
 	dir := cfg.getSnapDir()
 
 	if !exist(dir) {
@@ -123,6 +125,7 @@ func newDefaultSnapshotManager(cfg *Cfg, db storage.DataEngine) SnapshotManager 
 		limiter:  rate.NewLimiter(rate.Every(time.Second/time.Duration(cfg.LimitSnapChunkRate)), int(cfg.LimitSnapChunkRate)),
 		dir:      dir,
 		db:       db,
+		s:        s,
 		registry: make(map[string]struct{}),
 	}
 }
@@ -190,6 +193,14 @@ func (m *defaultSnapshotManager) Create(msg *mraft.SnapshotMessage) error {
 			err := m.db.CreateSnapshot(path, start, end)
 			if err != nil {
 				return errors.Wrapf(err, "")
+			}
+			cellID := msg.Header.Cell.ID
+			var idxer *indexer.Indexer
+			if idxer, err = m.s.GetIndexer(cellID); err != nil {
+				return err
+			}
+			if err = idxer.CreateSnapshot(path); err != nil {
+				return err
 			}
 		}
 
@@ -380,9 +391,21 @@ func (m *defaultSnapshotManager) Apply(msg *mraft.SnapshotMessage) error {
 	if err != nil {
 		return err
 	}
-	defer os.RemoveAll(m.getPathOfSnapKey(msg))
+	dir := m.getPathOfSnapKey(msg)
+	defer os.RemoveAll(dir)
 
-	return m.db.ApplySnapshot(m.getPathOfSnapKey(msg))
+	if err := m.db.ApplySnapshot(dir); err != nil {
+		return err
+	}
+	cellID := msg.Header.Cell.ID
+	var idxer *indexer.Indexer
+	if idxer, err = m.s.GetIndexer(cellID); err != nil {
+		return err
+	}
+	if err = idxer.ApplySnapshot(dir); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (m *defaultSnapshotManager) cleanTmp(msg *mraft.SnapshotMessage) error {
