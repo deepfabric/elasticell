@@ -13,4 +13,4 @@ ENV ELASTICELL_EXEC=pd
 
 WORKDIR /apps/deepfabric
 
-ENTRYPOINT ./entrypoint.sh
+ENTRYPOINT ["/bin/sh", "./entrypoint.sh"]

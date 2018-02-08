@@ -20,4 +20,4 @@ ENV ELASTICELL_EXEC=cell
 
 WORKDIR /apps/deepfabric
 
-ENTRYPOINT ./entrypoint.sh
+ENTRYPOINT ["/bin/sh", "./entrypoint.sh"]
