@@ -1,5 +1,5 @@
 ## Installation
-Elasticell is consists of pd, cell and redis-proxy(optional). [More about Elasticell components](../architecture/concept.md)
+Elasticell is consists of pd, cell and proxy(optional). [More about Elasticell components](../architecture/concept.md)
 
 ### Configuration
 For example, we will install Elasticell cluster as below: 
@@ -8,133 +8,61 @@ For example, we will install Elasticell cluster as below:
 |--|--|
 |PD|192.168.1.101, 192.168.1.102, 192.168.1.103|
 |Cell|192.168.1.201, 192.168.1.202, 192.168.1.203|
-|Redis-Proxy|192.168.1.91|
+|Proxy|192.168.1.91|
 
-On each node, use `/apps/deepfabric` as base folder, and create configuration file `/apps/deepfabric/cfg/cfg.json`, and create data folder `/apps/deepfabric/data`, and create log folder `/apps/deepfabric/log`
+On each node, use `/apps/deepfabric` as base folder, and create data folder `/apps/deepfabric/data`, and create log folder `/apps/deepfabric/log`
 
 #### PD
 ##### Node: 192.168.1.101
-###### Configuration
-```json
-{
-    "name": "pd1",
-    "dataDir": "/apps/deepfabric/data",
-    "leaseSecsTTL": 5,
-    "rpcAddr": "192.168.1.101:20800",
-    "embedEtcd": {
-        "clientUrls": "http://192.168.1.101:2379",
-        "peerUrls": "http://192.168.1.101:2380",
-        "initialCluster": "pd1=http://192.168.1.101:2380,pd2=http://192.168.1.102:2380,pd3=http://192.168.1.103:2380",
-        "initialClusterState": "new"
-    },
-    "Schedule": {
-        "maxReplicas": 3,
-        "locationLabels": ["zone", "rack"],
-        "maxSnapshotCount": 3,
-        "maxStoreDownTimeMs": 3600000,
-        "leaderScheduleLimit": 16,
-        "cellScheduleLimit": 12,
-        "replicaScheduleLimit": 16
-    }
-}
-```
-
-###### Run
 ```bash
-pd --cfg=pd.json --log-level=info
+./pd --log-level=info --log-file=/apps/deepfabric/log/pd.log --name=pd1 --data=/apps/deepfabric/data --addr-rpc=192.168.1.101:20800 --urls-client=http://192.168.1.101:2379 --urls-peer=http://192.168.1.101:2380 --initial-cluster=pd1=http://192.168.1.101:2380,pd2=http://192.168.1.102:2380,pd3=http://192.168.1.103:2380
 ```
 
 ##### Node: 192.168.1.102
-###### Configuration
-```json
-{
-    "name": "pd2",
-    "dataDir": "/apps/deepfabric/data",
-    "leaseSecsTTL": 5,
-    "rpcAddr": "192.168.1.102:20800",
-    "embedEtcd": {
-        "clientUrls": "http://192.168.1.102:2379",
-        "peerUrls": "http://192.168.1.102:2380",
-        "initialCluster": "pd1=http://192.168.1.101:2380,pd2=http://192.168.1.102:2380,pd3=http://192.168.1.103:2380",
-        "initialClusterState": "new"
-    },
-    "Schedule": {
-        "maxReplicas": 3,
-        "locationLabels": ["zone", "rack"],
-        "maxSnapshotCount": 3,
-        "maxStoreDownTimeMs": 3600000,
-        "leaderScheduleLimit": 16,
-        "cellScheduleLimit": 12,
-        "replicaScheduleLimit": 16
-    }
-}
-```
-
-###### Run
 ```bash
-pd --cfg=pd.json --log-level=info
+./pd --log-level=info --log-file=/apps/deepfabric/log/pd.log --name=pd2 --data=/apps/deepfabric/data --addr-rpc=192.168.1.102:20800 --urls-client=http://192.168.1.102:2379 --urls-peer=http://192.168.1.102:2380 --initial-cluster=pd1=http://192.168.1.101:2380,pd2=http://192.168.1.102:2380,pd3=http://192.168.1.103:2380
 ```
 
 ##### Node: 192.168.1.103
-###### Configuration
-```json
-{
-    "name": "pd3",
-    "dataDir": "/apps/deepfabric/data",
-    "leaseSecsTTL": 5,
-    "rpcAddr": "192.168.1.103:20800",
-    "embedEtcd": {
-        "clientUrls": "http://192.168.1.103:2379",
-        "peerUrls": "http://192.168.1.103:2380",
-        "initialCluster": "pd1=http://192.168.1.101:2380,pd2=http://192.168.1.102:2380,pd3=http://192.168.1.103:2380",
-        "initialClusterState": "new"
-    },
-    "Schedule": {
-        "maxReplicas": 3,
-        "locationLabels": ["zone", "rack"],
-        "maxSnapshotCount": 3,
-        "maxStoreDownTimeMs": 3600000,
-        "leaderScheduleLimit": 16,
-        "cellScheduleLimit": 12,
-        "replicaScheduleLimit": 16
-    }
-}
-```
-
-###### Run
 ```bash
-pd --cfg=pd.json --log-level=info
+./pd --log-level=info --log-file=/apps/deepfabric/log/pd.log --name=pd3 --data=/apps/deepfabric/data --addr-rpc=192.168.1.103:20800 --urls-client=http://192.168.1.103:2379 --urls-peer=http://192.168.1.103:2380 --initial-cluster=pd1=http://192.168.1.101:2380,pd2=http://192.168.1.102:2380,pd3=http://192.168.1.103:2380
 ```
 
 #### Cell
 ##### Node: 192.168.1.201
 ```bash
-cell --log-level=info --pd=192.168.1.101:20800,192.168.1.102:20800,192.168.1.103:20800 --addr=192.168.1.201:10800 --addr-cli=192.168.1.201:6379 --zone=zone-1 --rack=rack-1 --data=/apps/deepfabric/data
+./cell --log-level=info --log-file=/apps/deepfabric/log/cell.log --pd=192.168.1.101:20800,192.168.1.102:20800,192.168.1.103:20800 --addr=192.168.1.201:10800 --addr-cli=192.168.1.201:6379 --zone=zone-1 --rack=rack-1 --data=/apps/deepfabric/data
 ```
 
 ##### Node: 192.168.1.202
 ```bash
-cell --log-level=info --pd=192.168.1.101:20800,192.168.1.102:20800,192.168.1.103:20800 --addr=192.168.1.202:10800 --addr-cli=192.168.1.202:6379 --zone=zone-2 --rack=rack-2 --data=/apps/deepfabric/data
+./cell --log-level=info --log-file=/apps/deepfabric/log/cell.log --pd=192.168.1.101:20800,192.168.1.102:20800,192.168.1.103:20800 --addr=192.168.1.202:10800 --addr-cli=192.168.1.202:6379 --zone=zone-2 --rack=rack-2 --data=/apps/deepfabric/data
 ```
 
 ##### Node: 192.168.1.203
 ```bash
-cell --log-level=info --pd=192.168.1.101:20800,192.168.1.102:20800,192.168.1.103:20800 --addr=192.168.1.203:10800 --addr-cli=192.168.1.203:6379 --zone=zone-3 --rack=rack-3 --data=/apps/deepfabric/data
+cell --log-level=info --log-file=/apps/deepfabric/log/cell.log --pd=192.168.1.101:20800,192.168.1.102:20800,192.168.1.103:20800 --addr=192.168.1.203:10800 --addr-cli=192.168.1.203:6379 --zone=zone-3 --rack=rack-3 --data=/apps/deepfabric/data
 ```
 
-#### Redis-Proxy
+#### Proxy
 ##### Node: 192.168.1.91
+Create a json file in the folder `/apps/deepfabric/cfg/cfg.json` as below:
+
 ```json
 {
     "addr": "192.168.1.91:6379",
+    "addrNotify": "192.168.1.91:9998",
+    "watcherHeartbeatSec": 5,
     "pdAddrs": [
         "192.168.1.101:20800",
         "192.168.1.102:20800",
         "192.168.1.103:20800"
     ],
-    "maxRetries": 3,
+    "maxRetries": 100,
     "retryDuration": 2000,
+    "workerCount": 2,
     "supportCMDs": [
+        "query",
         "ping",
         "set",
         "get",
@@ -201,6 +129,10 @@ cell --log-level=info --pd=192.168.1.101:20800,192.168.1.102:20800,192.168.1.103
 }
 ```
 
+Run proxy:
+```bash
+./redis-proxy --log-level=info --log-file=/apps/deepfabric/log/proxy.log --cfg=/apps/deepfabric/cfg/cfg.json
+```
 
 ### Install from docker
 ```bash
@@ -210,24 +142,42 @@ docker pull deepfabric/proxy
 ```
 
 #### Run PD
-Execute the following command on each machine(192.168.1.101,192.168.1.102,192.168.1.103)
-
+##### Node: 192.168.1.101
 ```bash
-docker run -d -v /apps/deepfabric/cfg:/apps/deepfabric/cfg -v /apps/deepfabric/data:/apps/deepfabric/data deepfabric/pd
+docker run -d --net=host -v /apps/deepfabric/data:/apps/deepfabric/data deepfabric/pd --log-level=info --log-file=/apps/deepfabric/log/pd.log --name=pd1 --data=/apps/deepfabric/data --addr-rpc=192.168.1.101:20800 --urls-client=http://192.168.1.101:2379 --urls-peer=http://192.168.1.101:2380 --initial-cluster=pd1=http://192.168.1.101:2380,pd2=http://192.168.1.102:2380,pd3=http://192.168.1.103:2380
+```
+
+##### Node: 192.168.1.102
+```bash
+docker run -d --net=host -v /apps/deepfabric/data:/apps/deepfabric/data deepfabric/pd --log-level=info --log-file=/apps/deepfabric/log/pd.log --name=pd2 --data=/apps/deepfabric/data --addr-rpc=192.168.1.102:20800 --urls-client=http://192.168.1.102:2379 --urls-peer=http://192.168.1.102:2380 --initial-cluster=pd1=http://192.168.1.101:2380,pd2=http://192.168.1.102:2380,pd3=http://192.168.1.103:2380
+```
+
+##### Node: 192.168.1.103
+```bash
+docker run -d --net=host -v /apps/deepfabric/data:/apps/deepfabric/data deepfabric/pd --log-level=info --log-file=/apps/deepfabric/log/pd.log --name=pd3 --data=/apps/deepfabric/data --addr-rpc=192.168.1.103:20800 --urls-client=http://192.168.1.103:2379 --urls-peer=http://192.168.1.103:2380 --initial-cluster=pd1=http://192.168.1.101:2380,pd2=http://192.168.1.102:2380,pd3=http://192.168.1.103:2380
 ```
 
 #### Run Cell
-Execute the following command on each machine(192.168.1.201,192.168.1.202,192.168.1.203)
-
+##### Node: 192.168.1.201
 ```bash
-docker run -d -v /apps/deepfabric/cfg:/apps/deepfabric/cfg -v /apps/deepfabric/data:/apps/deepfabric/data deepfabric/cell
+docker run -d --net=host -v /apps/deepfabric/data:/apps/deepfabric/data deepfabric/cell --log-level=info --log-file=/apps/deepfabric/log/cell.log --pd=192.168.1.101:20800,192.168.1.102:20800,192.168.1.103:20800 --addr=192.168.1.201:10800 --addr-cli=192.168.1.201:6379 --zone=zone-1 --rack=rack-1 --data=/apps/deepfabric/data
 ```
 
-#### Run Redis-Proxy
-Execute the following command on 192.168.1.91
+##### Node: 192.168.1.202
+```bash
+docker run -d --net=host -v /apps/deepfabric/data:/apps/deepfabric/data deepfabric/cell --log-level=info --log-file=/apps/deepfabric/log/cell.log --pd=192.168.1.101:20800,192.168.1.102:20800,192.168.1.103:20800 --addr=192.168.1.202:10800 --addr-cli=192.168.1.202:6379 --zone=zone-1 --rack=rack-1 --data=/apps/deepfabric/data
+```
+
+##### Node: 192.168.1.203
+```bash
+docker run -d --net=host -v /apps/deepfabric/data:/apps/deepfabric/data deepfabric/cell --log-level=info --log-file=/apps/deepfabric/log/cell.log --pd=192.168.1.101:20800,192.168.1.102:20800,192.168.1.103:20800 --addr=192.168.1.203:10800 --addr-cli=192.168.1.203:6379 --zone=zone-1 --rack=rack-1 --data=/apps/deepfabric/data
+```
+
+#### Run Proxy
+Execute the following command on 192.168.1.91, the json configuration file is the same as the previous.
 
 ```bash
-docker run -d -v /apps/deepfabric/cfg:/apps/deepfabric/cfg -v /apps/deepfabric/data:/apps/deepfabric/data deepfabric/proxy
+docker run -d --net=host -v /apps/deepfabric/cfg:/apps/deepfabric/cfg deepfabric/proxy --log-level=info --log-file=/apps/deepfabric/log/proxy.log --cfg=/apps/deepfabric/cfg/cfg.json
 ```
 
 ### Install from source
@@ -253,7 +203,7 @@ docker run -it --rm -v /apps/deepfabric/dist:/apps/deepfabric/dist -e ELASTICELL
 docker run -it --rm -v /apps/deepfabric/dist:/apps/deepfabric/dist -e ELASTICELL_BUILD_TARGET=cell -e ELASTICELL_BUILD_VERSION=master deepfabric/elasticell-build 
 ```
 
-##### Build Redis-Proxy
+##### Build Proxy
 ```bash
 docker run -it --rm -v /apps/deepfabric/dist:/apps/deepfabric/dist -e ELASTICELL_BUILD_TARGET=proxy -e ELASTICELL_BUILD_VERSION=master deepfabric/elasticell-build 
 ```
@@ -271,25 +221,4 @@ apt-get -y install zlib1g-dev
 apt-get -y install libbz2-dev 
 apt-get -y install libgtest-dev 
 apt-get -y install libjemalloc-dev
-```
-
-##### Run PD
-Execute the following command on each machine(192.168.1.101,192.168.1.102,192.168.1.103)
-
-```bash
-/apps/deepfabric/pd --cfg=/apps/deepfabric/cfg/cfg.json --log-level=debug --log-file=/apps/deepfabric/log/pd.log
-```
-
-##### Run Cell
-Execute the following command on each machine(192.168.1.201,192.168.1.202,192.168.1.203)
-
-```bash
-/apps/deepfabric/cell --cfg=/apps/deepfabric/cfg/cfg.json --log-level=debug --log-file=/apps/deepfabric/log/pd.log
-```
-
-##### Run Redis-Proxy
-Execute the following command on 192.168.1.91
-
-```bash
-/apps/deepfabric/redis-proxy --cfg=/apps/deepfabric/cfg/cfg.json --log-level=debug --log-file=/apps/deepfabric/log/pd.log
 ```

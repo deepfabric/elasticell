@@ -54,11 +54,12 @@
 |worker-count-sent|Worker count: sent internal messages|
 |worker-count-apply|Worker count: apply raft log|
 |enable-metrics-request|Enable: request metrics|
+|enable-sync-raftlog|Enable: sync to disk while append the raft log|
 |metric-job|prometheus job name|
 |metric-address|prometheus proxy address|
 |interval-metric-sync|Interval(sec): metric sync|
 
-### Redis-Proxy
+### Proxy
 |field|comments|
 |--|--|
 |addr|Address to serve redis|

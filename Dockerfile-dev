@@ -1,4 +1,4 @@
-FROM golang:1.8
+FROM golang
 
 RUN apt-get update \
     && apt-get -y install libsnappy-dev  \
@@ -7,6 +7,5 @@ RUN apt-get update \
     && apt-get -y install libgtest-dev \
     && apt-get -y install libjemalloc-dev
 
-RUN go get github.com/fagongzi/goetty \
-    && go get github.com/deepfabric/c-nemo \
+RUN go get github.com/deepfabric/c-nemo \
     && go get github.com/deepfabric/go-nemo
