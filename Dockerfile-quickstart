@@ -1,4 +1,4 @@
-FROM ubuntu:16.04
+FROM golang:1.9.2
 
 RUN mkdir -p /apps/deepfabric/cfg \
     && mkdir -p /apps/deepfabric/log \
