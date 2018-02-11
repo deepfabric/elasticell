@@ -135,6 +135,7 @@ func (s *Store) getIndexer(cellID uint64) (idxer *indexer.Indexer, err error) {
 		}
 	}
 	s.indexers[cellID] = idxer
+	log.Infof("store-index[cell-%v]: created indexer with indices definition %v", cellID, s.indices)
 	return
 }
 
@@ -243,7 +244,6 @@ func (s *Store) handleIdxReqQueue() (absorbed bool, err error) {
 	var idxDestroyReq *pdpb.IndexDestroyCellRequest
 	var idxRebuildReq *pdpb.IndexRebuildCellRequest
 	var idxReqB []byte
-	begin := time.Now()
 	if idxReqB, err = listEng.LIndex(idxReqQueueKey, 0); err != nil {
 		return
 	}
@@ -258,21 +258,17 @@ func (s *Store) handleIdxReqQueue() (absorbed bool, err error) {
 		return
 	}
 	if idxDestroyReq = idxReq.GetIdxDestroy(); idxDestroyReq != nil {
-		if err = s.indexDestroyCell(idxDestroyReq, wb); err != nil {
-			log.Errorf("store-index: failed to handle idxDestroyReq %+v\n%+v", idxDestroyReq, err)
-		}
+		err = s.indexDestroyCell(idxDestroyReq, wb)
 	} else if idxRebuildReq = idxReq.GetIdxRebuild(); idxRebuildReq != nil {
-		if err = s.indexRebuildCell(idxRebuildReq, wb, dirtyIndices); err != nil {
-			log.Errorf("store-index: failed to handle idxRebuildReq %+v\n%+v", idxRebuildReq, err)
-		}
+		err = s.indexRebuildCell(idxRebuildReq, wb, dirtyIndices)
 	} else if idxSplitReq = idxReq.GetIdxSplit(); idxSplitReq != nil {
 		left := idxSplitReq.LeftCellID
 		right := idxSplitReq.RightCellID
-		if err = s.indexSplitCell(left, right, wb, dirtyIndices); err != nil {
-			log.Errorf("store-index: failed to handle idxSplitReq %+v\n%+v", idxSplitReq, err)
-		}
+		err = s.indexSplitCell(left, right, wb, dirtyIndices)
 	} else {
-		log.Errorf("store-index: unknown idxReq %v, idxReqB %v", idxReq, idxReqB)
+		err = errors.Errorf("unknown idxReq type, idxReq %v, idxReqB %v", idxReq, idxReqB)
+	}
+	if err != nil {
 		return
 	}
 
@@ -289,8 +285,6 @@ func (s *Store) handleIdxReqQueue() (absorbed bool, err error) {
 		err = errors.Wrap(err, "")
 		return
 	}
-	duration := time.Now().Sub(begin)
-	log.Infof("store-index: done processing idxReq %v in %v", idxReq, duration)
 	return
 }
 
@@ -423,6 +417,7 @@ func (s *Store) addIndexedKey(cellID uint64, idxNameIn string, docID uint64, dat
 }
 
 func (s *Store) indexSplitCell(cellIDL, cellIDR uint64, wb storage.WriteBatch, dirtyIndices map[*indexer.Indexer]int) (err error) {
+	begin := time.Now()
 	var cellL, cellR *metapb.Cell
 	if cellL = s.getCell(cellIDL); cellL == nil {
 		log.Infof("store-index[cell-%d]: ignored %+v due to left cell %d is gone.", cellIDL)
@@ -478,11 +473,13 @@ func (s *Store) indexSplitCell(cellIDL, cellIDR uint64, wb storage.WriteBatch, d
 		}
 		return
 	})
-	log.Infof("store-index[cell-%d]: done cell split for right cell %+v, has scanned %d dataKeys, has indexed %d dataKeys, %d errors.", cellIDL, cellR, scanned, indexed, cntErr)
+	duration := time.Now().Sub(begin)
+	log.Infof("store-index[cell-%d]: done cell split for right cell %+v, has scanned %d dataKeys, has indexed %d dataKeys, %d errors, cost %v.", cellIDL, cellR, scanned, indexed, cntErr, duration)
 	return
 }
 
 func (s *Store) indexDestroyCell(idxDestroyReq *pdpb.IndexDestroyCellRequest, wb storage.WriteBatch) (err error) {
+	begin := time.Now()
 	var cell *metapb.Cell
 	if cell = s.getCell(idxDestroyReq.CellID); cell == nil {
 		log.Infof("store-index[cell-%d]: ignored %+v due to cell %d is gone.", idxDestroyReq.CellID, idxDestroyReq.CellID)
@@ -523,11 +520,13 @@ func (s *Store) indexDestroyCell(idxDestroyReq *pdpb.IndexDestroyCellRequest, wb
 		indexed++
 		return
 	})
-	log.Infof("store-index[cell-%d]: done cell destroy %+v, has scanned %d dataKeys, has indexed %d dataKeys, %d errors.", idxDestroyReq.CellID, idxDestroyReq, scanned, indexed, cntErr)
+	duration := time.Now().Sub(begin)
+	log.Infof("store-index[cell-%d]: done cell destroy %+v, has scanned %d dataKeys, has indexed %d dataKeys, %d errors, cost %v.", idxDestroyReq.CellID, idxDestroyReq, scanned, indexed, cntErr, duration)
 	return
 }
 
 func (s *Store) indexRebuildCell(idxRebuildReq *pdpb.IndexRebuildCellRequest, wb storage.WriteBatch, dirtyIndices map[*indexer.Indexer]int) (err error) {
+	begin := time.Now()
 	var cell *metapb.Cell
 	if cell = s.getCell(idxRebuildReq.CellID); cell == nil {
 		log.Infof("store-index[cell-%d]: ignored %+v due to cell %d is gone.", idxRebuildReq.CellID, idxRebuildReq.CellID)
@@ -571,7 +570,8 @@ func (s *Store) indexRebuildCell(idxRebuildReq *pdpb.IndexRebuildCellRequest, wb
 		}
 		return
 	})
-	log.Infof("store-index[cell-%d]: done cell index rebuild %+v, has scanned %d dataKeys, has indexed %d dataKeys, %d errors", idxRebuildReq.CellID, idxRebuildReq, scanned, indexed, cntErr)
+	duration := time.Now().Sub(begin)
+	log.Infof("store-index[cell-%d]: done cell index rebuild %+v, has scanned %d dataKeys, has indexed %d dataKeys, %d errors, cost %v.", idxRebuildReq.CellID, idxRebuildReq, scanned, indexed, cntErr, duration)
 	return
 }
 
