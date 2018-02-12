@@ -391,8 +391,12 @@ func (s *Store) addIndexedKey(cellID uint64, idxNameIn string, docID uint64, dat
 	if doc, err = convertToDocument(idxDef, docID, pairs); err != nil {
 		return
 	}
+	// Insert could fail with ErrIdxNotExist since there's lock protection between determining doc.Index and invoking Insert.
 	if err = idxer.Insert(doc); err != nil {
-		return
+		if errors.Cause(err) != indexer.ErrIdxNotExist {
+			return
+		}
+		err = nil
 	}
 	log.Debugf("store-index[cell-%d]: added dataKey %+v to index %s, docID %d, paris %+v",
 		cellID, dataKey, idxNameIn, docID, pairs)
