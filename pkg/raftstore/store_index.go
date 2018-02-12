@@ -30,7 +30,6 @@ import (
 	"github.com/deepfabric/elasticell/pkg/util"
 	"github.com/deepfabric/indexer"
 	"github.com/deepfabric/indexer/cql"
-	"github.com/pilosa/pilosa"
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 )
@@ -76,27 +75,6 @@ func (s *Store) persistIndices() (err error) {
 	if err = util.FileMarshal(indicesFp, s.indices); err != nil {
 		log.Errorf("store-index: failed to persist indices definition\n%+v", err)
 	}
-	return
-}
-
-func (s *Store) allocateDocID(cellID uint64) (docID uint64, err error) {
-	var nextDocID int64
-	if nextDocID, err = s.getKVEngine().IncrBy(getCellNextDocIDKey(cellID), 1); err != nil {
-		return
-	}
-	nextDocID--
-	if nextDocID&(pilosa.SliceWidth-1) == 0 {
-		//If the key does not exist, it is set to 0 before performing the operation.
-		if nextDocID, err = s.getKVEngine().IncrBy(getCellNextDocIDKey(0), 1); err != nil {
-			return
-		}
-		nextDocID--
-		nextDocID *= pilosa.SliceWidth
-		if err = s.getKVEngine().Set(getCellNextDocIDKey(cellID), []byte(strconv.FormatInt(nextDocID+1, 10))); err != nil {
-			return
-		}
-	}
-	docID = uint64(nextDocID)
 	return
 }
 
@@ -365,7 +343,12 @@ func (s *Store) addIndexedKey(cellID uint64, idxNameIn string, docID uint64, dat
 
 	if docID == 0 {
 		// allocate docID
-		if docID, err = s.allocateDocID(cellID); err != nil {
+		p := s.replicatesMap.get(cellID)
+		if p == nil {
+			err = errors.Errorf("store-index[cell-%d]: cell not exist", cellID)
+			return
+		}
+		if docID, err = p.AllocateDocID(); err != nil {
 			return
 		}
 		if err = wb.Set(getDocIDKey(docID), dataKey); err != nil {
@@ -497,9 +480,6 @@ func (s *Store) indexDestroyCell(idxDestroyReq *pdpb.IndexDestroyCellRequest, wb
 	delete(s.indexers, idxDestroyReq.GetCellID())
 	s.rwlock.Unlock()
 	if err = idxer.Destroy(); err != nil {
-		return
-	}
-	if err = wb.Delete(getCellNextDocIDKey(cellID)); err != nil {
 		return
 	}
 	var scanned, indexed, cntErr int

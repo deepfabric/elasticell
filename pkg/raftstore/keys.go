@@ -204,10 +204,6 @@ func getRaftLogKey(cellID uint64, logIndex uint64) []byte {
 	return getCellIDKey(cellID, raftLogSuffix, 8, logIndex)
 }
 
-func getCellNextDocIDKey(cellID uint64) []byte {
-	return getCellIDKey(cellID, nextDocIDSuffix, 0, 0)
-}
-
 func getDocIDKey(docID uint64) []byte {
 	buf := acquireBuf()
 	buf.Write(cellDocIDPrefixKey)
