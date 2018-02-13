@@ -30,6 +30,7 @@ import (
 	"github.com/deepfabric/elasticell/pkg/util"
 	"github.com/deepfabric/indexer"
 	"github.com/deepfabric/indexer/cql"
+	"github.com/pilosa/pilosa"
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 )
@@ -483,6 +484,10 @@ func (s *Store) indexDestroyCell(idxDestroyReq *pdpb.IndexDestroyCellRequest, wb
 	s.rwlock.Lock()
 	delete(s.indexers, idxDestroyReq.GetCellID())
 	s.rwlock.Unlock()
+
+	if err = s.clearDocIDKeys(idxer); err != nil {
+		return
+	}
 	if err = idxer.Destroy(); err != nil {
 		return
 	}
@@ -525,6 +530,11 @@ func (s *Store) indexRebuildCell(idxRebuildReq *pdpb.IndexRebuildCellRequest, wb
 	if idxer, err = s.GetIndexer(cellID); err != nil {
 		return
 	}
+
+	if err = s.clearDocIDKeys(idxer); err != nil {
+		return
+	}
+
 	if err = idxer.Destroy(); err != nil {
 		return
 	}
@@ -556,6 +566,19 @@ func (s *Store) indexRebuildCell(idxRebuildReq *pdpb.IndexRebuildCellRequest, wb
 	})
 	duration := time.Now().Sub(begin)
 	log.Infof("store-index[cell-%d]: done cell index rebuild %+v, has scanned %d dataKeys, has indexed %d dataKeys, %d errors, cost %v.", idxRebuildReq.CellID, idxRebuildReq, scanned, indexed, cntErr, duration)
+	return
+}
+
+func (s *Store) clearDocIDKeys(idxer *indexer.Indexer) (err error) {
+	numList := idxer.GetDocIDFragList()
+	for _, num := range numList {
+		docIDStart := num * pilosa.SliceWidth
+		start := getDocIDKey(docIDStart)
+		end := getDocIDKey(docIDStart + pilosa.SliceWidth)
+		if err = s.engine.GetDataEngine().RangeDelete(start, end); err != nil {
+			return errors.Wrapf(err, "")
+		}
+	}
 	return
 }
 
