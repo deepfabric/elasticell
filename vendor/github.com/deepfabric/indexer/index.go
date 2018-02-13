@@ -383,3 +383,8 @@ func (ind *Index) Select(q *cql.CqlSelect) (qr *QueryResult, err error) {
 
 	return
 }
+
+//GetDocIDFragList returns DocID fragment list. Each fragment's size is pilosa.SliceWidth
+func (ind *Index) GetDocIDFragList() (numList []uint64) {
+	return ind.liveDocs.GetFragList()
+}

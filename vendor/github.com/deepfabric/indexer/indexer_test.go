@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pilosa/pilosa"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 
@@ -306,6 +307,7 @@ func TestIndexerWal(t *testing.T) {
 func TestIndexerSnapEmpty(t *testing.T) {
 	var err error
 	var ir, ir2 *Indexer
+	var numList []uint64
 	mainDir1 := "/tmp/indexer_test"
 	mainDir2 := "/tmp/indexer_test2"
 	snapDir := "/tmp/indexer_test_snap"
@@ -325,8 +327,9 @@ func TestIndexerSnapEmpty(t *testing.T) {
 	require.NoError(t, err)
 	fmt.Printf("ir.GetDocProts(): %v\n", ir.GetDocProts())
 
-	err = ir.CreateSnapshot(snapDir)
+	numList, err = ir.CreateSnapshot(snapDir)
 	require.NoError(t, err)
+	require.Equal(t, []uint64{}, numList)
 
 	//create indexer with existing data
 	ir2, err = NewIndexer(mainDir2, false, false)
@@ -343,8 +346,9 @@ func TestIndexerSnapEmpty(t *testing.T) {
 	ir, err = NewIndexer(mainDir1, false, true)
 	require.NoError(t, err)
 
-	err = ir.CreateSnapshot(snapDir)
+	numList, err = ir.CreateSnapshot(snapDir)
 	require.NoError(t, err)
+	require.Equal(t, []uint64{}, numList)
 
 	//create indexer with existing data
 	ir2, err = NewIndexer(mainDir2, false, true)
@@ -357,6 +361,7 @@ func TestIndexerSnap(t *testing.T) {
 	var err error
 	var docProt *cql.DocumentWithIdx
 	var ir, ir2 *Indexer
+	var numList, numList2 []uint64
 	initialNumDocs := 137
 	mainDir1 := "/tmp/indexer_test"
 	mainDir2 := "/tmp/indexer_test2"
@@ -387,8 +392,29 @@ func TestIndexerSnap(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	err = ir.CreateSnapshot(snapDir)
+	numList, err = ir.CreateSnapshot(snapDir)
 	require.NoError(t, err)
+	require.Equal(t, []uint64{0}, numList)
+
+	numList2 = ir.GetDocIDFragList()
+	require.Equal(t, numList, numList2)
+
+	//create index 2
+	docProt = newDocProt2()
+	err = ir.CreateIndex(docProt)
+	require.NoError(t, err)
+
+	doc := newDocProt2()
+	doc.Doc.DocID = pilosa.SliceWidth
+	err = ir.Insert(doc)
+	require.NoError(t, err)
+
+	numList, err = ir.CreateSnapshot(snapDir)
+	require.NoError(t, err)
+	require.Equal(t, []uint64{0, 1}, numList)
+
+	numList2 = ir.GetDocIDFragList()
+	require.Equal(t, numList, numList2)
 
 	//create indexer with existing data
 	ir2, err = NewIndexer(mainDir2, false, false)

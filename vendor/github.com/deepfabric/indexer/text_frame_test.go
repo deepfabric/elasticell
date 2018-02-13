@@ -110,6 +110,55 @@ func TestTextFrameDestroy(t *testing.T) {
 	require.Equal(t, uint64(0), f.td.Count())
 }
 
+func TestTextFrameGetFragList(t *testing.T) {
+	var err error
+	var f *TextFrame
+
+	f, err = NewTextFrame("/tmp/text_frame_test", "i", "f", true)
+	require.NoError(t, err)
+	defer f.Close()
+
+	text := "Go's standard library does not have a function solely intended to check if a file exists or not (like Python's os.path.exists). What is the idiomatic way to do it? 你好，世界"
+	docIDs := []uint64{
+		0,
+		1,
+		pilosa.SliceWidth,
+		pilosa.SliceWidth + 1,
+		9 * pilosa.SliceWidth}
+	expFragLists := [][]uint64{
+		[]uint64{0},
+		[]uint64{0},
+		[]uint64{0, 1},
+		[]uint64{0, 1},
+		[]uint64{0, 1, 9}}
+	for i := 0; i < len(docIDs); i++ {
+		err = f.DoIndex(docIDs[i], text)
+		require.NoError(t, err)
+		numList := f.GetFragList()
+		require.Equal(t, expFragLists[i], numList)
+	}
+
+	//clearBit doesn't impact GetFragList
+	docIDs = []uint64{
+		0,
+		1,
+		pilosa.SliceWidth,
+		pilosa.SliceWidth + 1,
+		9 * pilosa.SliceWidth}
+	expFragLists = [][]uint64{
+		[]uint64{0, 1, 9},
+		[]uint64{0, 1, 9},
+		[]uint64{0, 1, 9},
+		[]uint64{0, 1, 9},
+		[]uint64{0, 1, 9}}
+	for i := 0; i < len(docIDs); i++ {
+		_, err = f.clearBit(0, docIDs[i])
+		require.NoError(t, err)
+		numList := f.GetFragList()
+		require.Equal(t, expFragLists[i], numList)
+	}
+}
+
 func BenchmarkTextFrameDoIndex(b *testing.B) {
 	var err error
 	var f *TextFrame
