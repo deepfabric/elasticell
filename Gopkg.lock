@@ -150,9 +150,11 @@
   packages = [
     ".",
     "cql",
-    "cql/parser"
+    "cql/parser",
+    "wal",
+    "wal/walpb"
   ]
-  revision = "204281ece0c2ab4718f489a6b50cf971fd74be78"
+  revision = "4eef59b90edf8c5c9004d3737545d13382690a97"
 
 [[projects]]
   branch = "master"
@@ -347,14 +349,28 @@
 [[projects]]
   name = "github.com/shirou/gopsutil"
   packages = [
+    "cpu",
     "disk",
     "host",
     "internal/common",
     "mem",
+    "net",
     "process"
   ]
   revision = "7ec06ec280df1dd1f08befc535049d49d63ae18a"
   version = "v2.17.12"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/shirou/w32"
+  packages = ["."]
+  revision = "bb4de0191aa41b5507caa14b0650cdbddcd9280b"
+
+[[projects]]
+  name = "github.com/sirupsen/logrus"
+  packages = ["."]
+  revision = "d682213848ed68c0a260ca37d6dd5ace8423f5ba"
+  version = "v1.0.4"
 
 [[projects]]
   name = "github.com/sony/gobreaker"
@@ -395,7 +411,8 @@
   name = "golang.org/x/crypto"
   packages = [
     "bcrypt",
-    "blowfish"
+    "blowfish",
+    "ssh/terminal"
   ]
   revision = "728b753d0135da6801d45a38e6f43ff55779c5c2"
 

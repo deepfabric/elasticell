@@ -6,7 +6,7 @@ import (
 
 	datastructures "github.com/deepfabric/go-datastructures"
 	"github.com/deepfabric/indexer/cql"
-	"github.com/juju/testing/checkers"
+	"github.com/stretchr/testify/require"
 )
 
 const (
@@ -15,42 +15,42 @@ const (
 
 func newDocProt() *cql.DocumentWithIdx {
 	return &cql.DocumentWithIdx{
-		Document: cql.Document{
+		Doc: cql.Document{
 			DocID: 0,
-			UintProps: []cql.UintProp{
-				cql.UintProp{
+			UintProps: []*cql.UintProp{
+				&cql.UintProp{
 					Name:   "object",
 					ValLen: 8,
 					Val:    0,
 				},
-				cql.UintProp{
+				&cql.UintProp{
 					Name:   "price",
 					ValLen: 4,
 					Val:    0,
 				},
-				cql.UintProp{
+				&cql.UintProp{
 					Name:    "priceF64",
 					IsFloat: true,
 					ValLen:  8,
 					Val:     0,
 				},
-				cql.UintProp{
+				&cql.UintProp{
 					Name:   "number",
 					ValLen: 4,
 					Val:    0,
 				},
-				cql.UintProp{
+				&cql.UintProp{
 					Name:   "date",
 					ValLen: 8,
 					Val:    0,
 				},
 			},
-			StrProps: []cql.StrProp{
-				cql.StrProp{
+			StrProps: []*cql.StrProp{
+				&cql.StrProp{
 					Name: "description",
 					Val:  "",
 				},
-				cql.StrProp{
+				&cql.StrProp{
 					Name: "note",
 					Val:  "",
 				},
@@ -64,34 +64,27 @@ func newDocProt() *cql.DocumentWithIdx {
 func TestIndexNormal(t *testing.T) {
 	var err error
 	var ind *Index
-	var isEqual bool
 	var found bool
 	var bits map[uint64][]uint64
 
 	docProt := newDocProt()
-	if ind, err = NewIndex(docProt, "/tmp/index_test"); err != nil {
-		t.Fatalf("incorrect result of NewIndex, %+v", err)
-	}
-	if isEqual, err = checkers.DeepEqual(ind.DocProt, docProt); !isEqual {
-		t.Fatalf("incorrect result of NewIndex, %+v", err)
-	}
-
+	ind, err = NewIndex(docProt, "/tmp/index_test")
+	require.NoError(t, err)
+	require.Equal(t, docProt, ind.DocProt)
 	for i := 0; i < NumDocs; i++ {
 		doc := newDocProt()
-		doc.DocID = uint64(i)
-		for j := 0; j < len(doc.UintProps); j++ {
+		doc.Doc.DocID = uint64(i)
+		for j := 0; j < len(doc.Doc.UintProps); j++ {
 			val := uint64(i * (j + 1))
-			if val, err = cql.ParseUintProp(doc.UintProps[j], fmt.Sprintf("%v", val)); err != nil {
-				t.Fatalf("%+v", err)
-			}
-			doc.UintProps[j].Val = val
+			val, err = cql.ParseUintProp(doc.Doc.UintProps[j], fmt.Sprintf("%v", val))
+			require.NoError(t, err)
+			doc.Doc.UintProps[j].Val = val
 		}
-		for j := 0; j < len(doc.StrProps); j++ {
-			doc.StrProps[j].Val = fmt.Sprintf("%03d%03d and some random text", i, j)
+		for j := 0; j < len(doc.Doc.StrProps); j++ {
+			doc.Doc.StrProps[j].Val = fmt.Sprintf("%03d%03d and some random text", i, j)
 		}
-		if err = ind.Insert(doc); err != nil {
-			t.Fatalf("%+v", err)
-		}
+		err = ind.Insert(doc)
+		require.NoError(t, err)
 	}
 
 	// query numerical(integer) range
@@ -109,28 +102,22 @@ func TestIndexNormal(t *testing.T) {
 			},
 		},
 	}
-	if qr, err = ind.Select(cs); err != nil {
-		t.Fatalf("%+v", err)
-	}
+	qr, err = ind.Select(cs)
+	require.NoError(t, err)
 	fmt.Printf("query result: %v\n", qr.Bm.Bits())
 	// low <= 2*i <= high, (low+1)/2 <= i <= high/2
-	want := int(high/2 - (low+1)/2 + 1)
-	if qr.Bm.Count() != uint64(want) {
-		t.Fatalf("incorrect number of matches, have %d, want %d", qr.Bm.Count(), want)
-	}
+	want := uint64(high/2 - (low+1)/2 + 1)
+	require.Equalf(t, want, qr.Bm.Count(), "incorrect number of matches")
 
 	// query numerical range + order by + text
 	cs.OrderBy = "price"
 	cs.Limit = 20
-	if qr, err = ind.Select(cs); err != nil {
-		t.Fatalf("%+v", err)
-	}
+	qr, err = ind.Select(cs)
+	require.NoError(t, err)
+
 	items = qr.Oa.Finalize()
 	fmt.Printf("query result: %v\n", items)
-	want = cs.Limit
-	if len(items) != want {
-		t.Fatalf("incorrect number of matches, have %d, want %d", len(items), want)
-	}
+	require.Equalf(t, cs.Limit, len(items), "incorrect number of matches")
 
 	// dump bits
 	for name, frame := range ind.txtFrames {
@@ -138,9 +125,8 @@ func TestIndexNormal(t *testing.T) {
 		if termID, found = frame.td.GetTermID("017001"); !found {
 			continue
 		}
-		if bits, err = frame.Bits(); err != nil {
-			t.Fatalf("%+v", err)
-		}
+		bits, err = frame.Bits()
+		require.NoError(t, err)
 		//fmt.Printf("frmae %v bits: %v\n", name, bits)
 		fmt.Printf("frame %v bits[%v]: %v\n", name, termID, bits[termID])
 	}
@@ -154,24 +140,19 @@ func TestIndexNormal(t *testing.T) {
 		},
 	}
 	cs.Limit = 20
-	if qr, err = ind.Select(cs); err != nil {
-		t.Fatalf("%+v", err)
-	}
+	qr, err = ind.Select(cs)
+	require.NoError(t, err)
 	items = qr.Oa.Finalize()
 	fmt.Printf("query result: %v\n", items)
-	want = 1
-	if len(items) != want {
-		t.Fatalf("incorrect number of matches, have %d, want %d", len(items), want)
-	}
+	require.Equalf(t, 1, len(items), "incorrect number of matches")
 
 	// query numerical(float) range
 	valSs := []string{"30", "600"}
 	vals := make([]uint64, len(valSs))
 	for i, valS := range valSs {
 		var val uint64
-		if val, err = cql.Float64ToSortableUint64(valS); err != nil {
-			t.Fatalf("%+v", err)
-		}
+		val, err = cql.Float64ToSortableUint64(valS)
+		require.NoError(t, err)
 		vals[i] = val
 		fmt.Printf("FLOAT64 %v\t%v\n", valS, val)
 	}
@@ -186,90 +167,70 @@ func TestIndexNormal(t *testing.T) {
 			},
 		},
 	}
-	if qr, err = ind.Select(cs); err != nil {
-		t.Fatalf("%+v", err)
-	}
+	qr, err = ind.Select(cs)
+	require.NoError(t, err)
 	fmt.Printf("query result: %v\n", qr.Bm.Bits())
 	// low <= 3*i <= high, (low+2)/3 <= i <= high/3
-	want = int(600/3 - (30+2)/3 + 1)
-	if qr.Bm.Count() != uint64(want) {
-		t.Fatalf("incorrect number of matches, have %d, want %d", qr.Bm.Count(), want)
-	}
+	want = uint64(600/3 - (30+2)/3 + 1)
+	require.Equalf(t, want, qr.Bm.Count(), "incorrect number of matches")
 
 	//delete docs
 	for i := 0; i < NumDocs; i++ {
 		doc := newDocProt()
-		doc.DocID = uint64(i)
-		for j := 0; j < len(doc.UintProps); j++ {
-			doc.UintProps[j].Val = uint64(i * (j + 1))
+		doc.Doc.DocID = uint64(i)
+		for j := 0; j < len(doc.Doc.UintProps); j++ {
+			doc.Doc.UintProps[j].Val = uint64(i * (j + 1))
 		}
-		if found, err = ind.Del(doc.DocID); err != nil {
-			t.Fatalf("%+v", err)
-		} else if !found {
-			t.Fatalf("document %v not found", doc)
-		}
+		found, err = ind.Del(doc.Doc.DocID)
+		require.NoError(t, err)
+		require.Equalf(t, true, found, "document %v not found", doc)
 	}
 }
 
 func TestIndexOpenClose(t *testing.T) {
 	var err error
 	var ind, ind2 *Index
-	var isEqual bool
 
 	//create index
 	docProt := newDocProt()
 	ind, err = NewIndex(docProt, "/tmp/index_test")
-	if err != nil {
-		t.Fatalf("%+v", err)
-	}
+	require.NoError(t, err)
 
 	//insert documents
 	for i := 0; i < NumDocs; i++ {
 		doc := newDocProt()
-		doc.DocID = uint64(i)
-		for j := 0; j < len(doc.UintProps); j++ {
-			doc.UintProps[j].Val = uint64(i * (j + 1))
+		doc.Doc.DocID = uint64(i)
+		for j := 0; j < len(doc.Doc.UintProps); j++ {
+			doc.Doc.UintProps[j].Val = uint64(i * (j + 1))
 		}
-		if err = ind.Insert(doc); err != nil {
-			t.Fatalf("%+v", err)
-		}
+		err = ind.Insert(doc)
+		require.NoError(t, err)
 	}
 
 	//close index
-	if err = ind.Close(); err != nil {
-		t.Fatalf("%+v", err)
-	}
+	err = ind.Close()
+	require.NoError(t, err)
 
 	//open index
-	if err = ind.Open(); err != nil {
-		t.Fatalf("%+v", err)
-	}
+	err = ind.Open()
+	require.NoError(t, err)
 
 	//close index
-	if err = ind.Close(); err != nil {
-		t.Fatalf("%+v", err)
-	}
+	err = ind.Close()
+	require.NoError(t, err)
 
 	//open index with another Index object. This occurs when program restart.
 	ind2, err = NewIndexExt("/tmp/index_test", "orders")
-	if err != nil {
-		t.Fatalf("%+v", err)
-	}
+	require.NoError(t, err)
 
 	//verify DocProt keeps unchanged
-	if isEqual, err = checkers.DeepEqual(ind2.DocProt, ind.DocProt); !isEqual {
-		fmt.Printf("have %v\n", ind2.DocProt)
-		fmt.Printf("want %v\n", ind.DocProt)
-		t.Fatalf("index DocProt %+v", err)
-	}
+	require.Equal(t, ind.DocProt, ind2.DocProt)
 
 	//close index
-	if err = ind2.Close(); err != nil {
-		t.Fatalf("%+v", err)
-	}
+	err = ind2.Close()
+	require.NoError(t, err)
 
 	//destroy index
-	if err = ind.Destroy(); err != nil {
-		t.Fatalf("%+v", err)
-	}
+	err = ind.Destroy()
+	require.NoError(t, err)
 }

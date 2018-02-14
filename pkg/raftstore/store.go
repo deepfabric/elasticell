@@ -139,7 +139,7 @@ func NewStore(clusterID uint64, pdClient *pd.Client, meta metapb.Store, engine s
 	s.startAt = uint32(time.Now().Unix())
 	s.engine = engine
 	s.pdClient = pdClient
-	s.snapshotManager = newDefaultSnapshotManager(cfg, engine.GetDataEngine())
+	s.snapshotManager = newDefaultSnapshotManager(cfg, engine.GetDataEngine(), s)
 	s.pendingSnapshots = make(map[uint64]mraft.SnapshotMessageHeader)
 	s.trans = newTransport(s, pdClient, s.notify)
 	s.keyRanges = util.NewCellTree()
@@ -225,7 +225,7 @@ func (s *Store) startCells() {
 
 		s.keyRanges.Update(localState.Cell)
 		s.replicatesMap.put(cellID, pr)
-		if _, err := s.getIndexer(cellID); err != nil {
+		if _, err := s.GetIndexer(cellID); err != nil {
 			return false, err
 		}
 
@@ -1089,7 +1089,7 @@ func (s *Store) handleStoreHeartbeat() error {
 			rsp.SetLogLevel.NewLevel)
 		log.SetLevel(log.Level(rsp.SetLogLevel.NewLevel))
 	}
-	err = s.handleIndicesChange(rsp.Indices)
+	err = s._HandleIndicesChange(rsp.Indices)
 	return err
 }
 

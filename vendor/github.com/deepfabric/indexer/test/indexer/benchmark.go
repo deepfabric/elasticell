@@ -18,36 +18,36 @@ var (
 
 func newDocProt1() *cql.DocumentWithIdx {
 	return &cql.DocumentWithIdx{
-		Document: cql.Document{
+		Doc: cql.Document{
 			DocID: 0,
-			UintProps: []cql.UintProp{
-				cql.UintProp{
+			UintProps: []*cql.UintProp{
+				&cql.UintProp{
 					Name:   "object",
 					ValLen: 8,
 					Val:    0,
 				},
-				cql.UintProp{
+				&cql.UintProp{
 					Name:   "price",
 					ValLen: 4,
 					Val:    0,
 				},
-				cql.UintProp{
+				&cql.UintProp{
 					Name:   "number",
 					ValLen: 4,
 					Val:    0,
 				},
-				cql.UintProp{
+				&cql.UintProp{
 					Name:   "date",
 					ValLen: 8,
 					Val:    0,
 				},
 			},
-			StrProps: []cql.StrProp{
-				cql.StrProp{
+			StrProps: []*cql.StrProp{
+				&cql.StrProp{
 					Name: "description",
 					Val:  "",
 				},
-				cql.StrProp{
+				&cql.StrProp{
 					Name: "note",
 					Val:  "",
 				},
@@ -59,7 +59,7 @@ func newDocProt1() *cql.DocumentWithIdx {
 
 func prepareIndexer(numDocs int, docProts []*cql.DocumentWithIdx) (ir *indexer.Indexer, err error) {
 	//create indexer
-	if ir, err = indexer.NewIndexer("/tmp/indexer_test", true); err != nil {
+	if ir, err = indexer.NewIndexer("/tmp/indexer_test", true, false); err != nil {
 		return
 	}
 
@@ -69,12 +69,12 @@ func prepareIndexer(numDocs int, docProts []*cql.DocumentWithIdx) (ir *indexer.I
 			return
 		}
 		for i := 0; i < numDocs; i++ {
-			docProt.DocID = uint64(i)
-			for j := 0; j < len(docProt.UintProps); j++ {
-				docProt.UintProps[j].Val = uint64(i * (j + 1))
+			docProt.Doc.DocID = uint64(i)
+			for j := 0; j < len(docProt.Doc.UintProps); j++ {
+				docProt.Doc.UintProps[j].Val = uint64(i * (j + 1))
 			}
-			for j := 0; j < len(docProt.StrProps); j++ {
-				docProt.StrProps[j].Val = fmt.Sprintf("%03d%03d ", i, j) + "Go's standard library does not have a function solely intended to check if a file exists or not (like Python's os.path.exists). What is the idiomatic way to do it?"
+			for j := 0; j < len(docProt.Doc.StrProps); j++ {
+				docProt.Doc.StrProps[j].Val = fmt.Sprintf("%03d%03d ", i, j) + "Go's standard library does not have a function solely intended to check if a file exists or not (like Python's os.path.exists). What is the idiomatic way to do it?"
 			}
 			if err = ir.Insert(docProt); err != nil {
 				return

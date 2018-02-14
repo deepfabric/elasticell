@@ -328,13 +328,11 @@ message IndexDef {
     optional string        keyPattern   = 2 [(gogoproto.nullable) = false];
 	repeated FieldDef      fields       = 3;
 }
-
 message IndexKeyRequest {
 	optional uint64 cellID   = 1 [(gogoproto.nullable) = false];
-    optional metapb.CellEpoch epoch = 2 [(gogoproto.nullable) = false];
-    optional string idxName  = 3 [(gogoproto.nullable) = false];
-	repeated bytes dataKeys  = 4;
-	optional bool isDel      = 5 [(gogoproto.nullable) = false];
+    optional string idxName  = 2 [(gogoproto.nullable) = false];
+	repeated bytes cmdArgs   = 3;
+	optional bool isDel      = 4 [(gogoproto.nullable) = false];
 }
 
 message IndexSplitRequest {
@@ -351,10 +349,9 @@ message IndexRebuildCellRequest {
 }
 
 message IndexRequest {
-    optional IndexKeyRequest idxKey     = 1;
-    optional IndexSplitRequest idxSplit = 2;
-    optional IndexDestroyCellRequest idxDestroy = 3;
-    optional IndexRebuildCellRequest idxRebuild = 4;
+    optional IndexSplitRequest idxSplit = 1;
+    optional IndexDestroyCellRequest idxDestroy = 2;
+    optional IndexRebuildCellRequest idxRebuild = 3;
 }
 
 message KeyMetaVal {

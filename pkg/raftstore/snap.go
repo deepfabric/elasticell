@@ -18,6 +18,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -25,7 +26,9 @@ import (
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
 	"github.com/deepfabric/elasticell/pkg/storage"
 	"github.com/deepfabric/elasticell/pkg/util"
+	"github.com/deepfabric/indexer"
 	"github.com/fagongzi/goetty"
+	"github.com/pilosa/pilosa"
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 	"golang.org/x/time/rate"
@@ -55,12 +58,13 @@ type defaultSnapshotManager struct {
 
 	cfg *Cfg
 	db  storage.DataEngine
+	s   *Store
 	dir string
 
 	registry map[string]struct{}
 }
 
-func newDefaultSnapshotManager(cfg *Cfg, db storage.DataEngine) SnapshotManager {
+func newDefaultSnapshotManager(cfg *Cfg, db storage.DataEngine, s *Store) SnapshotManager {
 	dir := cfg.getSnapDir()
 
 	if !exist(dir) {
@@ -123,6 +127,7 @@ func newDefaultSnapshotManager(cfg *Cfg, db storage.DataEngine) SnapshotManager 
 		limiter:  rate.NewLimiter(rate.Every(time.Second/time.Duration(cfg.LimitSnapChunkRate)), int(cfg.LimitSnapChunkRate)),
 		dir:      dir,
 		db:       db,
+		s:        s,
 		registry: make(map[string]struct{}),
 	}
 }
@@ -184,6 +189,7 @@ func (m *defaultSnapshotManager) Create(msg *mraft.SnapshotMessage) error {
 	gzPath := m.getPathOfSnapKeyGZ(msg)
 	start := encStartKey(&msg.Header.Cell)
 	end := encEndKey(&msg.Header.Cell)
+	var numList []uint64
 
 	if !exist(gzPath) {
 		if !exist(path) {
@@ -191,8 +197,25 @@ func (m *defaultSnapshotManager) Create(msg *mraft.SnapshotMessage) error {
 			if err != nil {
 				return errors.Wrapf(err, "")
 			}
+			cellID := msg.Header.Cell.ID
+			var idxer *indexer.Indexer
+			if idxer, err = m.s.GetIndexer(cellID); err != nil {
+				return err
+			}
+			if numList, err = idxer.CreateSnapshot(path); err != nil {
+				return err
+			}
+			for _, num := range numList {
+				docIDStart := num * pilosa.SliceWidth
+				start = getDocIDKey(docIDStart)
+				end = getDocIDKey(docIDStart + pilosa.SliceWidth)
+				path2 := filepath.Join(path, fmt.Sprintf("docid-%v", docIDStart))
+				err := m.db.CreateSnapshot(path2, start, end)
+				if err != nil {
+					return errors.Wrapf(err, "")
+				}
+			}
 		}
-
 		err := util.GZIP(path)
 		if err != nil {
 			return errors.Wrapf(err, "")
@@ -380,9 +403,50 @@ func (m *defaultSnapshotManager) Apply(msg *mraft.SnapshotMessage) error {
 	if err != nil {
 		return err
 	}
-	defer os.RemoveAll(m.getPathOfSnapKey(msg))
+	dir := m.getPathOfSnapKey(msg)
+	defer os.RemoveAll(dir)
 
-	return m.db.ApplySnapshot(m.getPathOfSnapKey(msg))
+	// apply snapshot of data
+	if err := m.db.ApplySnapshot(dir); err != nil {
+		return err
+	}
+
+	cellID := msg.Header.Cell.ID
+	var idxer *indexer.Indexer
+	if idxer, err = m.s.GetIndexer(cellID); err != nil {
+		return err
+	}
+
+	// clear docid -> key according to indexer
+	if err = m.s.clearDocIDKeys(idxer); err != nil {
+		return err
+	}
+
+	// apply snapshot of docid -> key
+	var d *os.File
+	var fns []string
+	if d, err = os.Open(dir); err != nil {
+		return errors.Wrap(err, "")
+	}
+	defer d.Close()
+	if fns, err = d.Readdirnames(0); err != nil {
+		return errors.Wrap(err, "")
+	}
+	for _, fn := range fns {
+		if strings.HasPrefix(fn, "docid-") {
+			docIDSnapDir := filepath.Join(dir, fn)
+			if err = m.db.ApplySnapshot(docIDSnapDir); err != nil {
+				return err
+			}
+			log.Infof("applied snapshot %v", docIDSnapDir)
+		}
+	}
+
+	// apply snapshot of indexer
+	if err = idxer.ApplySnapshot(dir); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (m *defaultSnapshotManager) cleanTmp(msg *mraft.SnapshotMessage) error {

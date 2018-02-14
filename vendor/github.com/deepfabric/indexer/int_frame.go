@@ -3,6 +3,7 @@ package indexer
 import (
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"sync"
 
@@ -208,5 +209,19 @@ func (f *IntFrame) QueryRangeBetween(predicateMin, predicateMax uint64) (bm *pil
 		}
 		bm = bm.Union(bm2)
 	}
+	return
+}
+
+// GetFragList returns fragments' numbers
+func (f *IntFrame) GetFragList() (numList []uint64) {
+	numList = make([]uint64, len(f.fragments))
+	i := 0
+	f.rwlock.RLock()
+	for num := range f.fragments {
+		numList[i] = num
+		i++
+	}
+	f.rwlock.RUnlock()
+	sort.Slice(numList, func(i, j int) bool { return numList[i] < numList[j] })
 	return
 }

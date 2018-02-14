@@ -3,6 +3,8 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/antlr/antlr4/runtime/Go/antlr"
 	"github.com/pkg/errors"
 )
@@ -234,9 +236,7 @@ func TestCqlVisitor(t *testing.T) {
 	//parser.BuildParseTrees = true
 
 	tree := parser.Cql()
-	if el.err != nil {
-		t.Fatalf("parser raised exception %+v\n", el.err)
-	}
+	require.NoErrorf(t, el.err, "parser raised exception")
 
 	visitor := new(CqlTestVisitor)
 	tree.Accept(visitor)

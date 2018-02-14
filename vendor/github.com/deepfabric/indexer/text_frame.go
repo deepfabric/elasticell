@@ -3,6 +3,7 @@ package indexer
 import (
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -294,6 +295,20 @@ func (f *TextFrame) Query(text string) (bm *pilosa.Bitmap) {
 			bm = bm2
 		}
 	}
+	return
+}
+
+// GetFragList returns fragments' numbers
+func (f *TextFrame) GetFragList() (numList []uint64) {
+	numList = make([]uint64, len(f.fragments))
+	i := 0
+	f.rwlock.RLock()
+	for num := range f.fragments {
+		numList[i] = num
+		i++
+	}
+	f.rwlock.RUnlock()
+	sort.Slice(numList, func(i, j int) bool { return numList[i] < numList[j] })
 	return
 }
 

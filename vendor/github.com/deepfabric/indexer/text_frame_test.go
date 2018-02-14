@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/pilosa/pilosa"
-	"github.com/juju/testing/checkers"
+	"github.com/stretchr/testify/require"
 )
 
 func TestTextFrameParseWords(t *testing.T) {
@@ -17,11 +17,7 @@ func TestTextFrameParseWords(t *testing.T) {
 	words := ParseWords(text)
 	fmt.Printf("text: %v\n", text)
 	fmt.Printf("words: %v\n", strings.Join(words, "/"))
-	var err error
-	var isEqual bool
-	if isEqual, err = checkers.DeepEqual(strings.Join(words, "/"), expect); !isEqual {
-		t.Fatalf("incorrect result of (*TextFrame).Query, %+v", err)
-	}
+	require.Equal(t, expect, strings.Join(words, "/"))
 }
 
 func TestTextFrameDoIndex(t *testing.T) {
@@ -31,29 +27,25 @@ func TestTextFrameDoIndex(t *testing.T) {
 	var terms []string
 
 	//TESTCASE: query and insert term to an empty dict
-	if f, err = NewTextFrame("/tmp/text_frame_test", "i", "f", true); err != nil {
-		t.Fatalf("%+v", err)
-	}
+	f, err = NewTextFrame("/tmp/text_frame_test", "i", "f", true)
+	require.NoError(t, err)
 	defer f.Close()
 
 	text := "Go's standard library does not have a function solely intended to check if a file exists or not (like Python's os.path.exists). What is the idiomatic way to do it?"
-	if err = f.DoIndex(3, text); err != nil {
-		t.Fatalf("%+v", err)
-	}
+	err = f.DoIndex(3, text)
+	require.NoError(t, err)
 	fmt.Printf("termdict size: %d\n", f.td.Count())
 
 	terms = []string{"go", "it"}
 	for _, term := range terms {
-		if _, found = f.td.GetTermID(term); !found {
-			t.Fatalf("Term %s not found, want found", term)
-		}
+		_, found = f.td.GetTermID(term)
+		require.Equal(t, true, found, "Term %s not found", term)
 	}
 
 	terms = []string{"java", "php"}
 	for _, term := range terms {
-		if _, found = f.td.GetTermID(term); found {
-			t.Fatalf("Term %s found, want not-found", term)
-		}
+		_, found = f.td.GetTermID(term)
+		require.Equal(t, false, found, "Term %s found", term)
 	}
 }
 
@@ -62,13 +54,11 @@ func TestTextFrameQuery(t *testing.T) {
 	var f *TextFrame
 	var terms []string
 	var bm *pilosa.Bitmap
-	var isEqual bool
 	var bits map[uint64][]uint64
 
 	//TESTCASE: query and insert term to an empty dict
-	if f, err = NewTextFrame("/tmp/text_frame_test", "i", "f", true); err != nil {
-		t.Fatalf("%+v", err)
-	}
+	f, err = NewTextFrame("/tmp/text_frame_test", "i", "f", true)
+	require.NoError(t, err)
 	defer f.Close()
 
 	docIDs := []uint64{1, 10}
@@ -77,14 +67,12 @@ func TestTextFrameQuery(t *testing.T) {
 		"This is a listing of successful results of all the various data storage and processing system benchmarks I've conducted using the dataset produced in the Billion Taxi Rides in Redshift blog post. The dataset itself has 1.1 billion records, 51 columns and takes up about 500 GB of disk space uncompressed.",
 	}
 	for i := 0; i < len(docIDs); i++ {
-		if err = f.DoIndex(docIDs[i], texts[i]); err != nil {
-			t.Fatalf("%+v", err)
-		}
+		err = f.DoIndex(docIDs[i], texts[i])
+		require.NoError(t, err)
 	}
 	fmt.Printf("termdict size after indexing: %d\n", f.td.Count())
-	if bits, err = f.Bits(); err != nil {
-		t.Fatalf("%+v", err)
-	}
+	bits, err = f.Bits()
+	require.NoError(t, err)
 	fmt.Printf("frame bits: %v\n", bits)
 
 	terms = []string{"The", "disk", "standard function", "standard世界！", "你坏"}
@@ -93,9 +81,7 @@ func TestTextFrameQuery(t *testing.T) {
 		bm = f.Query(term)
 		docIDs = bm.Bits()
 		fmt.Printf("found term %s in documents: %v\n", term, docIDs)
-		if isEqual, err = checkers.DeepEqual(docIDs, expDocIDs[i]); !isEqual {
-			t.Fatalf("incorrect result of (*TextFrame).Query, %+v", err)
-		}
+		require.Equal(t, expDocIDs[i], docIDs)
 	}
 }
 
@@ -103,20 +89,17 @@ func TestTextFrameDestroy(t *testing.T) {
 	var err error
 	var f *TextFrame
 
-	if f, err = NewTextFrame("/tmp/text_frame_test", "i", "f", true); err != nil {
-		t.Fatalf("%+v", err)
-	}
+	f, err = NewTextFrame("/tmp/text_frame_test", "i", "f", true)
+	require.NoError(t, err)
 	defer f.Close()
 
 	text := "Go's standard library does not have a function solely intended to check if a file exists or not (like Python's os.path.exists). What is the idiomatic way to do it?"
-	if err = f.DoIndex(3, text); err != nil {
-		t.Fatalf("%+v", err)
-	}
+	err = f.DoIndex(3, text)
+	require.NoError(t, err)
 	fmt.Printf("termdict size: %d\n", f.td.Count())
 
-	if err = f.Destroy(); err != nil {
-		t.Fatalf("%+v", err)
-	}
+	err = f.Destroy()
+	require.NoError(t, err)
 
 	fps := []string{filepath.Join(f.path, "terms"), filepath.Join(f.path, "fragments")}
 	for _, fp := range fps {
@@ -124,24 +107,69 @@ func TestTextFrameDestroy(t *testing.T) {
 			t.Fatalf("path %s exists, want removed", fp)
 		}
 	}
-	if 0 != f.td.Count() {
-		t.Fatalf("f.td.Count() is %d, want 0", f.td.Count())
+	require.Equal(t, uint64(0), f.td.Count())
+}
+
+func TestTextFrameGetFragList(t *testing.T) {
+	var err error
+	var f *TextFrame
+
+	f, err = NewTextFrame("/tmp/text_frame_test", "i", "f", true)
+	require.NoError(t, err)
+	defer f.Close()
+
+	text := "Go's standard library does not have a function solely intended to check if a file exists or not (like Python's os.path.exists). What is the idiomatic way to do it? 你好，世界"
+	docIDs := []uint64{
+		0,
+		1,
+		pilosa.SliceWidth,
+		pilosa.SliceWidth + 1,
+		9 * pilosa.SliceWidth}
+	expFragLists := [][]uint64{
+		[]uint64{0},
+		[]uint64{0},
+		[]uint64{0, 1},
+		[]uint64{0, 1},
+		[]uint64{0, 1, 9}}
+	for i := 0; i < len(docIDs); i++ {
+		err = f.DoIndex(docIDs[i], text)
+		require.NoError(t, err)
+		numList := f.GetFragList()
+		require.Equal(t, expFragLists[i], numList)
+	}
+
+	//clearBit doesn't impact GetFragList
+	docIDs = []uint64{
+		0,
+		1,
+		pilosa.SliceWidth,
+		pilosa.SliceWidth + 1,
+		9 * pilosa.SliceWidth}
+	expFragLists = [][]uint64{
+		[]uint64{0, 1, 9},
+		[]uint64{0, 1, 9},
+		[]uint64{0, 1, 9},
+		[]uint64{0, 1, 9},
+		[]uint64{0, 1, 9}}
+	for i := 0; i < len(docIDs); i++ {
+		_, err = f.clearBit(0, docIDs[i])
+		require.NoError(t, err)
+		numList := f.GetFragList()
+		require.Equal(t, expFragLists[i], numList)
 	}
 }
 
 func BenchmarkTextFrameDoIndex(b *testing.B) {
 	var err error
 	var f *TextFrame
-	if f, err = NewTextFrame("/tmp/text_frame_test", "i", "f", true); err != nil {
-		b.Fatalf("%+v", err)
-	}
+	f, err = NewTextFrame("/tmp/text_frame_test", "i", "f", true)
+	require.NoError(b, err)
 	defer f.Close()
 
 	b.ResetTimer()
 	text := "Go's standard library does not have a function solely intended to check if a file exists or not (like Python's os.path.exists). What is the idiomatic way to do it? cindex为若干路径创建索引。索引是trigram倒排表。trigram是UTF-8文档中的连续3字节(可以是中英文混合)。posting list就是文档ID列表，将它们的delta以变长编码方式存放。整个索引存储在一个文件，在read时mmap到内存。所以索引尺寸受限于RAM。"
 	for i := 0; i < b.N; i++ {
-		if err = f.DoIndex(uint64(i), text); err != nil {
-			b.Fatalf("%+v", err)
-		}
+		err = f.DoIndex(uint64(i), text)
+		require.NoError(b, err)
 	}
 }
