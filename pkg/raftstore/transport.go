@@ -20,6 +20,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/coreos/etcd/raft/raftpb"
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
 	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
@@ -27,7 +28,6 @@ import (
 	"github.com/deepfabric/elasticell/pkg/pd"
 	"github.com/deepfabric/elasticell/pkg/pool"
 	"github.com/deepfabric/elasticell/pkg/util"
-	"github.com/deepfabric/etcd/raft/raftpb"
 	"github.com/fagongzi/goetty"
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
@@ -70,7 +70,10 @@ type transport struct {
 
 func newTransport(store *Store, client *pd.Client, handler func(interface{})) *transport {
 	t := &transport{
-		server:           goetty.NewServer(globalCfg.Addr, decoder, encoder, goetty.NewUUIDV4IdGenerator()),
+		server: goetty.NewServer(globalCfg.Addr,
+			goetty.WithServerDecoder(decoder),
+			goetty.WithServerEncoder(encoder),
+			goetty.WithServerIDGenerator(goetty.NewUUIDV4IdGenerator())),
 		conns:            make(map[uint64]goetty.IOSessionPool),
 		addrs:            make(map[uint64]string),
 		addrsRevert:      make(map[string]uint64),
@@ -287,7 +290,7 @@ func (t *transport) doSendQuery(item interface{}) {
 		log.Errorf("raftstore: doSendQuery failed, from_store=<%d> to_store=<%d>, errors:\n%s", fromStore, toStore, err)
 		return
 	}
-	err = conn.Write(item)
+	err = conn.WriteAndFlush(item)
 	if err != nil {
 		conn.Close()
 		log.Errorf("raftstore: doSendQuery failed, from_store=<%d> to_store=<%d>, errors:\n%s", fromStore, toStore, err)
@@ -407,7 +410,7 @@ func (t *transport) doSend(msg interface{}, to uint64) error {
 }
 
 func (t *transport) doWrite(msg interface{}, conn goetty.IOSession) error {
-	err := conn.Write(msg)
+	err := conn.WriteAndFlush(msg)
 	if err != nil {
 		conn.Close()
 		err = errors.Wrapf(err, "write")
@@ -597,14 +600,9 @@ func (t *transport) createConn(id uint64) (goetty.IOSession, error) {
 		return nil, errors.Wrapf(err, "getStoreAddr")
 	}
 
-	return goetty.NewConnector(t.getConnectionCfg(addr), decoder, encoder), nil
-}
-
-func (t *transport) getConnectionCfg(addr string) *goetty.Conf {
-	return &goetty.Conf{
-		Addr: addr,
-		TimeoutConnectToServer: defaultConnectTimeout,
-	}
+	return goetty.NewConnector(addr,
+		goetty.WithClientDecoder(decoder),
+		goetty.WithClientEncoder(encoder)), nil
 }
 
 func (t *transport) nexSeq() uint64 {

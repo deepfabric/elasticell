@@ -26,11 +26,11 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/coreos/etcd/raft"
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/server"
 	"github.com/deepfabric/elasticell/pkg/util"
-	"github.com/deepfabric/etcd/raft"
 )
 
 const (

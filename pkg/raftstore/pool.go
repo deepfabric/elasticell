@@ -3,8 +3,8 @@ package raftstore
 import (
 	"sync"
 
+	"github.com/coreos/etcd/raft/raftpb"
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
-	"github.com/deepfabric/etcd/raft/raftpb"
 	"github.com/fagongzi/goetty"
 )
 

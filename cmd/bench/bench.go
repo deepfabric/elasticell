@@ -119,10 +119,10 @@ func startG(total int64, wg, complate *sync.WaitGroup, ready chan struct{}, ans 
 		total = math.MaxInt64
 	}
 
-	conn := goetty.NewConnector(&goetty.Conf{
-		Addr: proxy,
-		TimeoutConnectToServer: time.Second * time.Duration(*connectTimeout),
-	}, redis.NewRedisReplyDecoder(), goetty.NewEmptyEncoder())
+	conn := goetty.NewConnector(proxy,
+		goetty.WithClientConnectTimeout(time.Second*time.Duration(*connectTimeout)),
+		goetty.WithClientDecoder(redis.NewRedisReplyDecoder()),
+		goetty.WithClientEncoder(goetty.NewEmptyEncoder()))
 	_, err := conn.Connect()
 	if err != nil {
 		fmt.Printf("%+v\n", err)
@@ -177,7 +177,7 @@ func startG(total int64, wg, complate *sync.WaitGroup, ready chan struct{}, ans 
 			c--
 		}
 
-		err := conn.WriteOutBuf()
+		err := conn.Flush()
 		if err != nil {
 			fmt.Printf("%+v\n", err)
 			os.Exit(1)

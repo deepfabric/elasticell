@@ -23,102 +23,11 @@
 ignored = ["github.com/deepfabric/go-nemo", "github.com/deepfabric/c-nemo"]
 
 [[constraint]]
-  name = "github.com/Workiva/go-datastructures"
-  version = "1.0.34"
-
-[[constraint]]
   name = "github.com/coreos/etcd"
-  version = "=3.1.2"
-
-[[constraint]]
-  name = "github.com/coreos/pkg"
-  branch = "master"
-
-[[constraint]]
-  name = "github.com/deepfabric/bkdtree"
-  branch = "master"
-
-[[constraint]]
-  name = "github.com/deepfabric/etcd"
-  branch = "elasticell"
-
-[[constraint]]
-  name = "github.com/deepfabric/go-datastructures"
-  branch = "master"
-
-[[constraint]]
-  name = "github.com/deepfabric/indexer"
-  branch = "master"
-
-[[constraint]]
-  name = "github.com/fagongzi/goetty"
-  branch = "master"
-
-[[constraint]]
-  name = "github.com/garyburd/redigo"
-  branch = "master"
-
-[[constraint]]
-  name = "github.com/gogo/protobuf"
-  branch = "master"
-
-[[constraint]]
-  name = "github.com/golang/protobuf"
-  branch = "master"
-
-[[constraint]]
-  name = "github.com/google/btree"
-  branch = "master"
-
-[[constraint]]
-  name = "github.com/gorilla/mux"
-  version = "1.4.0"
-
-[[constraint]]
-  name = "github.com/montanaflynn/stats"
-  branch = "master"
-
+  version = "v3.3.4"
+  source = "github.com/deepfabric/etcd"
+  
 [[constraint]]
   name = "github.com/pilosa/pilosa"
   source = "github.com/deepfabric/pilosa"
   branch = "master"
-
-[[constraint]]
-  name = "github.com/pingcap/check"
-  branch = "master"
-
-[[constraint]]
-  name = "github.com/pkg/errors"
-  branch = "master"
-
-[[constraint]]
-  name = "github.com/prometheus/client_golang"
-  branch = "master"
-
-[[constraint]]
-  name = "github.com/prometheus/common"
-  branch = "master"
-
-[[constraint]]
-  name = "github.com/shirou/gopsutil"
-  version = "2.17.11"
-
-[[constraint]]
-  name = "github.com/stretchr/testify"
-  branch = "master"
-
-[[constraint]]
-  name = "github.com/unrolled/render"
-  branch = "master"
-
-[[constraint]]
-  name = "github.com/urfave/negroni"
-  version = "0.2.0"
-
-[[constraint]]
-  name = "golang.org/x/net"
-  branch = "master"
-
-[[constraint]]
-  name = "google.golang.org/grpc"
-  version = "1.0.5"

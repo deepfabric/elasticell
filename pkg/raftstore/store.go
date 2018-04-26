@@ -22,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/coreos/etcd/raft/raftpb"
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
@@ -34,7 +35,6 @@ import (
 	"github.com/deepfabric/elasticell/pkg/storage"
 	"github.com/deepfabric/elasticell/pkg/util"
 	"github.com/deepfabric/elasticell/pkg/util/uuid"
-	"github.com/deepfabric/etcd/raft/raftpb"
 	datastructures "github.com/deepfabric/go-datastructures"
 	"github.com/deepfabric/indexer"
 	"github.com/deepfabric/indexer/cql"

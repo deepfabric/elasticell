@@ -283,7 +283,7 @@ func (m *defaultSnapshotManager) WriteTo(msg *mraft.SnapshotMessage, conn goetty
 				return 0, err
 			}
 
-			err = conn.Write(dst)
+			err = conn.WriteAndFlush(dst)
 			if err != nil {
 				return 0, err
 			}

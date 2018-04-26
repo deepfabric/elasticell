@@ -28,10 +28,10 @@ func main() {
 
 func query(arg string) (err error) {
 	var rsp interface{}
-	conn := goetty.NewConnector(&goetty.Conf{
-		Addr: *addr,
-		TimeoutConnectToServer: time.Second * time.Duration(*connectTimeout),
-	}, redis.NewRedisReplyDecoder(), goetty.NewEmptyEncoder())
+	conn := goetty.NewConnector(*addr,
+		goetty.WithClientConnectTimeout(time.Second*time.Duration(*connectTimeout)),
+		goetty.WithClientDecoder(redis.NewRedisReplyDecoder()),
+		goetty.WithClientEncoder(goetty.NewEmptyEncoder()))
 	if _, err = conn.Connect(); err != nil {
 		return
 	}
@@ -42,7 +42,7 @@ func query(arg string) (err error) {
 	if err = redis.WriteCommand(conn, "QUERY", arg); err != nil {
 		return
 	}
-	if err = conn.WriteOutBuf(); err != nil {
+	if err = conn.Flush(); err != nil {
 		return
 	}
 	if rsp, err = conn.ReadTimeout(time.Second * time.Duration(*readTimeout)); err != nil {

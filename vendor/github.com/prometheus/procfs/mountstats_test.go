@@ -1,3 +1,16 @@
+// Copyright 2018 The Prometheus Authors
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package procfs
 
 import (
@@ -88,6 +101,30 @@ func TestMountStats(t *testing.T) {
 			name:    "NFSv4 device with bad transport stats version 1.1",
 			s:       "device 192.168.1.1:/srv mounted on /mnt/nfs with fstype nfs4 statvers=1.1\nxprt: tcp 0 0 0 0 0 0 0 0 0 0",
 			invalid: true,
+		},
+		{
+			name: "NFSv3 device with transport stats version 1.0 OK",
+			s:    "device 192.168.1.1:/srv mounted on /mnt/nfs with fstype nfs statvers=1.0\nxprt: tcp 1 2 3 4 5 6 7 8 9 10",
+			mounts: []*Mount{{
+				Device: "192.168.1.1:/srv",
+				Mount:  "/mnt/nfs",
+				Type:   "nfs",
+				Stats: &MountStatsNFS{
+					StatVersion: "1.0",
+					Transport: NFSTransportStats{
+						Port:                     1,
+						Bind:                     2,
+						Connect:                  3,
+						ConnectIdleTime:          4,
+						IdleTime:                 5 * time.Second,
+						Sends:                    6,
+						Receives:                 7,
+						BadTransactionIDs:        8,
+						CumulativeActiveRequests: 9,
+						CumulativeBacklog:        10,
+					},
+				},
+			}},
 		},
 		{
 			name: "device rootfs OK",

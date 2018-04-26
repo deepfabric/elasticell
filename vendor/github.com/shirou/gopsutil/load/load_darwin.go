@@ -3,6 +3,7 @@
 package load
 
 import (
+	"context"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -11,7 +12,11 @@ import (
 )
 
 func Avg() (*AvgStat, error) {
-	values, err := common.DoSysctrl("vm.loadavg")
+	return AvgWithContext(context.Background())
+}
+
+func AvgWithContext(ctx context.Context) (*AvgStat, error) {
+	values, err := common.DoSysctrlWithContext(ctx, "vm.loadavg")
 	if err != nil {
 		return nil, err
 	}
@@ -43,11 +48,15 @@ func Avg() (*AvgStat, error) {
 // Almost same as FreeBSD implementation, but state is different.
 // U means 'Uninterruptible Sleep'.
 func Misc() (*MiscStat, error) {
+	return MiscWithContext(context.Background())
+}
+
+func MiscWithContext(ctx context.Context) (*MiscStat, error) {
 	bin, err := exec.LookPath("ps")
 	if err != nil {
 		return nil, err
 	}
-	out, err := invoke.Command(bin, "axo", "state")
+	out, err := invoke.CommandWithContext(ctx, bin, "axo", "state")
 	if err != nil {
 		return nil, err
 	}

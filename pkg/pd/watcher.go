@@ -122,9 +122,8 @@ func (w *Watcher) reset() {
 	w.serverOffset = 0
 	w.readyC = make(chan *pdpb.WatchEvent, 32)
 	w.listen = goetty.NewServer(w.addr,
-		&codec.ProxyDecoder{},
-		&codec.ProxyEncoder{},
-		goetty.NewInt64IDGenerator())
+		goetty.WithServerDecoder(&codec.ProxyDecoder{}),
+		goetty.WithServerEncoder(&codec.ProxyEncoder{}))
 	w.Unlock()
 }
 
@@ -261,7 +260,7 @@ func (w *Watcher) doConnection(conn goetty.IOSession) error {
 
 func (w *Watcher) sync(conn goetty.IOSession) error {
 	if !w.syncing {
-		err := conn.Write(&pdpb.WatcherNotifySync{
+		err := conn.WriteAndFlush(&pdpb.WatcherNotifySync{
 			Offset: w.getLocalOffset(),
 		})
 		if err != nil {

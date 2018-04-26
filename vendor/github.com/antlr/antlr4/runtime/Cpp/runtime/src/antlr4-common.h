@@ -7,11 +7,13 @@
 
 #include <algorithm>
 #include <assert.h>
+#include <atomic>
 #include <codecvt>
 #include <chrono>
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include <limits>
 #include <limits.h>
 #include <list>
 #include <map>
@@ -62,6 +64,8 @@
     typedef std::basic_string<__int32> i32string;
 
     typedef i32string UTF32String;
+  #else
+    typedef std::u32string UTF32String;
   #endif
 
   #ifdef ANTLR4CPP_EXPORTS
@@ -76,7 +80,7 @@
 
   class ANTLR4CPP_PUBLIC std::exception; // Needed for VS 2015.
 
-#elif __APPLE__
+#elif defined(__APPLE__)
   typedef std::u32string UTF32String;
 
   #define GUID_CFUUID
@@ -124,5 +128,5 @@
 #undef EOF
 #endif
 
-#define INVALID_INDEX (size_t)-1
+#define INVALID_INDEX std::numeric_limits<size_t>::max()
 template<class T> using Ref = std::shared_ptr<T>;

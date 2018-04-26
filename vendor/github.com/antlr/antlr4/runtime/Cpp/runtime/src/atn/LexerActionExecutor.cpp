@@ -19,6 +19,9 @@ LexerActionExecutor::LexerActionExecutor(const std::vector<Ref<LexerAction>> &le
   : _lexerActions(lexerActions), _hashCode(generateHashCode()) {
 }
 
+LexerActionExecutor::~LexerActionExecutor() {
+}
+
 Ref<LexerActionExecutor> LexerActionExecutor::append(Ref<LexerActionExecutor> const& lexerActionExecutor,
                                                      Ref<LexerAction> const& lexerAction) {
   if (lexerActionExecutor == nullptr) {
@@ -98,7 +101,7 @@ size_t LexerActionExecutor::generateHashCode() const {
   for (auto lexerAction : _lexerActions) {
     hash = MurmurHash::update(hash, lexerAction);
   }
-  MurmurHash::finish(hash, _lexerActions.size());
+  hash = MurmurHash::finish(hash, _lexerActions.size());
 
   return hash;
 }

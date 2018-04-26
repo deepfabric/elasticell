@@ -131,12 +131,11 @@ func (s *Server) stopNode() {
 
 func (s *Server) initRedis() {
 	rs := new(RedisServer)
-	rs.s = goetty.NewServerSize(globalCfg.AddrCli,
-		redis.Decoder,
-		redis.Encoder,
-		globalCfg.BufferCliRead,
-		globalCfg.BufferCliWrite,
-		goetty.NewInt64IDGenerator())
+	rs.s = goetty.NewServer(globalCfg.AddrCli,
+		goetty.WithServerDecoder(redis.Decoder),
+		goetty.WithServerEncoder(redis.Encoder),
+		goetty.WithServerReadBufSize(globalCfg.BufferCliRead),
+		goetty.WithServerWriteBufSize(globalCfg.BufferCliWrite))
 
 	s.redisServer = rs
 	s.redisServer.init()

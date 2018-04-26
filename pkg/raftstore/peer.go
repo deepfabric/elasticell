@@ -19,6 +19,7 @@ import (
 
 	"github.com/Workiva/go-datastructures/queue"
 
+	"github.com/coreos/etcd/raft"
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
@@ -27,7 +28,6 @@ import (
 	"github.com/deepfabric/elasticell/pkg/pd"
 	"github.com/deepfabric/elasticell/pkg/pool"
 	"github.com/deepfabric/elasticell/pkg/util"
-	"github.com/deepfabric/etcd/raft"
 	"github.com/pilosa/pilosa"
 	"golang.org/x/net/context"
 )

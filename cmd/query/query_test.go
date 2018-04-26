@@ -29,10 +29,11 @@ func TestQueryCodec(t *testing.T) {
 	var rsp interface{}
 	var ok bool
 	var err error
-	conn := goetty.NewConnector(&goetty.Conf{
-		Addr: *addr,
-		TimeoutConnectToServer: time.Second * time.Duration(*connectTimeout),
-	}, gredis.NewRedisReplyDecoder(), goetty.NewEmptyEncoder())
+	conn := goetty.NewConnector(
+		*addr,
+		goetty.WithClientConnectTimeout(time.Second*time.Duration(*connectTimeout)),
+		goetty.WithClientDecoder(gredis.NewRedisReplyDecoder()),
+		goetty.WithClientEncoder(goetty.NewEmptyEncoder()))
 	if _, err = conn.Connect(); err != nil {
 		return
 	}

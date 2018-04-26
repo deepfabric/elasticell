@@ -13,7 +13,7 @@
 	</parent>
 	<groupId>org.antlr</groupId>
 	<artifactId>antlr4-master</artifactId>
-	<version>4.7.1-SNAPSHOT</version>
+	<version>4.7.1</version>
 	<packaging>pom</packaging>
 
 	<name>ANTLR 4</name>
@@ -130,6 +130,20 @@
 				<directory>test</directory>
 			</testResource>
 		</testResources>
+		<plugins>
+			<plugin>
+				<artifactId>maven-clean-plugin</artifactId>
+				<version>3.0.0</version>
+				<configuration>
+					<filesets>
+						<fileset>
+							<directory>runtime/Swift/.build</directory>
+							<directory>runtime/Swift/Tests/Antlr4Tests/gen</directory>
+						</fileset>
+					</filesets>
+				</configuration>
+			</plugin>
+		</plugins>
 		<pluginManagement>
 			<plugins>
 				<plugin>

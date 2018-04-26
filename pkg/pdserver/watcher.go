@@ -156,7 +156,7 @@ func (wn *watcherNotifier) start() {
 				req := &pdpb.WatcherNotify{
 					Offset: nt.offset,
 				}
-				err = conn.Write(req)
+				err = conn.WriteAndFlush(req)
 				if err != nil {
 					wn.pause(nt.watcher, true)
 					log.Warnf("notify: %d to %s failed, errors:\n%+v",
@@ -339,7 +339,7 @@ func (wn *watcherNotifier) Connected(addr string, conn goetty.IOSession) {
 			}
 
 			if s, ok := msg.(*pdpb.WatcherNotifySync); ok {
-				err := conn.Write(wn.sync(addr, s.Offset))
+				err := conn.WriteAndFlush(wn.sync(addr, s.Offset))
 				if err != nil {
 					wn.pause(addr, true)
 					return
@@ -350,9 +350,7 @@ func (wn *watcherNotifier) Connected(addr string, conn goetty.IOSession) {
 }
 
 func createConn(addr string) goetty.IOSession {
-	c := &goetty.Conf{
-		Addr: addr,
-		TimeoutConnectToServer: time.Second * 30,
-	}
-	return goetty.NewConnector(c, &codec.ProxyDecoder{}, &codec.ProxyEncoder{})
+	return goetty.NewConnector(addr,
+		goetty.WithClientDecoder(&codec.ProxyDecoder{}),
+		goetty.WithClientEncoder(&codec.ProxyEncoder{}))
 }

@@ -34,12 +34,11 @@ type testRedisSuite struct {
 }
 
 func (s *testRedisSuite) SetUpSuite(c *C) {
-	s.svr = goetty.NewServerSize(":6379",
-		Decoder,
-		Encoder,
-		1024,
-		1024,
-		goetty.NewInt64IDGenerator())
+	s.svr = goetty.NewServer(":6379",
+		goetty.WithServerDecoder(Decoder),
+		goetty.WithServerEncoder(Encoder),
+		goetty.WithServerReadBufSize(1024),
+		goetty.WithServerWriteBufSize(1024))
 	go s.svr.Start(s.doConnection)
 	select {
 	case <-s.svr.Started():
@@ -76,7 +75,7 @@ func (s *testRedisSuite) doConnection(session goetty.IOSession) error {
 		cmd := req.(Command)
 		if cmd.CmdString() == "set" {
 			gredis.WriteStatus([]byte("OK"), session.OutBuf())
-			session.WriteOutBuf()
+			session.Flush()
 		}
 	}
 }

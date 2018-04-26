@@ -4,7 +4,7 @@ package mraft;
 
 import "metapb/metapb.proto";
 import "gogoproto/gogo.proto";
-import "github.com/deepfabric/etcd/raft/raftpb/raft.proto";
+import "github.com/coreos/etcd/raft/raftpb/raft.proto";
 
 option (gogoproto.marshaler_all) = true;
 option (gogoproto.sizer_all) = true;

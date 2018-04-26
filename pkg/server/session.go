@@ -95,12 +95,12 @@ func (s *session) writeLoop() {
 			pool.ReleaseResponse(rsp)
 
 			if i > 0 && i%globalCfg.BatchCliResps == 0 {
-				s.conn.WriteOutBuf()
+				s.conn.Flush()
 			}
 		}
 
 		if buf.Readable() > 0 {
-			s.conn.WriteOutBuf()
+			s.conn.Flush()
 		}
 		s.RUnlock()
 	}

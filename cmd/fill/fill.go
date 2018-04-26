@@ -15,7 +15,7 @@ var (
 	readTimeout    = flag.Int("rt", 10, "The timeout for read in seconds")
 	connectTimeout = flag.Int("ct", 10, "The timeout for connect to server")
 	addr           = flag.String("addr", "127.0.0.1:6379", "The target address.")
-	NumKeys        = 10000 //number of keys
+	numKeys        = 10000 //number of keys
 )
 
 func main() {
@@ -27,10 +27,10 @@ func main() {
 }
 
 func fill() (err error) {
-	conn := goetty.NewConnector(&goetty.Conf{
-		Addr: *addr,
-		TimeoutConnectToServer: time.Second * time.Duration(*connectTimeout),
-	}, redis.NewRedisReplyDecoder(), goetty.NewEmptyEncoder())
+	conn := goetty.NewConnector(*addr,
+		goetty.WithClientConnectTimeout(time.Second*time.Duration(*connectTimeout)),
+		goetty.WithClientDecoder(redis.NewRedisReplyDecoder()),
+		goetty.WithClientEncoder(goetty.NewEmptyEncoder()))
 	if _, err = conn.Connect(); err != nil {
 		return
 	}
@@ -40,7 +40,7 @@ func fill() (err error) {
 	complete.Add(2)
 
 	go func() {
-		for i := 0; i < NumKeys; i++ {
+		for i := 0; i < numKeys; i++ {
 			args := []string{
 				fmt.Sprintf("book_%08d", i),
 				"price", fmt.Sprintf("%v", 0.3+float32(i)),
@@ -58,7 +58,7 @@ func fill() (err error) {
 			if err = redis.WriteCommand(conn, "hmset", argInts...); err != nil {
 				return
 			}
-			if err = conn.WriteOutBuf(); err != nil {
+			if err = conn.Flush(); err != nil {
 				return
 			}
 		}
@@ -66,7 +66,7 @@ func fill() (err error) {
 	}()
 	go func() {
 		var rsp interface{}
-		for i := 0; i < NumKeys; i++ {
+		for i := 0; i < numKeys; i++ {
 			if rsp, err = conn.ReadTimeout(time.Second * time.Duration(*readTimeout)); err != nil {
 				return
 			}
