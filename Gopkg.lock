@@ -178,8 +178,8 @@
     ".",
     "protocol/redis"
   ]
-  revision = "be9ef486eb2217eb72c2b147f007ad5c34f80fcc"
-  version = "v1.1.1"
+  revision = "cafb47506a58cf1379fcd1cc02c61b02b2db3e0c"
+  version = "v1.1.2"
 
 [[projects]]
   name = "github.com/garyburd/redigo"
@@ -389,14 +389,22 @@
 [[projects]]
   name = "github.com/shirou/gopsutil"
   packages = [
+    "cpu",
     "disk",
     "host",
     "internal/common",
     "mem",
+    "net",
     "process"
   ]
   revision = "fc04d2dd9a512906a2604242b35275179e250eda"
   version = "v2.18.03"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/shirou/w32"
+  packages = ["."]
+  revision = "bb4de0191aa41b5507caa14b0650cdbddcd9280b"
 
 [[projects]]
   name = "github.com/sirupsen/logrus"
