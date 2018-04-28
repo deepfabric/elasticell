@@ -364,8 +364,7 @@ func (pr *PeerReplicate) destroy() error {
 	pr.store.removePendingSnapshot(pr.cellID)
 	pr.store.removeDroppedVoteMsg(pr.cellID)
 
-	wb := pr.store.engine.NewWriteBatch()
-
+	wb := pr.store.getDriver(pr.cellID).NewWriteBatch()
 	err := pr.store.clearMeta(pr.cellID, wb)
 	if err != nil {
 		return err
@@ -376,7 +375,7 @@ func (pr *PeerReplicate) destroy() error {
 		return err
 	}
 
-	err = pr.store.engine.Write(wb, false)
+	err = pr.store.getDriver(pr.cellID).Write(wb, false)
 	if err != nil {
 		return err
 	}

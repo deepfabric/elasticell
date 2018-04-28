@@ -44,7 +44,7 @@ func (n *Node) checkClusterBootstrapped() bool {
 }
 
 func (n *Node) checkStore() uint64 {
-	data, err := n.driver.GetEngine().Get(raftstore.GetStoreIdentKey())
+	data, err := n.drivers[0].GetEngine().Get(raftstore.GetStoreIdentKey())
 	if err != nil {
 		log.Fatalf("bootstrap: check store failed, errors:\n %+v", err)
 	}
@@ -79,7 +79,7 @@ func (n *Node) bootstrapStore() uint64 {
 	log.Infof("bootstrap: alloc store id succ, id=<%d>", storeID)
 
 	count := 0
-	err = n.driver.GetEngine().Scan(raftstore.GetMinKey(), raftstore.GetMaxKey(), func([]byte, []byte) (bool, error) {
+	err = n.drivers[0].GetEngine().Scan(raftstore.GetMinKey(), raftstore.GetMaxKey(), func([]byte, []byte) (bool, error) {
 		count++
 		return false, nil
 	}, false)
@@ -96,7 +96,7 @@ func (n *Node) bootstrapStore() uint64 {
 	st.ClusterID = n.clusterID
 	st.StoreID = storeID
 
-	err = n.driver.GetEngine().Set(raftstore.GetStoreIdentKey(), util.MustMarshal(st))
+	err = n.drivers[0].GetEngine().Set(raftstore.GetStoreIdentKey(), util.MustMarshal(st))
 	if err != nil {
 		log.Fatalf("bootstrap: bootstrap store failed, errors:\n %v", err)
 	}
@@ -159,7 +159,7 @@ func (n *Node) createCell(start, end []byte) metapb.Cell {
 	cell.Start = start
 	cell.End = end
 
-	err = raftstore.SaveCell(n.driver, cell)
+	err = raftstore.SaveCell(n.drivers[n.driversMask&cellID], cell)
 	if err != nil {
 		log.Fatalf("bootstrap: bootstrap first cell failed, errors:\n %+v", err)
 	}
@@ -195,7 +195,7 @@ func (n *Node) bootstrapCluster(cells []metapb.Cell) {
 
 func (n *Node) startStore() {
 	log.Infof("bootstrap: begin to start store, storeID=<%d>", n.storeMeta.ID)
-	n.store = raftstore.NewStore(n.clusterID, n.pdClient, n.storeMeta, n.driver, n.cfg.RaftStore)
+	n.store = raftstore.NewStore(n.clusterID, n.pdClient, n.storeMeta, n.drivers, n.cfg.RaftStore)
 
 	params, err := n.getInitParam()
 	if err != nil {

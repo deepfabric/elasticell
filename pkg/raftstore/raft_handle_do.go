@@ -314,7 +314,7 @@ func (pr *PeerReplicate) doSplitCheck(epoch metapb.CellEpoch, startKey, endKey [
 	var size uint64
 	var splitKey []byte
 
-	size, splitKey, err := pr.store.getDataEngine().GetTargetSizeKey(startKey, endKey, globalCfg.CellCapacity)
+	size, splitKey, err := pr.store.getDataEngine(pr.cellID).GetTargetSizeKey(startKey, endKey, globalCfg.CellCapacity)
 
 	if err != nil {
 		log.Errorf("raftstore-split[cell-%d]: failed to scan split key, errors:\n %+v",
@@ -706,12 +706,12 @@ func (ps *peerStorage) Entries(low, high, maxSize uint64) ([]raftpb.Entry, error
 	nextIndex := low
 	exceededMaxSize := false
 
-	startKey := getRaftLogKey(ps.getCell().ID, low)
+	startKey := getRaftLogKey(ps.cell.ID, low)
 
 	if low+1 == high {
 		// If election happens in inactive cells, they will just try
 		// to fetch one empty log.
-		v, err := ps.store.getMetaEngine().Get(startKey)
+		v, err := ps.store.getEngine(ps.cell.ID).Get(startKey)
 		if err != nil {
 			return nil, errors.Wrap(err, "")
 		}
@@ -732,7 +732,7 @@ func (ps *peerStorage) Entries(low, high, maxSize uint64) ([]raftpb.Entry, error
 	}
 
 	endKey := getRaftLogKey(ps.getCell().ID, high)
-	err = ps.store.getMetaEngine().Scan(startKey, endKey, func(key, value []byte) (bool, error) {
+	err = ps.store.getEngine(ps.cell.ID).Scan(startKey, endKey, func(key, value []byte) (bool, error) {
 		e := acquireEntry()
 		util.MustUnmarshal(e, value)
 
@@ -784,8 +784,8 @@ func (ps *peerStorage) Term(idx uint64) (uint64, error) {
 		return ps.lastTerm, nil
 	}
 
-	key := getRaftLogKey(ps.getCell().ID, idx)
-	v, err := ps.store.getMetaEngine().Get(key)
+	key := getRaftLogKey(ps.cell.ID, idx)
+	v, err := ps.store.getEngine(ps.cell.ID).Get(key)
 	if err != nil {
 		return 0, err
 	}
@@ -867,7 +867,7 @@ func (ps *peerStorage) setApplySnapJob(job *util.Job) {
 }
 
 func (s *Store) notifySplitCellIndex(leftCellID uint64, rightCellID uint64) (err error) {
-	listEng := s.getListEngine()
+	listEng := s.getListEngine(1)
 	idxReqQueueKey := getIdxReqQueueKey()
 	idxReq := &pdpb.IndexRequest{
 		IdxSplit: &pdpb.IndexSplitRequest{
@@ -884,7 +884,7 @@ func (s *Store) notifySplitCellIndex(leftCellID uint64, rightCellID uint64) (err
 }
 
 func (s *Store) notifyDestroyCellIndex(cell *metapb.Cell) (err error) {
-	listEng := s.getListEngine()
+	listEng := s.getListEngine(1)
 	idxReqQueueKey := getIdxReqQueueKey()
 	idxReq := &pdpb.IndexRequest{
 		IdxDestroy: &pdpb.IndexDestroyCellRequest{
@@ -901,7 +901,7 @@ func (s *Store) notifyDestroyCellIndex(cell *metapb.Cell) (err error) {
 }
 
 func (s *Store) notifyRebuildCellIndex(cell *metapb.Cell) (err error) {
-	listEng := s.getListEngine()
+	listEng := s.getListEngine(1)
 	idxReqQueueKey := getIdxReqQueueKey()
 	idxReq := &pdpb.IndexRequest{
 		IdxRebuild: &pdpb.IndexRebuildCellRequest{

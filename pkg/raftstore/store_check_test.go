@@ -32,5 +32,6 @@ func (s *storeTestSuite) TestIsRaftMsgValid(c *C) {
 
 func (s *storeTestSuite) TestIsMsgStale(c *C) {
 	store := new(Store)
-	store.engine = storage.NewMemoryDriver()
+	store.engines = []storage.Driver{storage.NewMemoryDriver()}
+	store.enginesMask = uint64(len(store.engines) - 1)
 }

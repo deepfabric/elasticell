@@ -23,9 +23,9 @@ import (
 	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
 	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
 	"github.com/deepfabric/elasticell/pkg/pool"
+	"github.com/deepfabric/elasticell/pkg/redis"
 	"github.com/deepfabric/elasticell/pkg/storage"
 	"github.com/deepfabric/elasticell/pkg/util"
-	"github.com/fagongzi/goetty/protocol/redis"
 )
 
 type redisBatch struct {
@@ -92,7 +92,7 @@ func (d *applyDelegate) doApplyRaftCMD(ctx *applyContext) *execResult {
 	var resp *raftcmdpb.RaftCMDResponse
 	var result *execResult
 
-	ctx.wb = d.store.engine.NewWriteBatch()
+	ctx.wb = d.store.getDriver(d.cell.ID).NewWriteBatch()
 	ctx.rb = acquireRedisBatch()
 
 	if !d.checkEpoch(ctx.req) {
@@ -109,7 +109,7 @@ func (d *applyDelegate) doApplyRaftCMD(ctx *applyContext) *execResult {
 	}
 
 	if ctx.rb.hasSetBatch() {
-		err = d.store.getKVEngine().MSet(ctx.rb.kvKeys, ctx.rb.kvValues)
+		err = d.store.getKVEngine(d.cell.ID).MSet(ctx.rb.kvKeys, ctx.rb.kvValues)
 		if err != nil {
 			log.Fatalf("raftstore-apply[cell-%d]: save apply context failed, errors:\n %+v",
 				d.cell.ID,
@@ -130,7 +130,7 @@ func (d *applyDelegate) doApplyRaftCMD(ctx *applyContext) *execResult {
 		}
 	}
 
-	err = d.store.engine.Write(ctx.wb, false)
+	err = d.store.getDriver(d.cell.ID).Write(ctx.wb, false)
 	if err != nil {
 		log.Fatalf("raftstore-apply[cell-%d]: commit apply result failed, errors:\n %+v",
 			d.cell.ID,
@@ -321,18 +321,26 @@ func (d *applyDelegate) doExecSplit(ctx *applyContext) (*raftcmdpb.RaftCMDRespon
 	newCell.Epoch.CellVer = d.cell.Epoch.CellVer
 
 	err := d.ps.updatePeerState(d.cell, mraft.Normal, ctx.wb)
+
+	wb := d.ps.store.getDriver(newCell.ID).NewWriteBatch()
 	if err == nil {
-		err = d.ps.updatePeerState(newCell, mraft.Normal, ctx.wb)
+		err = d.ps.updatePeerState(newCell, mraft.Normal, wb)
 	}
 
 	if err == nil {
-		err = d.ps.writeInitialState(newCell.ID, ctx.wb)
+		err = d.ps.writeInitialState(newCell.ID, wb)
 	}
-
 	if err != nil {
 		log.Fatalf("raftstore-apply[cell-%d]: save split cell failed, newCell=<%+v> errors:\n %+v",
 			d.cell.ID,
 			newCell,
+			err)
+	}
+
+	err = d.ps.store.getDriver(newCell.ID).Write(wb, false)
+	if err != nil {
+		log.Fatalf("raftstore-apply[cell-%d]: commit apply result failed, errors:\n %+v",
+			d.cell.ID,
 			err)
 	}
 
@@ -462,7 +470,7 @@ func (pr *PeerReplicate) doExecReadCmd(c *cmd) {
 
 	for _, req := range c.req.Requests {
 		if h, ok := pr.store.redisReadHandles[req.Type]; ok {
-			resp.Responses = append(resp.Responses, h(req))
+			resp.Responses = append(resp.Responses, h(pr.cellID, req))
 		}
 	}
 

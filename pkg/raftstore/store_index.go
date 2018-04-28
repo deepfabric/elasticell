@@ -217,7 +217,7 @@ func (s *Store) readyToServeIndex(ctx context.Context) {
 
 // handleIdxReqQueue handles idxReqs inside given persistent queue.
 func (s *Store) handleIdxReqQueue() (absorbed bool, err error) {
-	listEng := s.getListEngine()
+	listEng := s.getListEngine(1)
 	idxReqQueueKey := getIdxReqQueueKey()
 	var idxSplitReq *pdpb.IndexSplitRequest
 	var idxDestroyReq *pdpb.IndexDestroyCellRequest
@@ -230,7 +230,7 @@ func (s *Store) handleIdxReqQueue() (absorbed bool, err error) {
 		absorbed = true
 		return
 	}
-	wb := s.engine.GetKVEngine().NewWriteBatch()
+	wb := s.getKVEngine(1).NewWriteBatch()
 	dirtyIndices := make(map[*indexer.Indexer]int)
 	idxReq := &pdpb.IndexRequest{}
 	if err = idxReq.Unmarshal(idxReqB); err != nil {
@@ -251,7 +251,7 @@ func (s *Store) handleIdxReqQueue() (absorbed bool, err error) {
 		return
 	}
 
-	if err = s.engine.GetKVEngine().Write(wb); err != nil {
+	if err = s.getKVEngine(1).Write(wb); err != nil {
 		err = errors.Wrap(err, "")
 		return
 	}
@@ -271,8 +271,8 @@ func (s *Store) handleIdxKeyReq(idxKeyReq *pdpb.IndexKeyRequest) (err error) {
 	key := idxKeyReq.CmdArgs[0]
 	var changed bool
 	var pairs []string
-	wb := s.engine.GetKVEngine().NewWriteBatch()
-	changed, err = s.deleteIndexedKey(key, idxKeyReq.IsDel, wb)
+	wb := s.getKVEngine(1).NewWriteBatch()
+	changed, err = s.deleteIndexedKey(idxKeyReq.CellID, key, idxKeyReq.IsDel, wb)
 	if idxKeyReq.IsDel {
 		if err != nil {
 			log.Errorf("store-index[cell-%d]: failed to delete indexed key %+v from index %s\n%+v",
@@ -295,17 +295,17 @@ func (s *Store) handleIdxKeyReq(idxKeyReq *pdpb.IndexKeyRequest) (err error) {
 		}
 	}
 
-	if err = s.engine.GetKVEngine().Write(wb); err != nil {
+	if err = s.getKVEngine(1).Write(wb); err != nil {
 		err = errors.Wrap(err, "")
 		return
 	}
 	return
 }
 
-func (s *Store) deleteIndexedKey(dataKey []byte, isDel bool, wb storage.WriteBatch) (changed bool, err error) {
+func (s *Store) deleteIndexedKey(cellID uint64, dataKey []byte, isDel bool, wb storage.WriteBatch) (changed bool, err error) {
 	var idxer *indexer.Indexer
 	var metaValB []byte
-	if metaValB, err = s.engine.GetDataEngine().GetIndexInfo(dataKey); err != nil || len(metaValB) == 0 {
+	if metaValB, err = s.getDataEngine(cellID).GetIndexInfo(dataKey); err != nil || len(metaValB) == 0 {
 		return
 	}
 	metaVal := &pdpb.KeyMetaVal{}
@@ -326,7 +326,7 @@ func (s *Store) deleteIndexedKey(dataKey []byte, isDel bool, wb storage.WriteBat
 		return
 	}
 	if isDel {
-		if err = s.engine.GetDataEngine().SetIndexInfo(dataKey, []byte{}); err != nil {
+		if err = s.getDataEngine(cellID).SetIndexInfo(dataKey, []byte{}); err != nil {
 			err = errors.Wrap(err, "")
 			return
 		}
@@ -364,14 +364,14 @@ func (s *Store) addIndexedKey(cellID uint64, idxNameIn string, docID uint64, dat
 	if metaValB, err = metaVal.Marshal(); err != nil {
 		return
 	}
-	if err = s.engine.GetDataEngine().SetIndexInfo(dataKey, metaValB); err != nil {
+	if err = s.getDataEngine(cellID).SetIndexInfo(dataKey, metaValB); err != nil {
 		return
 	}
 
 	var idxDef *pdpb.IndexDef
 	if len(pairs) == 0 {
 		var fvPairs []*raftcmdpb.FVPair
-		hashEng := s.engine.GetHashEngine()
+		hashEng := s.getHashEngine(cellID)
 		if fvPairs, err = hashEng.HGetAll(dataKey); err != nil {
 			return
 		}
@@ -430,7 +430,7 @@ func (s *Store) indexSplitCell(cellIDL, cellIDR uint64, wb storage.WriteBatch, d
 	dirtyIndices[idxerL] = 0
 
 	var scanned, indexed, cntErr int
-	cntErr, err = s.engine.GetDataEngine().ScanIndexInfo(start, end, true, func(dataKey, metaValB []byte) (err error) {
+	cntErr, err = s.getDataEngine(cellIDL).ScanIndexInfo(start, end, true, func(dataKey, metaValB []byte) (err error) {
 		scanned++
 		if metaValB == nil || len(metaValB) == 0 {
 			return
@@ -492,7 +492,7 @@ func (s *Store) indexDestroyCell(idxDestroyReq *pdpb.IndexDestroyCellRequest, wb
 		return
 	}
 	var scanned, indexed, cntErr int
-	cntErr, err = s.engine.GetDataEngine().ScanIndexInfo(start, end, true, func(dataKey, metaValB []byte) (err error) {
+	cntErr, err = s.getDataEngine(cellID).ScanIndexInfo(start, end, true, func(dataKey, metaValB []byte) (err error) {
 		scanned++
 		if metaValB == nil || len(metaValB) == 0 {
 			return
@@ -543,7 +543,7 @@ func (s *Store) indexRebuildCell(idxRebuildReq *pdpb.IndexRebuildCellRequest, wb
 	}
 
 	var scanned, indexed, cntErr int
-	cntErr, err = s.engine.GetDataEngine().ScanIndexInfo(start, end, false, func(dataKey, metaValB []byte) (err error) {
+	cntErr, err = s.getDataEngine(idxRebuildReq.CellID).ScanIndexInfo(start, end, false, func(dataKey, metaValB []byte) (err error) {
 		scanned++
 		if metaValB != nil || len(metaValB) != 0 {
 			metaVal := &pdpb.KeyMetaVal{}
@@ -575,7 +575,7 @@ func (s *Store) clearDocIDKeys(idxer *indexer.Indexer) (err error) {
 		docIDStart := num * pilosa.SliceWidth
 		start := getDocIDKey(docIDStart)
 		end := getDocIDKey(docIDStart + pilosa.SliceWidth)
-		if err = s.engine.GetDataEngine().RangeDelete(start, end); err != nil {
+		if err = s.getKVEngine(1).RangeDelete(start, end); err != nil {
 			return errors.Wrapf(err, "")
 		}
 	}

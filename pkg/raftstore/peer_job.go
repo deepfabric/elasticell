@@ -367,7 +367,7 @@ func (pr *PeerReplicate) doRaftLogGC(cellID, startIndex, endIndex uint64) error 
 	if firstIndex == 0 {
 		startKey := getRaftLogKey(cellID, 0)
 		firstIndex = endIndex
-		key, _, err := pr.store.engine.GetEngine().Seek(startKey)
+		key, _, err := pr.store.getEngine(cellID).Seek(startKey)
 		if err != nil {
 			return err
 		}
@@ -386,7 +386,7 @@ func (pr *PeerReplicate) doRaftLogGC(cellID, startIndex, endIndex uint64) error 
 		return nil
 	}
 
-	wb := pr.store.engine.NewWriteBatch()
+	wb := pr.store.getDriver(cellID).NewWriteBatch()
 	for index := firstIndex; index < endIndex; index++ {
 		key := getRaftLogKey(cellID, index)
 		err := wb.Delete(key)
@@ -395,7 +395,7 @@ func (pr *PeerReplicate) doRaftLogGC(cellID, startIndex, endIndex uint64) error 
 		}
 	}
 
-	err := pr.store.engine.Write(wb, false)
+	err := pr.store.getDriver(cellID).Write(wb, false)
 	if err != nil {
 		log.Infof("raftstore-compact[cell-%d]: raft log gc complete, entriesCount=<%d>",
 			cellID,

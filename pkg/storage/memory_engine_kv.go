@@ -27,6 +27,11 @@ func newMemoryKVEngine(kv *util.KVTree) KVEngine {
 	}
 }
 
+func (e *memoryKVEngine) RangeDelete(start, end []byte) error {
+	e.kv.RangeDelete(start, end)
+	return nil
+}
+
 func (e *memoryKVEngine) Set(key, value []byte) error {
 	e.kv.Put(key, value)
 	return nil

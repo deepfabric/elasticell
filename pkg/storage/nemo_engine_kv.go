@@ -33,6 +33,14 @@ func newNemoKVEngine(db *gonemo.NEMO, cfg *NemoCfg) KVEngine {
 	}
 }
 
+func (e *nemoKVEngine) RangeDelete(start, end []byte) error {
+	e.limiter.Wait(context.TODO())
+	err := e.db.RangeDel(start, end)
+	e.limiter.Release()
+
+	return err
+}
+
 func (e *nemoKVEngine) Set(key, value []byte) error {
 	e.limiter.Wait(context.TODO())
 	err := e.db.Set(key, value, 0)

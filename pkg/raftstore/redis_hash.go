@@ -31,7 +31,7 @@ func (s *Store) execHSet(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.R
 		return rsp
 	}
 
-	n, err := s.getHashEngine().HSet(args[0], args[1], args[2])
+	n, err := s.getHashEngine(ctx.req.Header.CellId).HSet(args[0], args[1], args[2])
 	if err != nil {
 		rsp := pool.AcquireResponse()
 		rsp.ErrorResult = util.StringToSlice(err.Error())
@@ -62,7 +62,7 @@ func (s *Store) execHDel(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.R
 		return rsp
 	}
 
-	n, err := s.getHashEngine().HDel(args[0], args[1:]...)
+	n, err := s.getHashEngine(ctx.req.Header.CellId).HDel(args[0], args[1:]...)
 	if err != nil {
 		rsp := pool.AcquireResponse()
 		rsp.ErrorResult = util.StringToSlice(err.Error())
@@ -112,7 +112,7 @@ func (s *Store) execHMSet(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.
 		size += uint64(len(values[i]))
 	}
 
-	err := s.getHashEngine().HMSet(key, fields, values)
+	err := s.getHashEngine(ctx.req.Header.CellId).HMSet(key, fields, values)
 	if err != nil {
 		rsp := pool.AcquireResponse()
 		rsp.ErrorResult = util.StringToSlice(err.Error())
@@ -141,7 +141,7 @@ func (s *Store) execHSetNX(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb
 		return rsp
 	}
 
-	value, err := s.getHashEngine().HSetNX(args[0], args[1], args[2])
+	value, err := s.getHashEngine(ctx.req.Header.CellId).HSetNX(args[0], args[1], args[2])
 	if err != nil {
 		rsp := pool.AcquireResponse()
 		rsp.ErrorResult = util.StringToSlice(err.Error())
@@ -179,7 +179,7 @@ func (s *Store) execHIncrBy(ctx *applyContext, req *raftcmdpb.Request) *raftcmdp
 		return rsp
 	}
 
-	value, err := s.getHashEngine().HIncrBy(args[0], args[1], incrment)
+	value, err := s.getHashEngine(ctx.req.Header.CellId).HIncrBy(args[0], args[1], incrment)
 	if err != nil {
 		rsp := pool.AcquireResponse()
 		rsp.ErrorResult = util.StringToSlice(err.Error())
@@ -200,7 +200,7 @@ func (s *Store) execHIncrBy(ctx *applyContext, req *raftcmdpb.Request) *raftcmdp
 	return rsp
 }
 
-func (s *Store) execHGet(req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execHGet(id uint64, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
@@ -211,7 +211,7 @@ func (s *Store) execHGet(req *raftcmdpb.Request) *raftcmdpb.Response {
 		return rsp
 	}
 
-	value, err := s.getHashEngine().HGet(args[0], args[1])
+	value, err := s.getHashEngine(id).HGet(args[0], args[1])
 	if err != nil {
 		rsp := pool.AcquireResponse()
 		rsp.ErrorResult = util.StringToSlice(err.Error())
@@ -227,7 +227,7 @@ func (s *Store) execHGet(req *raftcmdpb.Request) *raftcmdpb.Response {
 	return rsp
 }
 
-func (s *Store) execHExists(req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execHExists(id uint64, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
@@ -238,7 +238,7 @@ func (s *Store) execHExists(req *raftcmdpb.Request) *raftcmdpb.Response {
 		return rsp
 	}
 
-	exists, err := s.getHashEngine().HExists(args[0], args[1])
+	exists, err := s.getHashEngine(id).HExists(args[0], args[1])
 	if err != nil {
 		rsp := pool.AcquireResponse()
 		rsp.ErrorResult = util.StringToSlice(err.Error())
@@ -256,7 +256,7 @@ func (s *Store) execHExists(req *raftcmdpb.Request) *raftcmdpb.Response {
 	return rsp
 }
 
-func (s *Store) execHKeys(req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execHKeys(id uint64, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
@@ -267,7 +267,7 @@ func (s *Store) execHKeys(req *raftcmdpb.Request) *raftcmdpb.Response {
 		return rsp
 	}
 
-	value, err := s.getHashEngine().HKeys(args[0])
+	value, err := s.getHashEngine(id).HKeys(args[0])
 	if err != nil {
 		rsp := pool.AcquireResponse()
 		rsp.ErrorResult = util.StringToSlice(err.Error())
@@ -283,7 +283,7 @@ func (s *Store) execHKeys(req *raftcmdpb.Request) *raftcmdpb.Response {
 	return rsp
 }
 
-func (s *Store) execHVals(req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execHVals(id uint64, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
@@ -294,7 +294,7 @@ func (s *Store) execHVals(req *raftcmdpb.Request) *raftcmdpb.Response {
 		return rsp
 	}
 
-	value, err := s.getHashEngine().HVals(args[0])
+	value, err := s.getHashEngine(id).HVals(args[0])
 	if err != nil {
 		rsp := pool.AcquireResponse()
 		rsp.ErrorResult = util.StringToSlice(err.Error())
@@ -310,7 +310,7 @@ func (s *Store) execHVals(req *raftcmdpb.Request) *raftcmdpb.Response {
 	return rsp
 }
 
-func (s *Store) execHGetAll(req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execHGetAll(id uint64, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
@@ -321,7 +321,7 @@ func (s *Store) execHGetAll(req *raftcmdpb.Request) *raftcmdpb.Response {
 		return rsp
 	}
 
-	value, err := s.getHashEngine().HGetAll(args[0])
+	value, err := s.getHashEngine(id).HGetAll(args[0])
 	if err != nil {
 		rsp := pool.AcquireResponse()
 		rsp.ErrorResult = util.StringToSlice(err.Error())
@@ -337,7 +337,7 @@ func (s *Store) execHGetAll(req *raftcmdpb.Request) *raftcmdpb.Response {
 	return rsp
 }
 
-func (s *Store) execHLen(req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execHLen(id uint64, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
@@ -348,7 +348,7 @@ func (s *Store) execHLen(req *raftcmdpb.Request) *raftcmdpb.Response {
 		return rsp
 	}
 
-	value, err := s.getHashEngine().HLen(args[0])
+	value, err := s.getHashEngine(id).HLen(args[0])
 	if err != nil {
 		rsp := pool.AcquireResponse()
 		rsp.ErrorResult = util.StringToSlice(err.Error())
@@ -361,7 +361,7 @@ func (s *Store) execHLen(req *raftcmdpb.Request) *raftcmdpb.Response {
 	return rsp
 }
 
-func (s *Store) execHMGet(req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execHMGet(id uint64, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
@@ -372,7 +372,7 @@ func (s *Store) execHMGet(req *raftcmdpb.Request) *raftcmdpb.Response {
 		return rsp
 	}
 
-	value, errs := s.getHashEngine().HMGet(args[0], args[1:]...)
+	value, errs := s.getHashEngine(id).HMGet(args[0], args[1:]...)
 	if len(errs) > 0 {
 		errors := make([][]byte, len(errs))
 		for idx, err := range errs {
@@ -394,7 +394,7 @@ func (s *Store) execHMGet(req *raftcmdpb.Request) *raftcmdpb.Response {
 
 }
 
-func (s *Store) execHStrLen(req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execHStrLen(id uint64, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
@@ -405,7 +405,7 @@ func (s *Store) execHStrLen(req *raftcmdpb.Request) *raftcmdpb.Response {
 		return rsp
 	}
 
-	value, err := s.getHashEngine().HStrLen(args[0], args[1])
+	value, err := s.getHashEngine(id).HStrLen(args[0], args[1])
 	if err != nil {
 		rsp := pool.AcquireResponse()
 		rsp.ErrorResult = util.StringToSlice(err.Error())

@@ -14,6 +14,7 @@
 package server
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/deepfabric/elasticell/pkg/log"
@@ -142,13 +143,13 @@ func (s *Server) initRedis() {
 }
 
 func (s *Server) initNode() {
-	driver, err := s.initDriver()
+	drivers, err := s.initDriver()
 	if err != nil {
 		log.Fatalf("bootstrap: init meta db failure, errors:\n %+v", err)
 		return
 	}
 
-	n, err := node.NewNode(globalCfg.AddrCli, globalCfg.Node, driver)
+	n, err := node.NewNode(globalCfg.AddrCli, globalCfg.Node, drivers)
 	if err != nil {
 		log.Fatalf("bootstrap: create node failure, errors:\n %+v", err)
 		return
@@ -156,11 +157,22 @@ func (s *Server) initNode() {
 	s.nodeServer = n
 }
 
-func (s *Server) initDriver() (storage.Driver, error) {
-	cfg := &storage.NemoCfg{
-		DataPath:              globalCfg.Node.RaftStore.DataPath,
-		OptionPath:            globalCfg.Node.RaftStore.OptionPath,
-		LimitConcurrencyWrite: globalCfg.Node.RaftStore.LimitConcurrencyWrite,
+func (s *Server) initDriver() ([]storage.Driver, error) {
+	var drivers []storage.Driver
+	for i := 0; i < globalCfg.Node.RaftStore.LimitNemoInstance; i++ {
+		cfg := &storage.NemoCfg{
+			DataPath:              fmt.Sprintf("%s/nemo_instance_%d", globalCfg.Node.RaftStore.DataPath, i),
+			OptionPath:            globalCfg.Node.RaftStore.OptionPath,
+			LimitConcurrencyWrite: globalCfg.Node.RaftStore.LimitConcurrencyWrite,
+		}
+
+		driver, err := storage.NewNemoDriver(cfg)
+		if err != nil {
+			return nil, err
+		}
+
+		drivers = append(drivers, driver)
 	}
-	return storage.NewNemoDriver(cfg)
+
+	return drivers, nil
 }

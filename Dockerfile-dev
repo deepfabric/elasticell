@@ -1,4 +1,4 @@
-FROM golang:1.9.2
+FROM golang
 
 RUN apt-get update \
     && apt-get -y install libsnappy-dev  \

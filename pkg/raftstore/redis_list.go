@@ -20,7 +20,7 @@ import (
 	"github.com/deepfabric/elasticell/pkg/util"
 )
 
-func (s *Store) execLIndex(req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execLIndex(id uint64, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
@@ -38,7 +38,7 @@ func (s *Store) execLIndex(req *raftcmdpb.Request) *raftcmdpb.Response {
 		return rsp
 	}
 
-	value, err := s.getListEngine().LIndex(args[0], index)
+	value, err := s.getListEngine(id).LIndex(args[0], index)
 	if err != nil {
 		rsp := pool.AcquireResponse()
 		rsp.ErrorResult = util.StringToSlice(err.Error())
@@ -52,7 +52,7 @@ func (s *Store) execLIndex(req *raftcmdpb.Request) *raftcmdpb.Response {
 	return rsp
 }
 
-func (s *Store) execLLEN(req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execLLEN(id uint64, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
@@ -63,7 +63,7 @@ func (s *Store) execLLEN(req *raftcmdpb.Request) *raftcmdpb.Response {
 		return rsp
 	}
 
-	value, err := s.getListEngine().LLen(args[0])
+	value, err := s.getListEngine(id).LLen(args[0])
 	if err != nil {
 		rsp := pool.AcquireResponse()
 		rsp.ErrorResult = util.StringToSlice(err.Error())
@@ -75,7 +75,7 @@ func (s *Store) execLLEN(req *raftcmdpb.Request) *raftcmdpb.Response {
 	return rsp
 }
 
-func (s *Store) execLRange(req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execLRange(id uint64, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
@@ -100,7 +100,7 @@ func (s *Store) execLRange(req *raftcmdpb.Request) *raftcmdpb.Response {
 		return rsp
 	}
 
-	value, err := s.getListEngine().LRange(args[0], start, end)
+	value, err := s.getListEngine(id).LRange(args[0], start, end)
 	if err != nil {
 		rsp := pool.AcquireResponse()
 		rsp.ErrorResult = util.StringToSlice(err.Error())
@@ -132,7 +132,7 @@ func (s *Store) execLInsert(ctx *applyContext, req *raftcmdpb.Request) *raftcmdp
 		return rsp
 	}
 
-	value, err := s.getListEngine().LInsert(args[0], int(pos), args[2], args[3])
+	value, err := s.getListEngine(ctx.req.Header.CellId).LInsert(args[0], int(pos), args[2], args[3])
 	if err != nil {
 		rsp := pool.AcquireResponse()
 		rsp.ErrorResult = util.StringToSlice(err.Error())
@@ -167,7 +167,7 @@ func (s *Store) execLPop(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.R
 		return rsp
 	}
 
-	value, err := s.getListEngine().LPop(args[0])
+	value, err := s.getListEngine(ctx.req.Header.CellId).LPop(args[0])
 	if err != nil {
 		rsp := pool.AcquireResponse()
 		rsp.ErrorResult = util.StringToSlice(err.Error())
@@ -195,7 +195,7 @@ func (s *Store) execLPush(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.
 		return rsp
 	}
 
-	value, err := s.getListEngine().LPush(args[0], args[1:]...)
+	value, err := s.getListEngine(ctx.req.Header.CellId).LPush(args[0], args[1:]...)
 	if err != nil {
 		rsp := pool.AcquireResponse()
 		rsp.ErrorResult = util.StringToSlice(err.Error())
@@ -233,7 +233,7 @@ func (s *Store) execLPushX(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb
 		return rsp
 	}
 
-	value, err := s.getListEngine().LPushX(args[0], args[1])
+	value, err := s.getListEngine(ctx.req.Header.CellId).LPushX(args[0], args[1])
 	if err != nil {
 		rsp := pool.AcquireResponse()
 		rsp.ErrorResult = util.StringToSlice(err.Error())
@@ -276,7 +276,7 @@ func (s *Store) execLRem(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.R
 		return rsp
 	}
 
-	value, err := s.getListEngine().LRem(args[0], count, args[2])
+	value, err := s.getListEngine(ctx.req.Header.CellId).LRem(args[0], count, args[2])
 	if err != nil {
 		rsp := pool.AcquireResponse()
 		rsp.ErrorResult = util.StringToSlice(err.Error())
@@ -311,7 +311,7 @@ func (s *Store) execLSet(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.R
 		return rsp
 	}
 
-	err = s.getListEngine().LSet(args[0], index, args[2])
+	err = s.getListEngine(ctx.req.Header.CellId).LSet(args[0], index, args[2])
 	if err != nil {
 		rsp := pool.AcquireResponse()
 		rsp.ErrorResult = util.StringToSlice(err.Error())
@@ -349,7 +349,7 @@ func (s *Store) execLTrim(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.
 		return rsp
 	}
 
-	err = s.getListEngine().LTrim(args[0], begin, end)
+	err = s.getListEngine(ctx.req.Header.CellId).LTrim(args[0], begin, end)
 	if err != nil {
 		rsp := pool.AcquireResponse()
 		rsp.ErrorResult = util.StringToSlice(err.Error())
@@ -373,7 +373,7 @@ func (s *Store) execRPop(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.R
 		return rsp
 	}
 
-	value, err := s.getListEngine().RPop(args[0])
+	value, err := s.getListEngine(ctx.req.Header.CellId).RPop(args[0])
 	if err != nil {
 		rsp := pool.AcquireResponse()
 		rsp.ErrorResult = util.StringToSlice(err.Error())
@@ -401,7 +401,7 @@ func (s *Store) execRPush(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.
 		return rsp
 	}
 
-	value, err := s.getListEngine().RPush(args[0], args[1:]...)
+	value, err := s.getListEngine(ctx.req.Header.CellId).RPush(args[0], args[1:]...)
 	if err != nil {
 		rsp := pool.AcquireResponse()
 		rsp.ErrorResult = util.StringToSlice(err.Error())
@@ -439,7 +439,7 @@ func (s *Store) execRPushX(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb
 		return rsp
 	}
 
-	value, err := s.getListEngine().RPushX(args[0], args[1])
+	value, err := s.getListEngine(ctx.req.Header.CellId).RPushX(args[0], args[1])
 	if err != nil {
 		rsp := pool.AcquireResponse()
 		rsp.ErrorResult = util.StringToSlice(err.Error())

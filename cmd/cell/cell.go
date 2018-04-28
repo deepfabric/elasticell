@@ -73,6 +73,7 @@ var (
 	limitSnapChunkBytesKB     = flag.Uint64("limit-snap-chunk-bytes", 1024, "Limit(KB): Max snap chunk size")
 	limitSnapChunkRate        = flag.Uint64("limit-snap-chunk-rate", 16, "Limit: Max snap chunks sent per second")
 	limitConcurrencyWrite     = flag.Uint64("limit-concurrency-write", 8, "Limit: write concurrency")
+	limitNemoInstance         = flag.Int("limit-nemo-instance", 1, "Limit: instance count of nemo")
 	thresholdCompact          = flag.Uint64("threshold-compact", 64, "Threshold: Raft Log compact, count of [first, replicated]")
 	thresholdSplitCheckMB     = flag.Uint64("threshold-split-check", 0, "Threshold(MB): Start split check, bytes that the cell has bean stored")
 	thresholdRaftElection     = flag.Int("threshold-raft-election", 10, "Threshold: Raft election, after this ticks")
@@ -199,6 +200,7 @@ func parseCfg() *server.Cfg {
 	cfg.Node.RaftStore.LimitSnapChunkBytes = *limitSnapChunkBytesKB * kb
 	cfg.Node.RaftStore.LimitSnapChunkRate = *limitSnapChunkRate
 	cfg.Node.RaftStore.LimitConcurrencyWrite = *limitConcurrencyWrite
+	cfg.Node.RaftStore.LimitNemoInstance = *limitNemoInstance
 	cfg.Node.RaftStore.ThresholdCompact = *thresholdCompact
 	cfg.Node.RaftStore.ThresholdSplitCheckBytes = *thresholdSplitCheckMB * mb
 	cfg.Node.RaftStore.ThresholdRaftElection = *thresholdRaftElection

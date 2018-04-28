@@ -62,7 +62,8 @@ func (s *storeTestSuite) TestGetTargetCell(c *C) {
 
 func (s *storeTestSuite) TestCleanup(c *C) {
 	store := new(Store)
-	store.engine = storage.NewMemoryDriver()
+	store.engines = []storage.Driver{storage.NewMemoryDriver()}
+	store.enginesMask = uint64(len(store.engines) - 1)
 	store.keyRanges = util.NewCellTree()
 	store.keyRanges.Update(metapb.Cell{
 		ID:    1,
@@ -78,43 +79,44 @@ func (s *storeTestSuite) TestCleanup(c *C) {
 	})
 
 	value := []byte("value")
-	c.Assert(store.engine.GetKVEngine().Set(getDataKey([]byte{0}), value), IsNil)
-	c.Assert(store.engine.GetKVEngine().Set(getDataKey([]byte{1}), value), IsNil)
-	c.Assert(store.engine.GetKVEngine().Set(getDataKey([]byte{9}), value), IsNil)
-	c.Assert(store.engine.GetKVEngine().Set(getDataKey([]byte{10}), value), IsNil)
-	c.Assert(store.engine.GetKVEngine().Set(getDataKey([]byte{11}), value), IsNil)
-	c.Assert(store.engine.GetKVEngine().Set(getDataKey([]byte{12}), value), IsNil)
+	c.Assert(store.getKVEngine(0).Set(getDataKey([]byte{0}), value), IsNil)
+	c.Assert(store.getKVEngine(0).Set(getDataKey([]byte{1}), value), IsNil)
+	c.Assert(store.getKVEngine(0).Set(getDataKey([]byte{9}), value), IsNil)
+	c.Assert(store.getKVEngine(0).Set(getDataKey([]byte{10}), value), IsNil)
+	c.Assert(store.getKVEngine(0).Set(getDataKey([]byte{11}), value), IsNil)
+	c.Assert(store.getKVEngine(0).Set(getDataKey([]byte{12}), value), IsNil)
 
 	store.cleanup()
 
-	value, err := store.engine.GetKVEngine().Get(getDataKey([]byte{0}))
+	value, err := store.getKVEngine(0).Get(getDataKey([]byte{0}))
 	c.Assert(err, IsNil)
 	c.Assert(len(value) == 0, IsTrue)
 
-	value, err = store.engine.GetKVEngine().Get(getDataKey([]byte{1}))
+	value, err = store.getKVEngine(0).Get(getDataKey([]byte{1}))
 	c.Assert(err, IsNil)
 	c.Assert(len(value) > 0, IsTrue)
 
-	value, err = store.engine.GetKVEngine().Get(getDataKey([]byte{9}))
+	value, err = store.getKVEngine(0).Get(getDataKey([]byte{9}))
 	c.Assert(err, IsNil)
 	c.Assert(len(value) > 0, IsTrue)
 
-	value, err = store.engine.GetKVEngine().Get(getDataKey([]byte{10}))
+	value, err = store.getKVEngine(0).Get(getDataKey([]byte{10}))
 	c.Assert(err, IsNil)
 	c.Assert(len(value) == 0, IsTrue)
 
-	value, err = store.engine.GetKVEngine().Get(getDataKey([]byte{11}))
+	value, err = store.getKVEngine(0).Get(getDataKey([]byte{11}))
 	c.Assert(err, IsNil)
 	c.Assert(len(value) > 0, IsTrue)
 
-	value, err = store.engine.GetKVEngine().Get(getDataKey([]byte{12}))
+	value, err = store.getKVEngine(0).Get(getDataKey([]byte{12}))
 	c.Assert(err, IsNil)
 	c.Assert(len(value) == 0, IsTrue)
 }
 
 func (s *storeTestSuite) TestClearMeta(c *C) {
 	store := new(Store)
-	store.engine = storage.NewMemoryDriver()
+	store.engines = []storage.Driver{storage.NewMemoryDriver()}
+	store.enginesMask = uint64(len(store.engines) - 1)
 	store.keyRanges = util.NewCellTree()
 	c1 := metapb.Cell{
 		ID:    1,
@@ -131,34 +133,34 @@ func (s *storeTestSuite) TestClearMeta(c *C) {
 	}
 	store.keyRanges.Update(c2)
 
-	c.Assert(SaveCell(store.engine, c1), IsNil)
-	c.Assert(SaveCell(store.engine, c2), IsNil)
-	wb := store.engine.NewWriteBatch()
+	c.Assert(SaveCell(store.engines[0], c1), IsNil)
+	c.Assert(SaveCell(store.engines[0], c2), IsNil)
+	wb := store.engines[0].NewWriteBatch()
 	store.clearMeta(c1.ID, wb)
 	store.clearMeta(c2.ID, wb)
-	store.engine.Write(wb, false)
+	store.engines[0].Write(wb, false)
 
-	data, err := store.engine.GetEngine().Get(getCellStateKey(c1.ID))
+	data, err := store.getEngine(0).Get(getCellStateKey(c1.ID))
 	c.Assert(err, IsNil)
 	c.Assert(len(data) == 0, IsTrue)
 
-	data, err = store.engine.GetEngine().Get(getRaftStateKey(c1.ID))
+	data, err = store.getEngine(0).Get(getRaftStateKey(c1.ID))
 	c.Assert(err, IsNil)
 	c.Assert(len(data) == 0, IsTrue)
 
-	data, err = store.engine.GetEngine().Get(getApplyStateKey(c1.ID))
+	data, err = store.getEngine(0).Get(getApplyStateKey(c1.ID))
 	c.Assert(err, IsNil)
 	c.Assert(len(data) == 0, IsTrue)
 
-	data, err = store.engine.GetEngine().Get(getCellStateKey(c2.ID))
+	data, err = store.getEngine(0).Get(getCellStateKey(c2.ID))
 	c.Assert(err, IsNil)
 	c.Assert(len(data) == 0, IsTrue)
 
-	data, err = store.engine.GetEngine().Get(getRaftStateKey(c2.ID))
+	data, err = store.getEngine(0).Get(getRaftStateKey(c2.ID))
 	c.Assert(err, IsNil)
 	c.Assert(len(data) == 0, IsTrue)
 
-	data, err = store.engine.GetEngine().Get(getApplyStateKey(c2.ID))
+	data, err = store.getEngine(0).Get(getApplyStateKey(c2.ID))
 	c.Assert(err, IsNil)
 	c.Assert(len(data) == 0, IsTrue)
 }

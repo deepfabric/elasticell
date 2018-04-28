@@ -44,7 +44,7 @@ func (s *Store) execKVSet(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.
 	return rsp
 }
 
-func (s *Store) execKVGet(req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execKVGet(id uint64, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
@@ -55,7 +55,7 @@ func (s *Store) execKVGet(req *raftcmdpb.Request) *raftcmdpb.Response {
 		return rsp
 	}
 
-	value, err := s.getKVEngine().Get(args[0])
+	value, err := s.getKVEngine(id).Get(args[0])
 	if err != nil {
 		rsp := pool.AcquireResponse()
 		rsp.ErrorResult = util.StringToSlice(err.Error())
@@ -68,7 +68,7 @@ func (s *Store) execKVGet(req *raftcmdpb.Request) *raftcmdpb.Response {
 	return rsp
 }
 
-func (s *Store) execKVStrLen(req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execKVStrLen(id uint64, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
@@ -79,7 +79,7 @@ func (s *Store) execKVStrLen(req *raftcmdpb.Request) *raftcmdpb.Response {
 		return rsp
 	}
 
-	n, err := s.getKVEngine().StrLen(args[0])
+	n, err := s.getKVEngine(id).StrLen(args[0])
 	if err != nil {
 		rsp := pool.AcquireResponse()
 		rsp.ErrorResult = util.StringToSlice(err.Error())
@@ -111,7 +111,7 @@ func (s *Store) execKVIncrBy(ctx *applyContext, req *raftcmdpb.Request) *raftcmd
 		return rsp
 	}
 
-	n, err := s.getKVEngine().IncrBy(args[0], incrment)
+	n, err := s.getKVEngine(ctx.req.Header.CellId).IncrBy(args[0], incrment)
 	if err != nil {
 		rsp := pool.AcquireResponse()
 		rsp.ErrorResult = util.StringToSlice(err.Error())
@@ -135,7 +135,7 @@ func (s *Store) execKVIncr(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb
 		return rsp
 	}
 
-	n, err := s.getKVEngine().IncrBy(args[0], 1)
+	n, err := s.getKVEngine(ctx.req.Header.CellId).IncrBy(args[0], 1)
 	if err != nil {
 		rsp := pool.AcquireResponse()
 		rsp.ErrorResult = util.StringToSlice(err.Error())
@@ -166,7 +166,7 @@ func (s *Store) execKVDecrby(ctx *applyContext, req *raftcmdpb.Request) *raftcmd
 		return rsp
 	}
 
-	n, err := s.getKVEngine().DecrBy(args[0], incrment)
+	n, err := s.getKVEngine(ctx.req.Header.CellId).DecrBy(args[0], incrment)
 	if err != nil {
 		rsp := pool.AcquireResponse()
 		rsp.ErrorResult = util.StringToSlice(err.Error())
@@ -189,7 +189,7 @@ func (s *Store) execKVDecr(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb
 		return rsp
 	}
 
-	n, err := s.getKVEngine().DecrBy(args[0], 1)
+	n, err := s.getKVEngine(ctx.req.Header.CellId).DecrBy(args[0], 1)
 	if err != nil {
 		rsp := pool.AcquireResponse()
 		rsp.ErrorResult = util.StringToSlice(err.Error())
@@ -212,7 +212,7 @@ func (s *Store) execKVGetSet(ctx *applyContext, req *raftcmdpb.Request) *raftcmd
 		return rsp
 	}
 
-	value, err := s.getKVEngine().GetSet(args[0], args[1])
+	value, err := s.getKVEngine(ctx.req.Header.CellId).GetSet(args[0], args[1])
 	if err != nil {
 		rsp := pool.AcquireResponse()
 		rsp.ErrorResult = util.StringToSlice(err.Error())
@@ -235,7 +235,7 @@ func (s *Store) execKVAppend(ctx *applyContext, req *raftcmdpb.Request) *raftcmd
 		return rsp
 	}
 
-	n, err := s.getKVEngine().Append(args[0], args[1])
+	n, err := s.getKVEngine(ctx.req.Header.CellId).Append(args[0], args[1])
 	if err != nil {
 		rsp := pool.AcquireResponse()
 		rsp.ErrorResult = util.StringToSlice(err.Error())
@@ -262,7 +262,7 @@ func (s *Store) execKVSetNX(ctx *applyContext, req *raftcmdpb.Request) *raftcmdp
 		return rsp
 	}
 
-	n, err := s.getKVEngine().SetNX(args[0], args[1])
+	n, err := s.getKVEngine(ctx.req.Header.CellId).SetNX(args[0], args[1])
 	if err != nil {
 		rsp := pool.AcquireResponse()
 		rsp.ErrorResult = util.StringToSlice(err.Error())

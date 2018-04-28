@@ -18,7 +18,7 @@ func (s *Store) execSAdd(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.R
 		return rsp
 	}
 
-	value, err := s.getSetEngine().SAdd(args[0], args[1:]...)
+	value, err := s.getSetEngine(ctx.req.Header.CellId).SAdd(args[0], args[1:]...)
 	if err != nil {
 		rsp := pool.AcquireResponse()
 		rsp.ErrorResult = util.StringToSlice(err.Error())
@@ -56,7 +56,7 @@ func (s *Store) execSRem(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.R
 		return rsp
 	}
 
-	value, err := s.getSetEngine().SRem(args[0], args[1:]...)
+	value, err := s.getSetEngine(ctx.req.Header.CellId).SRem(args[0], args[1:]...)
 	if err != nil {
 		rsp := pool.AcquireResponse()
 		rsp.ErrorResult = util.StringToSlice(err.Error())
@@ -79,7 +79,7 @@ func (s *Store) execSRem(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.R
 	return rsp
 }
 
-func (s *Store) execSCard(req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execSCard(id uint64, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
@@ -90,7 +90,7 @@ func (s *Store) execSCard(req *raftcmdpb.Request) *raftcmdpb.Response {
 		return rsp
 	}
 
-	value, err := s.getSetEngine().SCard(args[0])
+	value, err := s.getSetEngine(id).SCard(args[0])
 	if err != nil {
 		rsp := pool.AcquireResponse()
 		rsp.ErrorResult = util.StringToSlice(err.Error())
@@ -103,7 +103,7 @@ func (s *Store) execSCard(req *raftcmdpb.Request) *raftcmdpb.Response {
 
 }
 
-func (s *Store) execSMembers(req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execSMembers(id uint64, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
@@ -114,7 +114,7 @@ func (s *Store) execSMembers(req *raftcmdpb.Request) *raftcmdpb.Response {
 		return rsp
 	}
 
-	value, err := s.getSetEngine().SMembers(args[0])
+	value, err := s.getSetEngine(id).SMembers(args[0])
 	if err != nil {
 		rsp := pool.AcquireResponse()
 		rsp.ErrorResult = util.StringToSlice(err.Error())
@@ -128,7 +128,7 @@ func (s *Store) execSMembers(req *raftcmdpb.Request) *raftcmdpb.Response {
 	return rsp
 }
 
-func (s *Store) execSIsMember(req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execSIsMember(id uint64, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
@@ -139,7 +139,7 @@ func (s *Store) execSIsMember(req *raftcmdpb.Request) *raftcmdpb.Response {
 		return rsp
 	}
 
-	value, err := s.getSetEngine().SIsMember(args[0], args[1])
+	value, err := s.getSetEngine(id).SIsMember(args[0], args[1])
 	if err != nil {
 		rsp := pool.AcquireResponse()
 		rsp.ErrorResult = util.StringToSlice(err.Error())
@@ -151,7 +151,7 @@ func (s *Store) execSIsMember(req *raftcmdpb.Request) *raftcmdpb.Response {
 	return rsp
 }
 
-func (s *Store) execSPop(req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execSPop(id uint64, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
@@ -162,7 +162,7 @@ func (s *Store) execSPop(req *raftcmdpb.Request) *raftcmdpb.Response {
 		return rsp
 	}
 
-	value, err := s.getSetEngine().SPop(args[0])
+	value, err := s.getSetEngine(id).SPop(args[0])
 	if err != nil {
 		rsp := pool.AcquireResponse()
 		rsp.ErrorResult = util.StringToSlice(err.Error())

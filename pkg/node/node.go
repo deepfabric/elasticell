@@ -33,21 +33,23 @@ import (
 type Node struct {
 	sync.RWMutex
 
-	cfg       *Cfg
-	clusterID uint64
-	pdClient  *pd.Client
-	driver    storage.Driver
-	storeMeta metapb.Store
-	store     *raftstore.Store
+	cfg         *Cfg
+	clusterID   uint64
+	pdClient    *pd.Client
+	drivers     []storage.Driver
+	driversMask uint64
+	storeMeta   metapb.Store
+	store       *raftstore.Store
 
 	runner *util.Runner
 }
 
 // NewNode create a node instance, then init store, pd connection and init the cluster ID
-func NewNode(clientAddr string, cfg *Cfg, driver storage.Driver) (*Node, error) {
+func NewNode(clientAddr string, cfg *Cfg, drivers []storage.Driver) (*Node, error) {
 	n := new(Node)
 	n.cfg = cfg
-	n.driver = driver
+	n.drivers = drivers
+	n.driversMask = uint64(len(drivers) - 1)
 	n.clusterID = cfg.ClusterID
 	n.storeMeta = newStore(clientAddr, cfg)
 	n.runner = util.NewRunner()

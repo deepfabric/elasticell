@@ -41,6 +41,7 @@ type Cfg struct {
 	LimitSnapChunkBytes       uint64
 	LimitSnapChunkRate        uint64
 	LimitConcurrencyWrite     uint64
+	LimitNemoInstance         int
 	ThresholdCompact          uint64
 	ThresholdSplitCheckBytes  uint64
 	ThresholdRaftElection     int

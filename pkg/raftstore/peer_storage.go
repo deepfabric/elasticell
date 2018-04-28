@@ -112,7 +112,7 @@ func newPeerStorage(store *Store, cell metapb.Cell) (*peerStorage, error) {
 }
 
 func (ps *peerStorage) initRaftState() error {
-	v, err := ps.store.getMetaEngine().Get(getRaftStateKey(ps.getCell().ID))
+	v, err := ps.store.getEngine(ps.cell.ID).Get(getRaftStateKey(ps.cell.ID))
 	if err != nil {
 		return errors.Wrap(err, "")
 	}
@@ -138,7 +138,7 @@ func (ps *peerStorage) initRaftState() error {
 }
 
 func (ps *peerStorage) initApplyState() error {
-	v, err := ps.store.getMetaEngine().Get(getApplyStateKey(ps.getCell().ID))
+	v, err := ps.store.getEngine(ps.cell.ID).Get(getApplyStateKey(ps.cell.ID))
 	if err != nil {
 		return errors.Wrap(err, "")
 	}
@@ -182,7 +182,7 @@ func (ps *peerStorage) initLastTerm() error {
 		return nil
 	}
 
-	v, err := ps.store.getMetaEngine().Get(getRaftLogKey(ps.getCell().ID, lastIndex))
+	v, err := ps.store.getEngine(ps.cell.ID).Get(getRaftLogKey(ps.cell.ID, lastIndex))
 	if err != nil {
 		return errors.Wrap(err, "")
 	}
@@ -316,8 +316,8 @@ func (ps *peerStorage) checkRange(low, high uint64) error {
 }
 
 func (ps *peerStorage) loadLogEntry(index uint64) (*raftpb.Entry, error) {
-	key := getRaftLogKey(ps.getCell().ID, index)
-	v, err := ps.store.getMetaEngine().Get(key)
+	key := getRaftLogKey(ps.cell.ID, index)
+	v, err := ps.store.getEngine(ps.cell.ID).Get(key)
 	if err != nil {
 		log.Errorf("raftstore[cell-%d]: load entry failure, index=<%d> errors:\n %+v",
 			ps.getCell().ID,
@@ -340,7 +340,7 @@ func (ps *peerStorage) loadCellLocalState(job *util.Job) (*mraft.CellLocalState,
 		return nil, util.ErrJobCancelled
 	}
 
-	return loadCellLocalState(ps.getCell().ID, ps.store.engine, false)
+	return loadCellLocalState(ps.cell.ID, ps.store.getDriver(ps.cell.ID), false)
 }
 
 func (ps *peerStorage) applySnapshot(job *util.Job) error {
@@ -360,8 +360,8 @@ func (ps *peerStorage) applySnapshot(job *util.Job) error {
 }
 
 func (ps *peerStorage) loadApplyState() (*mraft.RaftApplyState, error) {
-	key := getApplyStateKey(ps.getCell().ID)
-	v, err := ps.store.getMetaEngine().Get(key)
+	key := getApplyStateKey(ps.cell.ID)
+	v, err := ps.store.getEngine(ps.cell.ID).Get(key)
 	if err != nil {
 		log.Errorf("raftstore[cell-%d]: load apply state failed, errors:\n %+v",
 			ps.getCell().ID,
@@ -469,7 +469,7 @@ func (ps *peerStorage) updatePeerState(cell metapb.Cell, state mraft.PeerState, 
 		return wb.Set(getCellStateKey(cell.ID), data)
 	}
 
-	return ps.store.getMetaEngine().Set(getCellStateKey(cell.ID), data)
+	return ps.store.getEngine(cell.ID).Set(getCellStateKey(cell.ID), data)
 }
 
 func (ps *peerStorage) writeInitialState(cellID uint64, wb storage.WriteBatch) error {
@@ -497,7 +497,7 @@ func (ps *peerStorage) deleteAllInRange(start, end []byte, job *util.Job) error 
 		return util.ErrJobCancelled
 	}
 
-	return ps.store.getDataEngine().RangeDelete(start, end)
+	return ps.store.getDataEngine(ps.cell.ID).RangeDelete(start, end)
 }
 
 func compactRaftLog(cellID uint64, state *mraft.RaftApplyState, compactIndex, compactTerm uint64) error {

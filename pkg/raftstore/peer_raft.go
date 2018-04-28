@@ -531,7 +531,7 @@ func (pr *PeerReplicate) handleRaftReadyAppend(ctx *readyContext, rd *raft.Ready
 		pr.send(rd.Messages)
 	}
 
-	ctx.wb = pr.store.engine.NewWriteBatch()
+	ctx.wb = pr.store.getDriver(pr.cellID).NewWriteBatch()
 
 	pr.handleAppendSnapshot(ctx, rd)
 	pr.handleAppendEntries(ctx, rd)
@@ -543,7 +543,7 @@ func (pr *PeerReplicate) handleRaftReadyAppend(ctx *readyContext, rd *raft.Ready
 	pr.handleSaveRaftState(ctx)
 	pr.handleSaveApplyState(ctx)
 
-	err := pr.store.engine.Write(ctx.wb, globalCfg.EnableSyncRaftLog)
+	err := pr.store.getDriver(pr.cellID).Write(ctx.wb, globalCfg.EnableSyncRaftLog)
 	if err != nil {
 		log.Fatalf("raftstore[cell-%d]: handle raft ready failure, errors\n %+v",
 			pr.getCell().ID,

@@ -71,9 +71,10 @@ type Store struct {
 	pendingLock        sync.RWMutex
 	pendingSnapshots   map[uint64]mraft.SnapshotMessageHeader
 	trans              *transport
-	engine             storage.Driver
+	engines            []storage.Driver
+	enginesMask        uint64
 	runner             *util.Runner
-	redisReadHandles   map[raftcmdpb.CMDType]func(*raftcmdpb.Request) *raftcmdpb.Response
+	redisReadHandles   map[raftcmdpb.CMDType]func(uint64, *raftcmdpb.Request) *raftcmdpb.Response
 	redisWriteHandles  map[raftcmdpb.CMDType]func(*applyContext, *raftcmdpb.Request) *raftcmdpb.Response
 	sendingSnapCount   uint32
 	reveivingSnapCount uint32
@@ -129,7 +130,7 @@ type QueryRequestCb struct {
 }
 
 // NewStore returns store
-func NewStore(clusterID uint64, pdClient *pd.Client, meta metapb.Store, engine storage.Driver, cfg *Cfg) *Store {
+func NewStore(clusterID uint64, pdClient *pd.Client, meta metapb.Store, engines []storage.Driver, cfg *Cfg) *Store {
 	globalCfg = cfg
 
 	s := new(Store)
@@ -137,9 +138,10 @@ func NewStore(clusterID uint64, pdClient *pd.Client, meta metapb.Store, engine s
 	s.id = meta.ID
 	s.meta = meta
 	s.startAt = uint32(time.Now().Unix())
-	s.engine = engine
+	s.engines = engines
+	s.enginesMask = uint64(len(engines) - 1)
 	s.pdClient = pdClient
-	s.snapshotManager = newDefaultSnapshotManager(cfg, engine.GetDataEngine(), s)
+	s.snapshotManager = newDefaultSnapshotManager(cfg, s.getDataEngine, s)
 	s.pendingSnapshots = make(map[uint64]mraft.SnapshotMessageHeader)
 	s.trans = newTransport(s, pdClient, s.notify)
 	s.keyRanges = util.NewCellTree()
@@ -157,7 +159,7 @@ func NewStore(clusterID uint64, pdClient *pd.Client, meta metapb.Store, engine s
 	s.runner.AddNamedWorker(splitWorker)
 	s.runner.AddNamedWorker(raftGCWorker)
 
-	s.redisReadHandles = make(map[raftcmdpb.CMDType]func(*raftcmdpb.Request) *raftcmdpb.Response)
+	s.redisReadHandles = make(map[raftcmdpb.CMDType]func(uint64, *raftcmdpb.Request) *raftcmdpb.Response)
 	s.redisWriteHandles = make(map[raftcmdpb.CMDType]func(*applyContext, *raftcmdpb.Request) *raftcmdpb.Response)
 
 	s.indices = make(map[string]*pdpb.IndexDef)
@@ -181,64 +183,64 @@ func (s *Store) startCells() {
 	tomebstoneCount := 0
 	applyingCount := 0
 
-	wb := s.engine.NewWriteBatch()
+	for _, driver := range s.engines {
+		wb := driver.NewWriteBatch()
+		err := driver.GetEngine().Scan(cellMetaMinKey, cellMetaMaxKey, func(key, value []byte) (bool, error) {
+			cellID, suffix, err := decodeCellMetaKey(key)
+			if err != nil {
+				return false, err
+			}
 
-	err := s.getMetaEngine().Scan(cellMetaMinKey, cellMetaMaxKey, func(key, value []byte) (bool, error) {
-		cellID, suffix, err := decodeCellMetaKey(key)
-		if err != nil {
-			return false, err
-		}
+			if suffix != cellStateSuffix {
+				return true, nil
+			}
 
-		if suffix != cellStateSuffix {
+			totalCount++
+
+			localState := new(mraft.CellLocalState)
+			util.MustUnmarshal(localState, value)
+
+			for _, p := range localState.Cell.Peers {
+				s.peerCache.put(p.ID, *p)
+			}
+
+			if localState.State == mraft.Tombstone {
+				s.clearMeta(cellID, wb)
+				tomebstoneCount++
+				log.Infof("bootstrap: cell is tombstone in store, cellID=<%d>",
+					cellID)
+				return true, nil
+			}
+
+			pr, err := createPeerReplicate(s, &localState.Cell)
+			if err != nil {
+				return false, err
+			}
+
+			if localState.State == mraft.Applying {
+				applyingCount++
+				log.Infof("bootstrap: cell is applying in store, cellID=<%d>", cellID)
+				pr.startApplyingSnapJob()
+			}
+
+			pr.startRegistrationJob()
+
+			s.keyRanges.Update(localState.Cell)
+			s.replicatesMap.put(cellID, pr)
+			if _, err := s.GetIndexer(cellID); err != nil {
+				return false, err
+			}
+
 			return true, nil
-		}
+		}, false)
 
-		totalCount++
-
-		localState := new(mraft.CellLocalState)
-		util.MustUnmarshal(localState, value)
-
-		for _, p := range localState.Cell.Peers {
-			s.peerCache.put(p.ID, *p)
-		}
-
-		if localState.State == mraft.Tombstone {
-			s.clearMeta(cellID, wb)
-			tomebstoneCount++
-			log.Infof("bootstrap: cell is tombstone in store, cellID=<%d>",
-				cellID)
-			return true, nil
-		}
-
-		pr, err := createPeerReplicate(s, &localState.Cell)
 		if err != nil {
-			return false, err
+			log.Fatalf("bootstrap: init store failed, errors:\n %+v", err)
 		}
-
-		if localState.State == mraft.Applying {
-			applyingCount++
-			log.Infof("bootstrap: cell is applying in store, cellID=<%d>", cellID)
-			pr.startApplyingSnapJob()
+		err = driver.Write(wb, false)
+		if err != nil {
+			log.Fatalf("bootstrap: init store failed, errors:\n %+v", err)
 		}
-
-		pr.startRegistrationJob()
-
-		s.keyRanges.Update(localState.Cell)
-		s.replicatesMap.put(cellID, pr)
-		if _, err := s.GetIndexer(cellID); err != nil {
-			return false, err
-		}
-
-		return true, nil
-	}, false)
-
-	if err != nil {
-		log.Fatalf("bootstrap: init store failed, errors:\n %+v", err)
-	}
-
-	err = s.engine.Write(wb, false)
-	if err != nil {
-		log.Fatalf("bootstrap: init store failed, errors:\n %+v", err)
 	}
 
 	log.Infof("bootstrap: starts with %d cells, including %d tombstones and %d applying cells",
@@ -248,7 +250,7 @@ func (s *Store) startCells() {
 
 	s.cleanup()
 
-	if err = s.loadIndices(); err != nil && !os.IsNotExist(err) {
+	if err := s.loadIndices(); err != nil && !os.IsNotExist(err) {
 		log.Fatalf("bootstrap: init store failed, errors:\n %+v", err)
 	}
 }
@@ -913,7 +915,7 @@ func (s *Store) cleanup() {
 
 	s.keyRanges.Ascend(func(cell *metapb.Cell) bool {
 		start := encStartKey(cell)
-		err := s.getDataEngine().RangeDelete(lastStartKey, start)
+		err := s.getDataEngine(cell.ID).RangeDelete(lastStartKey, start)
 		if err != nil {
 			log.Fatalf("bootstrap: cleanup possible garbage data failed, start=<%v> end=<%v> errors:\n %+v",
 				lastStartKey,
@@ -925,12 +927,14 @@ func (s *Store) cleanup() {
 		return true
 	})
 
-	err := s.getDataEngine().RangeDelete(lastStartKey, dataMaxKey)
-	if err != nil {
-		log.Fatalf("bootstrap: cleanup possible garbage data failed, start=<%v> end=<%v> errors:\n %+v",
-			lastStartKey,
-			dataMaxKey,
-			err)
+	for _, driver := range s.engines {
+		err := driver.GetDataEngine().RangeDelete(lastStartKey, dataMaxKey)
+		if err != nil {
+			log.Fatalf("bootstrap: cleanup possible garbage data failed, start=<%v> end=<%v> errors:\n %+v",
+				lastStartKey,
+				dataMaxKey,
+				err)
+		}
 	}
 
 	log.Infof("bootstrap: cleanup possible garbage data complete")
@@ -943,7 +947,7 @@ func (s *Store) clearMeta(cellID uint64, wb storage.WriteBatch) error {
 	var keys [][]byte
 	defer func() {
 		for _, key := range keys {
-			s.getMetaEngine().Free(key)
+			s.getEngine(cellID).Free(key)
 		}
 	}()
 
@@ -951,7 +955,7 @@ func (s *Store) clearMeta(cellID uint64, wb storage.WriteBatch) error {
 	metaStart := getCellMetaPrefix(cellID)
 	metaEnd := getCellMetaPrefix(cellID + 1)
 
-	err := s.getMetaEngine().Scan(metaStart, metaEnd, func(key, value []byte) (bool, error) {
+	err := s.getEngine(cellID).Scan(metaStart, metaEnd, func(key, value []byte) (bool, error) {
 		keys = append(keys, key)
 		err := wb.Delete(key)
 		if err != nil {
@@ -969,7 +973,7 @@ func (s *Store) clearMeta(cellID uint64, wb storage.WriteBatch) error {
 	raftStart := getCellRaftPrefix(cellID)
 	raftEnd := getCellRaftPrefix(cellID + 1)
 
-	err = s.getMetaEngine().Scan(raftStart, raftEnd, func(key, value []byte) (bool, error) {
+	err = s.getEngine(cellID).Scan(raftStart, raftEnd, func(key, value []byte) (bool, error) {
 		keys = append(keys, key)
 		err := wb.Delete(key)
 		if err != nil {
@@ -1173,30 +1177,34 @@ func (s *Store) SetKeyConvertFun(fn func([]byte, func([]byte) metapb.Cell) metap
 	s.keyConvertFun = fn
 }
 
-func (s *Store) getMetaEngine() storage.Engine {
-	return s.engine.GetEngine()
+func (s *Store) getDriver(id uint64) storage.Driver {
+	return s.engines[s.enginesMask&id]
 }
 
-func (s *Store) getDataEngine() storage.DataEngine {
-	return s.engine.GetDataEngine()
+func (s *Store) getEngine(id uint64) storage.Engine {
+	return s.getDriver(id).GetEngine()
 }
 
-func (s *Store) getKVEngine() storage.KVEngine {
-	return s.engine.GetKVEngine()
+func (s *Store) getDataEngine(id uint64) storage.DataEngine {
+	return s.getDriver(id).GetDataEngine()
 }
 
-func (s *Store) getHashEngine() storage.HashEngine {
-	return s.engine.GetHashEngine()
+func (s *Store) getKVEngine(id uint64) storage.KVEngine {
+	return s.getDriver(id).GetKVEngine()
 }
 
-func (s *Store) getListEngine() storage.ListEngine {
-	return s.engine.GetListEngine()
+func (s *Store) getHashEngine(id uint64) storage.HashEngine {
+	return s.getDriver(id).GetHashEngine()
 }
 
-func (s *Store) getSetEngine() storage.SetEngine {
-	return s.engine.GetSetEngine()
+func (s *Store) getListEngine(id uint64) storage.ListEngine {
+	return s.getDriver(id).GetListEngine()
 }
 
-func (s *Store) getZSetEngine() storage.ZSetEngine {
-	return s.engine.GetZSetEngine()
+func (s *Store) getSetEngine(id uint64) storage.SetEngine {
+	return s.getDriver(id).GetSetEngine()
+}
+
+func (s *Store) getZSetEngine(id uint64) storage.ZSetEngine {
+	return s.getDriver(id).GetZSetEngine()
 }

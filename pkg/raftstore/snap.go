@@ -57,14 +57,14 @@ type defaultSnapshotManager struct {
 	limiter *rate.Limiter
 
 	cfg *Cfg
-	db  storage.DataEngine
+	db  func(uint64) storage.DataEngine
 	s   *Store
 	dir string
 
 	registry map[string]struct{}
 }
 
-func newDefaultSnapshotManager(cfg *Cfg, db storage.DataEngine, s *Store) SnapshotManager {
+func newDefaultSnapshotManager(cfg *Cfg, db func(uint64) storage.DataEngine, s *Store) SnapshotManager {
 	dir := cfg.getSnapDir()
 
 	if !exist(dir) {
@@ -190,10 +190,11 @@ func (m *defaultSnapshotManager) Create(msg *mraft.SnapshotMessage) error {
 	start := encStartKey(&msg.Header.Cell)
 	end := encEndKey(&msg.Header.Cell)
 	var numList []uint64
+	db := m.db(msg.Header.Cell.ID)
 
 	if !exist(gzPath) {
 		if !exist(path) {
-			err := m.db.CreateSnapshot(path, start, end)
+			err := db.CreateSnapshot(path, start, end)
 			if err != nil {
 				return errors.Wrapf(err, "")
 			}
@@ -210,7 +211,7 @@ func (m *defaultSnapshotManager) Create(msg *mraft.SnapshotMessage) error {
 				start = getDocIDKey(docIDStart)
 				end = getDocIDKey(docIDStart + pilosa.SliceWidth)
 				path2 := filepath.Join(path, fmt.Sprintf("docid-%v", docIDStart))
-				err := m.db.CreateSnapshot(path2, start, end)
+				err := db.CreateSnapshot(path2, start, end)
 				if err != nil {
 					return errors.Wrapf(err, "")
 				}
@@ -407,7 +408,7 @@ func (m *defaultSnapshotManager) Apply(msg *mraft.SnapshotMessage) error {
 	defer os.RemoveAll(dir)
 
 	// apply snapshot of data
-	if err := m.db.ApplySnapshot(dir); err != nil {
+	if err := m.db(msg.Header.Cell.ID).ApplySnapshot(dir); err != nil {
 		return err
 	}
 
@@ -435,7 +436,7 @@ func (m *defaultSnapshotManager) Apply(msg *mraft.SnapshotMessage) error {
 	for _, fn := range fns {
 		if strings.HasPrefix(fn, "docid-") {
 			docIDSnapDir := filepath.Join(dir, fn)
-			if err = m.db.ApplySnapshot(docIDSnapDir); err != nil {
+			if err = m.db(msg.Header.Cell.ID).ApplySnapshot(docIDSnapDir); err != nil {
 				return err
 			}
 			log.Infof("applied snapshot %v", docIDSnapDir)

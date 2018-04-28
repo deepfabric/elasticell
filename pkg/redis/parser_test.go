@@ -72,7 +72,7 @@ func (s *testRedisSuite) doConnection(session goetty.IOSession) error {
 			return err
 		}
 
-		cmd := req.(Command)
+		cmd := req.(gredis.Command)
 		if cmd.CmdString() == "set" {
 			gredis.WriteStatus([]byte("OK"), session.OutBuf())
 			session.Flush()

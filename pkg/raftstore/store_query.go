@@ -257,7 +257,7 @@ func (s *Store) readyToServeQuery(ctx context.Context) {
 func (s *Store) readDocument(docID uint64) (doc *querypb.Document, err error) {
 	var fvPairs []*raftcmdpb.FVPair
 	var dataKey []byte
-	if dataKey, err = s.engine.GetKVEngine().Get(getDocIDKey(docID)); err != nil {
+	if dataKey, err = s.getKVEngine(1).Get(getDocIDKey(docID)); err != nil {
 		return
 	}
 	if len(dataKey) == 0 {
@@ -267,9 +267,21 @@ func (s *Store) readDocument(docID uint64) (doc *querypb.Document, err error) {
 	doc = &querypb.Document{
 		Key: getOriginKey(dataKey),
 	}
-	if fvPairs, err = s.engine.GetHashEngine().HGetAll(dataKey); err != nil {
+
+	cellID := uint64(0)
+	if len(s.engines) > 1 {
+		target, err := s.getTargetCell(doc.Key)
+		if err != nil {
+			return nil, err
+		}
+
+		cellID = target.cellID
+	}
+
+	if fvPairs, err = s.getHashEngine(cellID).HGetAll(dataKey); err != nil {
 		return
 	}
+
 	for _, fv := range fvPairs {
 		doc.FvPairs = append(doc.FvPairs, fv.Field)
 		doc.FvPairs = append(doc.FvPairs, fv.Value)

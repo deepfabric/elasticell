@@ -287,7 +287,7 @@ func (d *applyDelegate) applyEntry(ctx *applyContext, entry *raftpb.Entry) *exec
 	state := d.applyState
 	state.AppliedIndex = entry.Index
 
-	err := d.store.getMetaEngine().Set(getApplyStateKey(d.cell.ID), util.MustMarshal(&state))
+	err := d.store.getEngine(d.cell.ID).Set(getApplyStateKey(d.cell.ID), util.MustMarshal(&state))
 	if err != nil {
 		log.Fatalf("raftstore-apply[cell-%d]: apply empty entry failed, entry=<%s> errors:\n %+v",
 			d.cell.ID,

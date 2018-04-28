@@ -75,7 +75,7 @@ func (s *Store) isMsgStale(msg *mraft.RaftMessage) (bool, error) {
 	}
 
 	// no exist, check with tombstone key.
-	localState, err := loadCellLocalState(cellID, s.engine, true)
+	localState, err := loadCellLocalState(cellID, s.getDriver(cellID), true)
 	if err != nil {
 		return false, err
 	}

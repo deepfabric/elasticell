@@ -25,7 +25,7 @@ func (s *Store) execZAdd(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.R
 		return rsp
 	}
 
-	value, err := s.getZSetEngine().ZAdd(args[0], score, args[2])
+	value, err := s.getZSetEngine(ctx.req.Header.CellId).ZAdd(args[0], score, args[2])
 	if err != nil {
 		rsp := pool.AcquireResponse()
 		rsp.ErrorResult = util.StringToSlice(err.Error())
@@ -52,7 +52,7 @@ func (s *Store) execZAdd(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.R
 	return rsp
 }
 
-func (s *Store) execZCard(req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execZCard(id uint64, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
@@ -63,7 +63,7 @@ func (s *Store) execZCard(req *raftcmdpb.Request) *raftcmdpb.Response {
 		return rsp
 	}
 
-	value, err := s.getZSetEngine().ZCard(args[0])
+	value, err := s.getZSetEngine(id).ZCard(args[0])
 	if err != nil {
 		rsp := pool.AcquireResponse()
 		rsp.ErrorResult = util.StringToSlice(err.Error())
@@ -75,7 +75,7 @@ func (s *Store) execZCard(req *raftcmdpb.Request) *raftcmdpb.Response {
 	return rsp
 }
 
-func (s *Store) execZCount(req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execZCount(id uint64, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
@@ -86,7 +86,7 @@ func (s *Store) execZCount(req *raftcmdpb.Request) *raftcmdpb.Response {
 		return rsp
 	}
 
-	value, err := s.getZSetEngine().ZCount(args[0], args[1], args[2])
+	value, err := s.getZSetEngine(id).ZCount(args[0], args[1], args[2])
 	if err != nil {
 		rsp := pool.AcquireResponse()
 		rsp.ErrorResult = util.StringToSlice(err.Error())
@@ -116,7 +116,7 @@ func (s *Store) execZIncrBy(ctx *applyContext, req *raftcmdpb.Request) *raftcmdp
 		return rsp
 	}
 
-	value, err := s.getZSetEngine().ZIncrBy(args[0], args[1], by)
+	value, err := s.getZSetEngine(ctx.req.Header.CellId).ZIncrBy(args[0], args[1], by)
 	if err != nil {
 		rsp := pool.AcquireResponse()
 		rsp.ErrorResult = util.StringToSlice(err.Error())
@@ -130,7 +130,7 @@ func (s *Store) execZIncrBy(ctx *applyContext, req *raftcmdpb.Request) *raftcmdp
 	return rsp
 }
 
-func (s *Store) execZLexCount(req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execZLexCount(id uint64, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
@@ -141,7 +141,7 @@ func (s *Store) execZLexCount(req *raftcmdpb.Request) *raftcmdpb.Response {
 		return rsp
 	}
 
-	value, err := s.getZSetEngine().ZLexCount(args[0], args[1], args[2])
+	value, err := s.getZSetEngine(id).ZLexCount(args[0], args[1], args[2])
 	if err != nil {
 		rsp := pool.AcquireResponse()
 		rsp.ErrorResult = util.StringToSlice(err.Error())
@@ -153,7 +153,7 @@ func (s *Store) execZLexCount(req *raftcmdpb.Request) *raftcmdpb.Response {
 	return rsp
 }
 
-func (s *Store) execZRange(req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execZRange(id uint64, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
@@ -179,7 +179,7 @@ func (s *Store) execZRange(req *raftcmdpb.Request) *raftcmdpb.Response {
 	}
 
 	withScores := len(args) == 4
-	value, err := s.getZSetEngine().ZRange(args[0], start, stop)
+	value, err := s.getZSetEngine(id).ZRange(args[0], start, stop)
 	if err != nil {
 		rsp := pool.AcquireResponse()
 		rsp.ErrorResult = util.StringToSlice(err.Error())
@@ -193,7 +193,7 @@ func (s *Store) execZRange(req *raftcmdpb.Request) *raftcmdpb.Response {
 	return rsp
 }
 
-func (s *Store) execZRangeByLex(req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execZRangeByLex(id uint64, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
@@ -204,7 +204,7 @@ func (s *Store) execZRangeByLex(req *raftcmdpb.Request) *raftcmdpb.Response {
 		return rsp
 	}
 
-	value, err := s.getZSetEngine().ZRangeByLex(args[0], args[1], args[2])
+	value, err := s.getZSetEngine(id).ZRangeByLex(args[0], args[1], args[2])
 	if err != nil {
 		rsp := pool.AcquireResponse()
 		rsp.ErrorResult = util.StringToSlice(err.Error())
@@ -218,7 +218,7 @@ func (s *Store) execZRangeByLex(req *raftcmdpb.Request) *raftcmdpb.Response {
 	return rsp
 }
 
-func (s *Store) execZRangeByScore(req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execZRangeByScore(id uint64, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
@@ -229,7 +229,7 @@ func (s *Store) execZRangeByScore(req *raftcmdpb.Request) *raftcmdpb.Response {
 		return rsp
 	}
 
-	value, err := s.getZSetEngine().ZRangeByScore(args[0], args[1], args[2])
+	value, err := s.getZSetEngine(id).ZRangeByScore(args[0], args[1], args[2])
 	if err != nil {
 		rsp := pool.AcquireResponse()
 		rsp.ErrorResult = util.StringToSlice(err.Error())
@@ -243,7 +243,7 @@ func (s *Store) execZRangeByScore(req *raftcmdpb.Request) *raftcmdpb.Response {
 	return rsp
 }
 
-func (s *Store) execZRank(req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execZRank(id uint64, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
@@ -254,7 +254,7 @@ func (s *Store) execZRank(req *raftcmdpb.Request) *raftcmdpb.Response {
 		return rsp
 	}
 
-	value, err := s.getZSetEngine().ZRank(args[0], args[1])
+	value, err := s.getZSetEngine(id).ZRank(args[0], args[1])
 	if err != nil {
 		rsp := pool.AcquireResponse()
 		rsp.ErrorResult = util.StringToSlice(err.Error())
@@ -285,7 +285,7 @@ func (s *Store) execZRem(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.R
 		return rsp
 	}
 
-	value, err := s.getZSetEngine().ZRem(args[0], args[1:]...)
+	value, err := s.getZSetEngine(ctx.req.Header.CellId).ZRem(args[0], args[1:]...)
 	if err != nil {
 		rsp := pool.AcquireResponse()
 		rsp.ErrorResult = util.StringToSlice(err.Error())
@@ -318,7 +318,7 @@ func (s *Store) execZRemRangeByLex(ctx *applyContext, req *raftcmdpb.Request) *r
 		return rsp
 	}
 
-	value, err := s.getZSetEngine().ZRemRangeByLex(args[0], args[1], args[2])
+	value, err := s.getZSetEngine(ctx.req.Header.CellId).ZRemRangeByLex(args[0], args[1], args[2])
 	if err != nil {
 		rsp := pool.AcquireResponse()
 		rsp.ErrorResult = util.StringToSlice(err.Error())
@@ -355,7 +355,7 @@ func (s *Store) execZRemRangeByRank(ctx *applyContext, req *raftcmdpb.Request) *
 		return rsp
 	}
 
-	value, err := s.getZSetEngine().ZRemRangeByRank(args[0], start, stop)
+	value, err := s.getZSetEngine(ctx.req.Header.CellId).ZRemRangeByRank(args[0], start, stop)
 	if err != nil {
 		rsp := pool.AcquireResponse()
 		rsp.ErrorResult = util.StringToSlice(err.Error())
@@ -378,7 +378,7 @@ func (s *Store) execZRemRangeByScore(ctx *applyContext, req *raftcmdpb.Request) 
 		return rsp
 	}
 
-	value, err := s.getZSetEngine().ZRemRangeByScore(args[0], args[1], args[2])
+	value, err := s.getZSetEngine(ctx.req.Header.CellId).ZRemRangeByScore(args[0], args[1], args[2])
 	if err != nil {
 		rsp := pool.AcquireResponse()
 		rsp.ErrorResult = util.StringToSlice(err.Error())
@@ -390,7 +390,7 @@ func (s *Store) execZRemRangeByScore(ctx *applyContext, req *raftcmdpb.Request) 
 	return rsp
 }
 
-func (s *Store) execZScore(req *raftcmdpb.Request) *raftcmdpb.Response {
+func (s *Store) execZScore(id uint64, req *raftcmdpb.Request) *raftcmdpb.Response {
 	cmd := redis.Command(req.Cmd)
 	args := cmd.Args()
 
@@ -401,7 +401,7 @@ func (s *Store) execZScore(req *raftcmdpb.Request) *raftcmdpb.Response {
 		return rsp
 	}
 
-	value, err := s.getZSetEngine().ZScore(args[0], args[1])
+	value, err := s.getZSetEngine(id).ZScore(args[0], args[1])
 	if err != nil {
 		rsp := pool.AcquireResponse()
 		rsp.ErrorResult = util.StringToSlice(err.Error())
