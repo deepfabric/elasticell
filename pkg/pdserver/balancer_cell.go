@@ -32,6 +32,7 @@ func newBalanceCellScheduler(cfg *Cfg) *balanceCellScheduler {
 	filters = append(filters, newStateFilter(cfg))
 	filters = append(filters, newHealthFilter(cfg))
 	filters = append(filters, newSnapshotCountFilter(cfg))
+	filters = append(filters, newStorageThresholdFilter(cfg))
 
 	return &balanceCellScheduler{
 		cfg:      cfg,
