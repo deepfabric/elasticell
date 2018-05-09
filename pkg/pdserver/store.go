@@ -62,8 +62,8 @@ type ClusterStore interface {
 // LeaderStore is the store interface for leader info
 type LeaderStore interface {
 	// CampaignLeader is for leader election
-	// if we are win the leader election, the enableLeaderFun will call
-	CampaignLeader(leaderSignature string, leaderLeaseTTL int64, enableLeaderFun func()) error
+	// if we are win the leader election, the enableLeaderFun will call, otherwrise disableLeaderFun will call
+	CampaignLeader(leaderSignature string, leaderLeaseTTL int64, enableLeaderFun, disableLeaderFun func()) error
 	// WatchLeader watch leader,
 	// this funcation will return unitl the leader's lease is timeout
 	// or server closed

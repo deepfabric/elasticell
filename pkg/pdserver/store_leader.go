@@ -92,7 +92,7 @@ func (s *pdStore) WatchLeader() {
 
 // CampaignLeader is for leader election
 // if we are win the leader election, the enableLeaderFun will call
-func (s *pdStore) CampaignLeader(leaderSignature string, leaderLeaseTTL int64, enableLeaderFun func()) error {
+func (s *pdStore) CampaignLeader(leaderSignature string, leaderLeaseTTL int64, enableLeaderFun, disableLeaderFun func()) error {
 	lessor := clientv3.NewLease(s.client)
 	defer lessor.Close()
 
@@ -128,6 +128,7 @@ func (s *pdStore) CampaignLeader(leaderSignature string, leaderLeaseTTL int64, e
 	}
 
 	enableLeaderFun()
+	defer disableLeaderFun()
 
 	for {
 		select {
