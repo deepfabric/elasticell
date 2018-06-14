@@ -236,7 +236,7 @@ func checkEpoch(cell metapb.Cell, req *raftcmdpb.RaftCMDRequest) bool {
 		}
 	} else {
 		// for redis command, we don't care conf version.
-		checkConfVer = true
+		checkVer = true
 	}
 
 	if !checkConfVer && !checkVer {

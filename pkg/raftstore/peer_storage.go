@@ -369,7 +369,7 @@ func (ps *peerStorage) loadApplyState() (*mraft.RaftApplyState, error) {
 		return nil, err
 	}
 
-	if nil == v {
+	if len(v) == 0 {
 		return nil, errors.New("cell apply state not found")
 	}
 

@@ -413,7 +413,7 @@ func (t *transport) doWrite(msg interface{}, conn goetty.IOSession) error {
 	err := conn.WriteAndFlush(msg)
 	if err != nil {
 		conn.Close()
-		err = errors.Wrapf(err, "write")
+		return errors.Wrapf(err, "write")
 	}
 
 	return nil
