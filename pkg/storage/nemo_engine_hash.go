@@ -18,7 +18,6 @@ package storage
 import (
 	"bytes"
 
-	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
 	"github.com/deepfabric/elasticell/pkg/util"
 	gonemo "github.com/deepfabric/go-nemo"
@@ -85,7 +84,7 @@ func (e *nemoHashEngine) HScanGet(key, start []byte, count int) ([]*raftcmdpb.FV
 		if !iter.Valid() {
 			break
 		}
-		
+
 		field := iter.Field()
 		value := iter.Value()
 		if !bytes.Equal(start, field) {
@@ -93,11 +92,6 @@ func (e *nemoHashEngine) HScanGet(key, start []byte, count int) ([]*raftcmdpb.FV
 				Field: field,
 				Value: value,
 			})
-
-			log.Infof("iter returnd field <%s>, value <%s>, result: %+v",
-				field,
-				value,
-				result)
 		}
 
 		iter.Next()
