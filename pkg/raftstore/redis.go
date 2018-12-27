@@ -44,6 +44,7 @@ func (s *Store) initRedisHandle() {
 	s.redisReadHandles[raftcmdpb.HKeys] = s.execHKeys
 	s.redisReadHandles[raftcmdpb.HVals] = s.execHVals
 	s.redisReadHandles[raftcmdpb.HGetAll] = s.execHGetAll
+	s.redisReadHandles[raftcmdpb.HScanGet] = s.execHScanGet
 	s.redisReadHandles[raftcmdpb.HLen] = s.execHLen
 	s.redisReadHandles[raftcmdpb.HMGet] = s.execHMGet
 	s.redisReadHandles[raftcmdpb.HStrLen] = s.execHStrLen

@@ -38,19 +38,20 @@ enum CMDType {
     MSetNX   = 213;
 
     // Hash
-    HSet    = 300;
-    HGet    = 301;
-    HDel    = 302;
-    HExists = 303;
-    HKeys   = 304;
-    HVals   = 305;
-    HGetAll = 306;
-    HLen    = 307;
-    HMGet   = 308;
-    HMSet   = 309;
-    HSetNX  = 310;
-    HStrLen = 311;
-    HIncrBy = 312;
+    HSet     = 300;
+    HGet     = 301;
+    HDel     = 302;
+    HExists  = 303;
+    HKeys    = 304;
+    HVals    = 305;
+    HGetAll  = 306;
+    HLen     = 307;
+    HMGet    = 308;
+    HMSet    = 309;
+    HSetNX   = 310;
+    HStrLen  = 311;
+    HIncrBy  = 312;
+    HScanGet = 313;
 
     // lists
     LIndex    = 400;

@@ -14,6 +14,7 @@
 package raftstore
 
 import (
+	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
 	"github.com/deepfabric/elasticell/pkg/pool"
 	"github.com/deepfabric/elasticell/pkg/redis"
@@ -333,6 +334,40 @@ func (s *Store) execHGetAll(id uint64, req *raftcmdpb.Request) *raftcmdpb.Respon
 	rsp := pool.AcquireResponse()
 	rsp.FvPairArrayResult = value
 	rsp.HasEmptyFVPairArrayResult = &has
+
+	return rsp
+}
+
+func (s *Store) execHScanGet(id uint64, req *raftcmdpb.Request) *raftcmdpb.Response {
+	cmd := redis.Command(req.Cmd)
+	args := cmd.Args()
+
+	if len(args) != 3 {
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = redis.ErrInvalidCommandResp
+		return rsp
+	}
+
+	count, err := util.StrInt64(args[2])
+	if err != nil {
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = util.StringToSlice(err.Error())
+		return rsp
+	}
+
+	value, err := s.getHashEngine(id).HScanGet(args[0], args[1], int(count))
+	if err != nil {
+		rsp := pool.AcquireResponse()
+		rsp.ErrorResult = util.StringToSlice(err.Error())
+		return rsp
+	}
+
+	log.Infof("returnd %+v", value)
+	var has = true
+	rsp := pool.AcquireResponse()
+	rsp.FvPairArrayResult = value
+	rsp.HasEmptyFVPairArrayResult = &has
+	log.Infof("returnd %+v", rsp.FvPairArrayResult)
 
 	return rsp
 }

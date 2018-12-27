@@ -79,6 +79,7 @@ func (s *Store) persistIndices() (err error) {
 	return
 }
 
+// GetIndexer returns indexer of cell
 func (s *Store) GetIndexer(cellID uint64) (idxer *indexer.Indexer, err error) {
 	var ok bool
 	s.rwlock.RLock()

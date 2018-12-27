@@ -60,6 +60,7 @@ type HashEngine interface {
 	HKeys(key []byte) ([][]byte, error)
 	HVals(key []byte) ([][]byte, error)
 	HGetAll(key []byte) ([]*raftcmdpb.FVPair, error)
+	HScanGet(key, start []byte, count int) ([]*raftcmdpb.FVPair, error)
 	HLen(key []byte) (int64, error)
 	HMGet(key []byte, fields ...[]byte) ([][]byte, []error)
 	HMSet(key []byte, fields, values [][]byte) error

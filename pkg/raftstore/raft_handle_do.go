@@ -601,7 +601,7 @@ func (pr *PeerReplicate) doApplyReads(rd *raft.Ready) {
 			pr.doExecReadCmd(c)
 		}
 	} else {
-		for _ = range rd.ReadStates {
+		for range rd.ReadStates {
 			pr.pendingReads.incrReadyCnt()
 		}
 	}
