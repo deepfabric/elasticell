@@ -48,17 +48,23 @@ var (
 	urlsAdvertisePeer           = flag.String("urls-advertise-peer", "", "URLS(advertise): embed etcd peer urls")
 	initialCluster              = flag.String("initial-cluster", "", "Initial: embed etcd initial cluster")
 	initialClusterState         = flag.String("initial-cluster-state", "new", "Initial: embed etcd initial cluster state")
+	version                     = flag.Bool("version", false, "Show version info")
 )
 
 func main() {
 	flag.Parse()
+
+	if *version && util.PrintVersion() {
+		os.Exit(0)
+	}
+
 	cfg := parseCfg()
 
 	log.InitLog()
 
 	var logFile, etcdLogFile string
 	logFile = log.GetLogFile()
-	etcdLogFile = util.ReplaceFpExt(logFile, "-etcd.log")
+	etcdLogFile = util.ReplaceFpExt(logFile, "_etcd.log")
 
 	f, err := os.OpenFile(etcdLogFile, os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666)
 	if err != nil {

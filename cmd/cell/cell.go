@@ -91,10 +91,16 @@ var (
 	metricInstance     = flag.String("metric-instance", "", "prometheus instance name")
 	metricAddress      = flag.String("metric-address", "", "prometheus proxy address")
 	metricIntervalSync = flag.Uint64("interval-metric-sync", 0, "Interval(sec): metric sync")
+
+	version = flag.Bool("version", false, "Show version info")
 )
 
 func main() {
 	flag.Parse()
+
+	if *version && util.PrintVersion() {
+		os.Exit(0)
+	}
 
 	log.InitLog()
 	raft.SetLogger(log.DefaultLogger())
