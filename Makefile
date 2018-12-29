@@ -20,11 +20,11 @@ DIST_DIR 	= $(ROOT_DIR)dist/
 release: dist_dir pd cell;
 
 .PHONY: pd
-taas: ; $(info ======== compiled elasticell-pd:)
+pd: ; $(info ======== compiled elasticell-pd:)
 	env CGO_ENABLED=$(CGO_ENABLED) GOOS=$(GOOS) go build -a -installsuffix cgo -o $(DIST_DIR)pd $(LD_FLAGS) $(ROOT_DIR)cmd/pd/*.go
 
 .PHONY: cell
-taas: ; $(info ======== compiled elasticell-cell:)
+cell: ; $(info ======== compiled elasticell-cell:)
 	env GOOS=$(GOOS) go build -o $(DIST_DIR)cell $(LD_FLAGS) $(ROOT_DIR)cmd/cell/*.go
 
 .PHONY: dist_dir

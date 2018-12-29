@@ -1,12 +1,8 @@
-FROM deepfabric/elasticell-dev
+FROM deepfabric/centos
 
-RUN mkdir -p /apps/deepfabric
-
-COPY ./entrypoint-build.sh /apps/deepfabric
-
-RUN apt-get update \
-    && apt-get install -y git \
-    && chmod +x /apps/deepfabric/entrypoint-build.sh
-
-WORKDIR /apps/deepfabric
-ENTRYPOINT ./entrypoint-build.sh
+RUN yum -y install go \
+    && yum -y install make \
+    && go get github.com/funny/slab \
+    && go get github.com/deepfabric/c-nemo \
+    && go get github.com/deepfabric/go-nemo 
+   

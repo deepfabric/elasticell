@@ -1,16 +1,23 @@
-FROM ubuntu:16.04
+FROM deepfabric/build as builder
 
-RUN mkdir -p /apps/deepfabric
+RUN go get github.com/deepfabric/elasticell-proxy
 
-COPY ./dist/redis-proxy  /apps/deepfabric
-COPY ./entrypoint.sh /apps/deepfabric
+WORKDIR /root/go/src/github.com/deepfabric/elasticell-proxy
 
-RUN chmod +x /apps/deepfabric/redis-proxy \
-    && chmod +x /apps/deepfabric/entrypoint.sh 
+RUN make proxy
 
-ENV ELASTICELL_HOME=/apps/deepfabric
-ENV ELASTICELL_EXEC=redis-proxy
+FROM alpine:latest
 
-WORKDIR /apps/deepfabric
+COPY --from=builder /root/go/src/github.com/deepfabric/elasticell-proxy/dist/redis-proxy /usr/local/bin/redis-proxy
 
-ENTRYPOINT ["/bin/sh", "./entrypoint.sh"]
+RUN mkdir -p /var/redis-proxy/
+RUN mkdir -p /var/lib/redis-proxy/
+
+# Alpine Linux doesn't use pam, which means that there is no /etc/nsswitch.conf,
+# but Golang relies on /etc/nsswitch.conf to check the order of DNS resolving
+# (see https://github.com/golang/go/commit/9dee7771f561cf6aee081c0af6658cc81fac3918)
+# To fix this we just create /etc/nsswitch.conf and add the following line:
+RUN echo 'hosts: files mdns4_minimal [NOTFOUND=return] dns mdns4' >> /etc/nsswitch.conf
+
+# Define default command.
+ENTRYPOINT ["/usr/local/bin/redis-proxy"]
