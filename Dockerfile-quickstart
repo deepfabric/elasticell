@@ -1,4 +1,20 @@
-FROM golang:1.9.2
+FROM deepfabric/build as builder
+
+COPY . /root/go/src/github.com/deepfabric/elasticell
+WORKDIR /root/go/src/github.com/deepfabric/elasticell
+RUN make release
+
+FROM deepfabric/build as builder_proxy
+
+RUN git clone https://github.com/deepfabric/elasticell-proxy /root/go/src/github.com/deepfabric/elasticell-proxy
+WORKDIR /root/go/src/github.com/deepfabric/elasticell-proxy
+RUN make
+
+FROM deepfabric/centos
+
+COPY --from=builder /root/go/src/github.com/deepfabric/elasticell/dist/cell /usr/local/bin/cell
+COPY --from=builder /root/go/src/github.com/deepfabric/elasticell/dist/pd /usr/local/bin/pd
+COPY --from=builder_proxy /root/go/src/github.com/deepfabric/elasticell-proxy/dist/redis-proxy /usr/local/bin/redis-proxy
 
 RUN mkdir -p /apps/deepfabric/cfg \
     && mkdir -p /apps/deepfabric/log \
@@ -7,26 +23,14 @@ RUN mkdir -p /apps/deepfabric/cfg \
     && mkdir -p /apps/deepfabric/pd3/data \
     && mkdir -p /apps/deepfabric/cell1/data \
     && mkdir -p /apps/deepfabric/cell2/data \
-    && mkdir -p /apps/deepfabric/cell3/data 
+    && mkdir -p /apps/deepfabric/cell3/data
+
+ENTRYPOINT ["/usr/local/bin/cell"]
 
 COPY ./quickstart-cfgs /apps/deepfabric/cfg
-COPY ./dist/redis-proxy  /apps/deepfabric
-COPY ./dist/pd  /apps/deepfabric
-COPY ./dist/cell  /apps/deepfabric
 COPY ./entrypoint-quickstart.sh /apps/deepfabric
 
-RUN apt-get update \
-    && apt-get -y install libsnappy-dev  \
-    && apt-get -y install zlib1g-dev \
-    && apt-get -y install libbz2-dev \
-    && apt-get -y install libgtest-dev \
-    && apt-get -y install libjemalloc-dev
-
-RUN chmod +x /apps/deepfabric/pd \
-    && chmod +x /apps/deepfabric/cell \
-    && chmod +x /apps/deepfabric/redis-proxy \
-    && chmod +x /apps/deepfabric/entrypoint-quickstart.sh
+RUN chmod +x /apps/deepfabric/entrypoint-quickstart.sh
 
 WORKDIR /apps/deepfabric
-
-ENTRYPOINT ./entrypoint-quickstart.sh
+ENTRYPOINT ["/apps/deepfabric/entrypoint-quickstart.sh"]
