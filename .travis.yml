@@ -6,12 +6,9 @@ services:
   - docker
 
 before_install:
-  - docker pull deepfabric/elasticell-dev
-  - docker pull deepfabric/elasticell-build
-  - mkdir -p /tmp/elasticell
+  - docker pull deepfabric/build
 
 install: true
 
 script:
-  - docker build -t deepfabric/elasticell .
-  - docker run -it --rm -v /tmp/elasticell:/apps/deepfabric/dist -e ELASTICELL_BUILD_TARGET=all deepfabric/elasticell-build
+  - docker build -t deepfabric/cell -f Dockerfile-cell .
