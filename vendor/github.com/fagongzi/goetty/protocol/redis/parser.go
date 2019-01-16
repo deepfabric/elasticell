@@ -26,7 +26,7 @@ var (
 	// NullBulk empty bulk string
 	NullBulk = []byte("-1")
 	// NullArray empty array
-	NullArray = []byte("-1")
+	NullArray = []byte("0")
 )
 
 // ReadCommand returns redis command from buffer
