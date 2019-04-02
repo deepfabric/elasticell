@@ -1,7 +1,9 @@
 package goetty
 
 import (
+	"log"
 	"net"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -164,6 +166,17 @@ func (s *Server) Start(loopFn func(IOSession) error) error {
 		s.addSession(session)
 
 		go func() {
+			defer func() {
+				if err := recover(); err != nil {
+					const size = 64 << 10
+					rBuf := make([]byte, size)
+					rBuf = rBuf[:runtime.Stack(rBuf, false)]
+					log.Printf("goetty: connection painc %+v, stack:\n%s",
+						err,
+						rBuf)
+				}
+			}()
+
 			loopFn(session)
 			session.Close()
 			s.deleteSession(session)

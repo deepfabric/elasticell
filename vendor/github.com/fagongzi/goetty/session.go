@@ -329,7 +329,7 @@ func (s *clientIOSession) readFromConn(timeout time.Duration) (bool, interface{}
 		s.conn.SetReadDeadline(time.Now().Add(timeout))
 	}
 
-	_, err := io.Copy(s.in, s.conn)
+	n, err := io.Copy(s.in, s.conn)
 	if err != nil {
 		for _, sm := range s.svr.opts.middlewares {
 			oerr := sm.ReadError(err, s)
@@ -338,6 +338,10 @@ func (s *clientIOSession) readFromConn(timeout time.Duration) (bool, interface{}
 			}
 		}
 		return false, nil, err
+	}
+
+	if n == 0 {
+		return false, nil, io.EOF
 	}
 
 	return s.svr.opts.decoder.Decode(s.in)

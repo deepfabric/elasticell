@@ -57,7 +57,7 @@ func check(t *testing.T, condition bool, tp string, f func(), args ...interface{
 			buf.WriteByte('\n')
 		}
 	}
-	log(2, fmt.Sprintf(buf.String(), args...))
+	doLog(2, fmt.Sprintf(buf.String(), args...))
 	f()
 	return false
 }
@@ -76,16 +76,16 @@ func isNil(t *testing.T, v interface{}, f func()) bool {
 	}
 	switch vv := v.(type) {
 	case toString:
-		log(2, fmt.Sprintf(`not nil
+		doLog(2, fmt.Sprintf(`not nil
         v = %#v`, vv.String()))
 	case error:
-		log(2, fmt.Sprintf(`not nil
+		doLog(2, fmt.Sprintf(`not nil
         v = %#v`, vv.Error()))
 	case []byte:
-		log(2, fmt.Sprintf(`not nil
+		doLog(2, fmt.Sprintf(`not nil
         v = %#v`, vv))
 	default:
-		log(2, fmt.Sprintf(`not nil
+		doLog(2, fmt.Sprintf(`not nil
         v = %v`, vv))
 	}
 	f()
@@ -104,7 +104,7 @@ func notNil(t *testing.T, v interface{}, f func()) bool {
 	if v != nil {
 		return true
 	}
-	log(2, fmt.Sprintf(`is nil`))
+	doLog(2, fmt.Sprintf(`is nil`))
 	f()
 	return false
 }
@@ -121,7 +121,7 @@ func deepEqual(t *testing.T, a, b interface{}, f func()) bool {
 	if reflect.DeepEqual(a, b) {
 		return true
 	}
-	log(2, fmt.Sprintf(`not deep equal
+	doLog(2, fmt.Sprintf(`not deep equal
         a = %#v
         b = %#v`, a, b))
 	f()
@@ -204,11 +204,11 @@ func equal(t *testing.T, a, b interface{}, f func()) bool {
 		return true
 	}
 	if printable {
-		log(2, fmt.Sprintf(`not equal
+		doLog(2, fmt.Sprintf(`not equal
         a = '%c' = %#v
         b = '%c' = %#v`, a, a, b, b))
 	} else {
-		log(2, fmt.Sprintf(`not equal
+		doLog(2, fmt.Sprintf(`not equal
         a = %#v
         b = %#v`, a, b))
 	}
@@ -361,7 +361,7 @@ func unsafeEqual(ia, ib interface{}, size int) bool {
 	)
 }
 
-func log(depth int, val string) {
+func doLog(depth int, val string) {
 	if _, file, line, ok := runtime.Caller(1 + depth); ok {
 		// Truncate file name at last file name separator.
 		if index := strings.LastIndex(file, "/"); index >= 0 {

@@ -1,8 +1,15 @@
 package goetty
 
+import (
+	"fmt"
+)
+
 const (
 	// FieldLength field length bytes
 	FieldLength = 4
+
+	// DefaultMaxBodySize max default body size, 10M
+	DefaultMaxBodySize = 1024 * 1024 * 10
 )
 
 // IntLengthFieldBasedDecoder decoder based on length filed + data
@@ -11,11 +18,12 @@ type IntLengthFieldBasedDecoder struct {
 	lengthFieldOffset   int
 	lengthAdjustment    int
 	initialBytesToStrip int
+	maxBodySize         int
 }
 
 // NewIntLengthFieldBasedDecoder create a IntLengthFieldBasedDecoder
 func NewIntLengthFieldBasedDecoder(base Decoder) Decoder {
-	return NewIntLengthFieldBasedDecoderSize(base, 0, 0, 0)
+	return NewIntLengthFieldBasedDecoderSize(base, 0, 0, 0, DefaultMaxBodySize)
 }
 
 // NewIntLengthFieldBasedDecoderSize  create a IntLengthFieldBasedDecoder
@@ -25,12 +33,13 @@ func NewIntLengthFieldBasedDecoder(base Decoder) Decoder {
 // 2. -4:                                             base decoder received: 4(length) + body
 // 3. -(4 + lengthFieldOffset):                       base decoder received: lengthFieldOffset + 4(length) + body
 // 4. -(4 + lengthFieldOffset + initialBytesToStrip): base decoder received: initialBytesToStrip + lengthFieldOffset + 4(length)
-func NewIntLengthFieldBasedDecoderSize(base Decoder, lengthFieldOffset, lengthAdjustment, initialBytesToStrip int) Decoder {
+func NewIntLengthFieldBasedDecoderSize(base Decoder, lengthFieldOffset, lengthAdjustment, initialBytesToStrip, maxBodySize int) Decoder {
 	return &IntLengthFieldBasedDecoder{
 		base:                base,
 		lengthFieldOffset:   lengthFieldOffset,
 		lengthAdjustment:    lengthAdjustment,
 		initialBytesToStrip: initialBytesToStrip,
+		maxBodySize:         maxBodySize,
 	}
 }
 
@@ -46,6 +55,10 @@ func (decoder IntLengthFieldBasedDecoder) Decode(in *ByteBuf) (bool, interface{}
 	length, err := in.PeekInt(decoder.initialBytesToStrip + decoder.lengthFieldOffset)
 	if err != nil {
 		return true, nil, err
+	}
+
+	if length > decoder.maxBodySize {
+		return false, nil, fmt.Errorf("too big body size %d, max is %d", length, decoder.maxBodySize)
 	}
 
 	skip := minFrameLength + decoder.lengthAdjustment

@@ -92,6 +92,11 @@ enum CMDType {
     ZRemRangeByRank  = 612;                    
     ZRemRangeByScore = 613;
     ZScore           = 614;
+
+    // lock
+    Lock     = 700;
+    Unlock   = 701;
+    Lockable = 702;
 }
 
 enum AdminCmdType {

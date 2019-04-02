@@ -81,7 +81,7 @@
   tasks:
   - name: start proxy
     shell: >
-      {{ ELASTICELL_DIR }}/redis-proxy 
+      {{ ELASTICELL_DIR }}/proxy 
       --cfg={{ ELASTICELL_DIR }}/cfg/proxy.json
     async: 1
     poll: 0

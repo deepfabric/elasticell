@@ -1,17 +1,16 @@
 FROM deepfabric/build as builder
 
-RUN go get github.com/deepfabric/elasticell-proxy;exit 0
-
-WORKDIR /root/go/src/github.com/deepfabric/elasticell-proxy
+COPY . /root/go/src/github.com/deepfabric/elasticell
+WORKDIR /root/go/src/github.com/deepfabric/elasticell
 
 RUN make proxy
 
 FROM alpine:latest
 
-COPY --from=builder /root/go/src/github.com/deepfabric/elasticell-proxy/dist/redis-proxy /usr/local/bin/redis-proxy
+COPY --from=builder /root/go/src/github.com/deepfabric/elasticell/dist/proxy /usr/local/bin/proxy
 
-RUN mkdir -p /var/redis-proxy/
-RUN mkdir -p /var/lib/redis-proxy/
+RUN mkdir -p /var/proxy/
+RUN mkdir -p /var/lib/proxy/
 RUN apk update
 RUN apk add bind-tools wget netcat-openbsd
 
@@ -22,4 +21,4 @@ RUN apk add bind-tools wget netcat-openbsd
 RUN echo 'hosts: files mdns4_minimal [NOTFOUND=return] dns mdns4' >> /etc/nsswitch.conf
 
 # Define default command.
-ENTRYPOINT ["/usr/local/bin/redis-proxy"]
+ENTRYPOINT ["/usr/local/bin/proxy"]

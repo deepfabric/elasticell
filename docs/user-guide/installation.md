@@ -131,7 +131,7 @@ Create a json file in the folder `/apps/deepfabric/cfg/cfg.json` as below:
 
 Run proxy:
 ```bash
-./redis-proxy --log-level=info --log-file=/apps/deepfabric/log/proxy.log --cfg=/apps/deepfabric/cfg/cfg.json
+./proxy --log-level=info --log-file=/apps/deepfabric/log/proxy.log --cfg=/apps/deepfabric/cfg/cfg.json
 ```
 
 ### Install from docker

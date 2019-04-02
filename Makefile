@@ -17,11 +17,15 @@ CGO_ENABLED = 0
 DIST_DIR 	= $(ROOT_DIR)dist/
 
 .PHONY: release
-release: dist_dir pd cell;
+release: dist_dir pd cell proxy;
 
 .PHONY: pd
 pd: ; $(info ======== compiled elasticell-pd:)
 	env CGO_ENABLED=$(CGO_ENABLED) GOOS=$(GOOS) go build -a -installsuffix cgo -o $(DIST_DIR)pd $(LD_FLAGS) $(ROOT_DIR)cmd/pd/*.go
+
+.PHONY: proxy
+proxy: ; $(info ======== compiled elasticell-proxy:)
+	env CGO_ENABLED=$(CGO_ENABLED) GOOS=$(GOOS) go build -a -installsuffix cgo -o $(DIST_DIR)proxy $(LD_FLAGS) $(ROOT_DIR)cmd/proxy/*.go
 
 .PHONY: cell
 cell: ; $(info ======== compiled elasticell-cell:)

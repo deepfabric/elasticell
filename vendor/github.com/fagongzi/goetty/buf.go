@@ -48,6 +48,11 @@ func Byte2UInt64(data []byte) uint64 {
 	return binary.BigEndian.Uint64(data)
 }
 
+// Byte2UInt16 byte array to uint16 value using big order
+func Byte2UInt16(data []byte) uint16 {
+	return binary.BigEndian.Uint16(data)
+}
+
 // Byte2UInt32 byte array to uint32 value using big order
 func Byte2UInt32(data []byte) uint32 {
 	return binary.BigEndian.Uint32(data)
@@ -89,6 +94,30 @@ func Uint64ToBytesTo(v uint64, ret []byte) {
 func Int64ToBytes(v int64) []byte {
 	ret := make([]byte, 8)
 	Int64ToBytesTo(v, ret)
+	return ret
+}
+
+// Uint32ToBytesTo uint32 value to bytes array using big order
+func Uint32ToBytesTo(v uint32, ret []byte) {
+	binary.BigEndian.PutUint32(ret, v)
+}
+
+// UInt32ToBytes uint32 value to bytes array using big order
+func UInt32ToBytes(v uint32) []byte {
+	ret := make([]byte, 4)
+	Uint32ToBytesTo(v, ret)
+	return ret
+}
+
+// Uint16ToBytesTo uint16 value to bytes array using big order
+func Uint16ToBytesTo(v uint16, ret []byte) {
+	binary.BigEndian.PutUint16(ret, v)
+}
+
+// UInt16ToBytes uint16 value to bytes array using big order
+func UInt16ToBytes(v uint16) []byte {
+	ret := make([]byte, 2)
+	Uint16ToBytesTo(v, ret)
 	return ret
 }
 
@@ -307,9 +336,19 @@ func (b *ByteBuf) ReadInt() (int, error) {
 	return Byte2Int(b.buf[b.readerIndex-4 : b.readerIndex]), nil
 }
 
+// ReadUInt16 get uint16 value from buf
+func (b *ByteBuf) ReadUInt16() (uint16, error) {
+	if b.Readable() < 2 {
+		return 0, io.ErrShortBuffer
+	}
+
+	b.readerIndex += 2
+	return Byte2UInt16(b.buf[b.readerIndex-2 : b.readerIndex]), nil
+}
+
 // ReadUInt32 get uint32 value from buf
 func (b *ByteBuf) ReadUInt32() (uint32, error) {
-	if b.Readable() < 8 {
+	if b.Readable() < 4 {
 		return 0, io.ErrShortBuffer
 	}
 
@@ -415,6 +454,33 @@ func (b *ByteBuf) WriteInt(v int) (n int, err error) {
 	Int2BytesTo(v, b.buf[b.writerIndex:b.writerIndex+4])
 	b.writerIndex += 4
 	return 4, nil
+}
+
+// WriteUInt16 write uint16 value to buf using big order
+// return write bytes count, error
+func (b *ByteBuf) WriteUInt16(v uint16) (n int, err error) {
+	b.Expansion(2)
+	Uint16ToBytesTo(v, b.buf[b.writerIndex:b.writerIndex+2])
+	b.writerIndex += 2
+	return 2, nil
+}
+
+// WriteUInt32 write uint32 value to buf using big order
+// return write bytes count, error
+func (b *ByteBuf) WriteUInt32(v uint32) (n int, err error) {
+	b.Expansion(4)
+	Uint32ToBytesTo(v, b.buf[b.writerIndex:b.writerIndex+4])
+	b.writerIndex += 4
+	return 4, nil
+}
+
+// WriteUInt64 write uint64 value to buf using big order
+// return write bytes count, error
+func (b *ByteBuf) WriteUInt64(v uint64) (n int, err error) {
+	b.Expansion(8)
+	Uint64ToBytesTo(v, b.buf[b.writerIndex:b.writerIndex+8])
+	b.writerIndex += 8
+	return 8, nil
 }
 
 // WriteInt64 write int64 value to buf using big order

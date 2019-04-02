@@ -130,6 +130,11 @@ func (s *RedisServer) init() {
 	s.handlers[raftcmdpb.ZRemRangeByRank] = s.onZRemRangeByRank
 	s.handlers[raftcmdpb.ZRemRangeByScore] = s.onZRemRangeByScore
 	s.handlers[raftcmdpb.ZScore] = s.onZScore
+
+	// lock
+	s.handlers[raftcmdpb.Lock] = s.onLock
+	s.handlers[raftcmdpb.Unlock] = s.onUnlock
+	s.handlers[raftcmdpb.Lockable] = s.onLockable
 }
 
 func (s *RedisServer) doConnection(session goetty.IOSession) error {

@@ -74,6 +74,9 @@
         "zremrangebylex",
         "zremrangebyrank",
         "zremrangebyscore",
-        "zscore"
+        "zscore",
+        "lock",
+        "unlock",
+        "lockable"
     ]
 }
