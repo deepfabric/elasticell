@@ -145,7 +145,7 @@ func (c *cache) handleCellHeartbeat(source *CellInfo) error {
 	}
 
 	leaderChanged := false
-	if current.LeaderPeer != nil && current.LeaderPeer.ID != source.LeaderPeer.ID {
+	if current.LeaderPeer == nil || (current.LeaderPeer != nil && current.LeaderPeer.ID != source.LeaderPeer.ID) {
 		log.Infof("cell-heartbeat[%d]: update cell leader, from=<%v> to=<%+v>",
 			current.getID(),
 			current,

@@ -367,7 +367,6 @@ func (p *RedisProxy) doRefreshRange(r *pdpb.Range) {
 
 func (p *RedisProxy) clean() {
 	p.stores = make(map[uint64]*metapb.Store)
-	p.cellLeaderAddrs = make(map[uint64]string)
 }
 
 func (p *RedisProxy) getSyncEpoch() uint64 {
