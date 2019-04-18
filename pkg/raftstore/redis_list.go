@@ -45,10 +45,9 @@ func (s *Store) execLIndex(id uint64, req *raftcmdpb.Request) *raftcmdpb.Respons
 		return rsp
 	}
 
-	has := true
 	rsp := pool.AcquireResponse()
 	rsp.BulkResult = value
-	rsp.HasEmptyBulkResult = &has
+	rsp.HasEmptyBulkResult = len(value) == 0
 	return rsp
 }
 
@@ -107,10 +106,9 @@ func (s *Store) execLRange(id uint64, req *raftcmdpb.Request) *raftcmdpb.Respons
 		return rsp
 	}
 
-	has := true
 	rsp := pool.AcquireResponse()
 	rsp.SliceArrayResult = value
-	rsp.HasEmptySliceArrayResult = &has
+	rsp.HasEmptySliceArrayResult = len(value) == 0
 	return rsp
 }
 
@@ -177,10 +175,9 @@ func (s *Store) execLPop(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.R
 	size := uint64(len(value))
 	ctx.metrics.sizeDiffHint -= size
 
-	has := true
 	rsp := pool.AcquireResponse()
 	rsp.BulkResult = value
-	rsp.HasEmptyBulkResult = &has
+	rsp.HasEmptyBulkResult = len(value) == 0
 	return rsp
 }
 
@@ -383,10 +380,9 @@ func (s *Store) execRPop(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.R
 	size := uint64(len(value))
 	ctx.metrics.sizeDiffHint -= size
 
-	has := true
 	rsp := pool.AcquireResponse()
 	rsp.BulkResult = value
-	rsp.HasEmptyBulkResult = &has
+	rsp.HasEmptyBulkResult = len(value) == 0
 	return rsp
 }
 

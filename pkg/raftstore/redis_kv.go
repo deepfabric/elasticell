@@ -65,6 +65,7 @@ func (s *Store) execKVGet(id uint64, req *raftcmdpb.Request) *raftcmdpb.Response
 
 	rsp := pool.AcquireResponse()
 	rsp.BulkResult = value
+	rsp.HasEmptyBulkResult = len(value) == 0
 	return rsp
 }
 
@@ -221,6 +222,7 @@ func (s *Store) execKVGetSet(ctx *applyContext, req *raftcmdpb.Request) *raftcmd
 
 	rsp := pool.AcquireResponse()
 	rsp.BulkResult = value
+	rsp.HasEmptyBulkResult = len(value) == 0
 	return rsp
 }
 

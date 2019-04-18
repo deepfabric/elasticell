@@ -14,7 +14,6 @@
 package raftstore
 
 import (
-	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
 	"github.com/deepfabric/elasticell/pkg/pool"
 	"github.com/deepfabric/elasticell/pkg/redis"
@@ -220,10 +219,9 @@ func (s *Store) execHGet(id uint64, req *raftcmdpb.Request) *raftcmdpb.Response 
 		return rsp
 	}
 
-	has := true
 	rsp := pool.AcquireResponse()
 	rsp.BulkResult = value
-	rsp.HasEmptyBulkResult = &has
+	rsp.HasEmptyBulkResult = len(value) == 0
 
 	return rsp
 }
@@ -276,10 +274,9 @@ func (s *Store) execHKeys(id uint64, req *raftcmdpb.Request) *raftcmdpb.Response
 		return rsp
 	}
 
-	var has = true
 	rsp := pool.AcquireResponse()
 	rsp.SliceArrayResult = value
-	rsp.HasEmptySliceArrayResult = &has
+	rsp.HasEmptySliceArrayResult = len(value) == 0
 
 	return rsp
 }
@@ -303,10 +300,9 @@ func (s *Store) execHVals(id uint64, req *raftcmdpb.Request) *raftcmdpb.Response
 		return rsp
 	}
 
-	var has = true
 	rsp := pool.AcquireResponse()
 	rsp.SliceArrayResult = value
-	rsp.HasEmptySliceArrayResult = &has
+	rsp.HasEmptySliceArrayResult = len(value) == 0
 
 	return rsp
 }
@@ -330,10 +326,9 @@ func (s *Store) execHGetAll(id uint64, req *raftcmdpb.Request) *raftcmdpb.Respon
 		return rsp
 	}
 
-	var has = true
 	rsp := pool.AcquireResponse()
 	rsp.FvPairArrayResult = value
-	rsp.HasEmptyFVPairArrayResult = &has
+	rsp.HasEmptyFVPairArrayResult = len(value) == 0
 
 	return rsp
 }
@@ -362,12 +357,9 @@ func (s *Store) execHScanGet(id uint64, req *raftcmdpb.Request) *raftcmdpb.Respo
 		return rsp
 	}
 
-	log.Infof("returnd %+v", value)
-	var has = true
 	rsp := pool.AcquireResponse()
 	rsp.FvPairArrayResult = value
-	rsp.HasEmptyFVPairArrayResult = &has
-	log.Infof("returnd %+v", rsp.FvPairArrayResult)
+	rsp.HasEmptyFVPairArrayResult = len(value) == 0
 
 	return rsp
 }
@@ -420,10 +412,9 @@ func (s *Store) execHMGet(id uint64, req *raftcmdpb.Request) *raftcmdpb.Response
 		return rsp
 	}
 
-	has := true
 	rsp := pool.AcquireResponse()
 	rsp.SliceArrayResult = value
-	rsp.HasEmptySliceArrayResult = &has
+	rsp.HasEmptySliceArrayResult = len(value) == 0
 
 	return rsp
 

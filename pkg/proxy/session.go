@@ -101,11 +101,11 @@ func (rs *redisSession) doResp(resp *raftcmdpb.Response, buf *goetty.ByteBuf) {
 		}
 	}
 
-	if resp.BulkResult != nil || resp.HasEmptyBulkResult != nil {
+	if len(resp.BulkResult) > 0 || resp.HasEmptyBulkResult {
 		redis.WriteBulk(resp.BulkResult, buf)
 	}
 
-	if resp.FvPairArrayResult != nil || resp.HasEmptyFVPairArrayResult != nil {
+	if len(resp.FvPairArrayResult) > 0 || resp.HasEmptyFVPairArrayResult {
 		credis.WriteFVPairArray(resp.FvPairArrayResult, buf)
 	}
 
@@ -113,19 +113,19 @@ func (rs *redisSession) doResp(resp *raftcmdpb.Response, buf *goetty.ByteBuf) {
 		redis.WriteInteger(*resp.IntegerResult, buf)
 	}
 
-	if resp.ScorePairArrayResult != nil || resp.HasEmptyScorePairArrayResult != nil {
-		credis.WriteScorePairArray(resp.ScorePairArrayResult, *resp.Withscores, buf)
+	if len(resp.ScorePairArrayResult) > 0 || resp.HasEmptyScorePairArrayResult {
+		credis.WriteScorePairArray(resp.ScorePairArrayResult, resp.Withscores, buf)
 	}
 
-	if resp.SliceArrayResult != nil || resp.HasEmptySliceArrayResult != nil {
+	if len(resp.SliceArrayResult) > 0 || resp.HasEmptySliceArrayResult {
 		redis.WriteSliceArray(resp.SliceArrayResult, buf)
 	}
 
-	if resp.StatusResult != nil {
+	if len(resp.StatusResult) > 0 {
 		redis.WriteStatus(resp.StatusResult, buf)
 	}
 
-	if resp.DocArrayResult != nil || resp.HasEmptyDocArrayResult != nil {
+	if len(resp.DocArrayResult) > 0 || resp.HasEmptyDocArrayResult {
 		credis.WriteDocArray(resp.DocArrayResult, buf)
 	}
 

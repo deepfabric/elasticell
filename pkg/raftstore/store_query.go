@@ -236,11 +236,11 @@ func (s *Store) readyToServeQuery(ctx context.Context) {
 						state.docs[i] = docItems[i].(DocPtr).Document
 					}
 				}
-				has := true
+
 				rsp := pool.AcquireResponse()
 				rsp.UUID = state.qrc.qr.UUID
 				rsp.SessionID = state.qrc.qr.SessionID
-				rsp.HasEmptyDocArrayResult = &has
+				rsp.HasEmptyDocArrayResult = len(state.docs) == 0
 				rsp.DocArrayResult = state.docs
 				rsp.ErrorResults = state.errorResults
 				resp := pool.AcquireRaftCMDResponse()

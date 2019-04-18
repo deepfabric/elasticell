@@ -121,10 +121,9 @@ func (s *Store) execSMembers(id uint64, req *raftcmdpb.Request) *raftcmdpb.Respo
 		return rsp
 	}
 
-	has := true
 	rsp := pool.AcquireResponse()
 	rsp.SliceArrayResult = value
-	rsp.HasEmptySliceArrayResult = &has
+	rsp.HasEmptySliceArrayResult = len(value) == 0
 	return rsp
 }
 
@@ -169,9 +168,8 @@ func (s *Store) execSPop(id uint64, req *raftcmdpb.Request) *raftcmdpb.Response 
 		return rsp
 	}
 
-	has := true
 	rsp := pool.AcquireResponse()
 	rsp.BulkResult = value
-	rsp.HasEmptyBulkResult = &has
+	rsp.HasEmptyBulkResult = len(value) == 0
 	return rsp
 }

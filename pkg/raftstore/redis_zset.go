@@ -123,10 +123,9 @@ func (s *Store) execZIncrBy(ctx *applyContext, req *raftcmdpb.Request) *raftcmdp
 		return rsp
 	}
 
-	has := true
 	rsp := pool.AcquireResponse()
 	rsp.BulkResult = value
-	rsp.HasEmptyBulkResult = &has
+	rsp.HasEmptyBulkResult = len(value) == 0
 	return rsp
 }
 
@@ -188,8 +187,8 @@ func (s *Store) execZRange(id uint64, req *raftcmdpb.Request) *raftcmdpb.Respons
 
 	rsp := pool.AcquireResponse()
 	rsp.ScorePairArrayResult = value
-	rsp.HasEmptyScorePairArrayResult = &withScores
-	rsp.Withscores = &withScores
+	rsp.HasEmptyScorePairArrayResult = len(value) == 0
+	rsp.Withscores = withScores
 	return rsp
 }
 
@@ -211,10 +210,9 @@ func (s *Store) execZRangeByLex(id uint64, req *raftcmdpb.Request) *raftcmdpb.Re
 		return rsp
 	}
 
-	has := true
 	rsp := pool.AcquireResponse()
 	rsp.SliceArrayResult = value
-	rsp.HasEmptySliceArrayResult = &has
+	rsp.HasEmptySliceArrayResult = len(value) == 0
 	return rsp
 }
 
@@ -236,10 +234,10 @@ func (s *Store) execZRangeByScore(id uint64, req *raftcmdpb.Request) *raftcmdpb.
 		return rsp
 	}
 
-	has := true
 	rsp := pool.AcquireResponse()
 	rsp.ScorePairArrayResult = value
-	rsp.HasEmptyScorePairArrayResult = &has
+	rsp.HasEmptyScorePairArrayResult = len(value) == 0
+	rsp.Withscores = len(args) >= 4
 	return rsp
 }
 
@@ -262,10 +260,9 @@ func (s *Store) execZRank(id uint64, req *raftcmdpb.Request) *raftcmdpb.Response
 	}
 
 	if value < 0 {
-		has := true
 		rsp := pool.AcquireResponse()
 		rsp.BulkResult = nil
-		rsp.HasEmptyBulkResult = &has
+		rsp.HasEmptyBulkResult = true
 		return rsp
 	}
 
@@ -408,10 +405,9 @@ func (s *Store) execZScore(id uint64, req *raftcmdpb.Request) *raftcmdpb.Respons
 		return rsp
 	}
 
-	has := true
 	rsp := pool.AcquireResponse()
 	rsp.BulkResult = value
-	rsp.HasEmptyBulkResult = &has
+	rsp.HasEmptyBulkResult = len(value) == 0
 	return rsp
 
 }
