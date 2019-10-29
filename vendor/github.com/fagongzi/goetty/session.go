@@ -14,6 +14,8 @@ import (
 var (
 	// ErrConnectServerSide error for can't connect to client at server side
 	ErrConnectServerSide = errors.New("can't connect to client at server side")
+
+	emptyTime time.Time
 )
 
 // IOSession session
@@ -327,6 +329,8 @@ func (s *clientIOSession) write(msg interface{}, flush bool) error {
 func (s *clientIOSession) readFromConn(timeout time.Duration) (bool, interface{}, error) {
 	if 0 != timeout {
 		s.conn.SetReadDeadline(time.Now().Add(timeout))
+	} else {
+		s.conn.SetReadDeadline(emptyTime)
 	}
 
 	n, err := io.Copy(s.in, s.conn)

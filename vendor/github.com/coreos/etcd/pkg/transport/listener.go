@@ -53,6 +53,9 @@ func wrapTLS(addr, scheme string, tlsinfo *TLSInfo, l net.Listener) (net.Listene
 	if scheme != "https" && scheme != "unixs" {
 		return l, nil
 	}
+	if tlsinfo != nil && tlsinfo.SkipClientSANVerify {
+		return NewTLSListener(l, tlsinfo)
+	}
 	return newTLSListener(l, tlsinfo, checkSAN)
 }
 
@@ -65,12 +68,19 @@ type TLSInfo struct {
 	CRLFile            string
 	InsecureSkipVerify bool
 
+	SkipClientSANVerify bool
+
 	// ServerName ensures the cert matches the given host in case of discovery / virtual hosting
 	ServerName string
 
 	// HandshakeFailure is optionally called when a connection fails to handshake. The
 	// connection will be closed immediately afterwards.
 	HandshakeFailure func(*tls.Conn, error)
+
+	// CipherSuites is a list of supported cipher suites.
+	// If empty, Go auto-populates it by default.
+	// Note that cipher suites are prioritized in the given order.
+	CipherSuites []uint16
 
 	selfCert bool
 
@@ -90,7 +100,7 @@ func (info TLSInfo) Empty() bool {
 	return info.CertFile == "" && info.KeyFile == ""
 }
 
-func SelfCert(dirpath string, hosts []string) (info TLSInfo, err error) {
+func SelfCert(dirpath string, hosts []string, additionalUsages ...x509.ExtKeyUsage) (info TLSInfo, err error) {
 	if err = os.MkdirAll(dirpath, 0700); err != nil {
 		return
 	}
@@ -119,7 +129,7 @@ func SelfCert(dirpath string, hosts []string) (info TLSInfo, err error) {
 		NotAfter:     time.Now().Add(365 * (24 * time.Hour)),
 
 		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
-		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		ExtKeyUsage:           append([]x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}, additionalUsages...),
 		BasicConstraintsValid: true,
 	}
 
@@ -176,6 +186,10 @@ func (info TLSInfo) baseConfig() (*tls.Config, error) {
 	cfg := &tls.Config{
 		MinVersion: tls.VersionTLS12,
 		ServerName: info.ServerName,
+	}
+
+	if len(info.CipherSuites) > 0 {
+		cfg.CipherSuites = info.CipherSuites
 	}
 
 	if info.AllowedCN != "" {

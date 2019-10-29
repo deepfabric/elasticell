@@ -351,6 +351,8 @@ func (c *connector) write(msg interface{}, flush bool) error {
 func (c *connector) readFromConn(timeout time.Duration) (bool, interface{}, error) {
 	if 0 != timeout {
 		c.conn.SetReadDeadline(time.Now().Add(timeout))
+	} else {
+		c.conn.SetReadDeadline(emptyTime)
 	}
 
 	n, err := io.Copy(c.in, c.conn)

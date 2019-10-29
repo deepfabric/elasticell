@@ -21,15 +21,15 @@ release: dist_dir pd cell proxy;
 
 .PHONY: pd
 pd: ; $(info ======== compiled elasticell-pd:)
-	env CGO_ENABLED=$(CGO_ENABLED) GOOS=$(GOOS) go build -a -installsuffix cgo -o $(DIST_DIR)pd $(LD_FLAGS) $(ROOT_DIR)cmd/pd/*.go
+	env CGO_ENABLED=$(CGO_ENABLED) GOOS=$(GOOS) go build -mod vendor -a -installsuffix cgo -o $(DIST_DIR)pd $(LD_FLAGS) $(ROOT_DIR)cmd/pd/*.go
 
 .PHONY: proxy
 proxy: ; $(info ======== compiled elasticell-proxy:)
-	env CGO_ENABLED=$(CGO_ENABLED) GOOS=$(GOOS) go build -a -installsuffix cgo -o $(DIST_DIR)proxy $(LD_FLAGS) $(ROOT_DIR)cmd/proxy/*.go
+	env CGO_ENABLED=$(CGO_ENABLED) GOOS=$(GOOS) go build -mod vendor -a -installsuffix cgo -o $(DIST_DIR)proxy $(LD_FLAGS) $(ROOT_DIR)cmd/proxy/*.go
 
 .PHONY: cell
 cell: ; $(info ======== compiled elasticell-cell:)
-	env GOOS=$(GOOS) go build -o $(DIST_DIR)cell $(LD_FLAGS) $(ROOT_DIR)cmd/cell/*.go
+	env GO111MODULE=off GOOS=$(GOOS) go build -o $(DIST_DIR)cell $(LD_FLAGS) $(ROOT_DIR)cmd/cell/*.go
 
 .PHONY: dist_dir
 dist_dir: ; $(info ======== prepare distribute dir:)

@@ -1,26 +1,29 @@
-default: deps lint test
+.PHONY: all
 
-deps:
-	go get github.com/alecthomas/gometalinter
-	gometalinter --install
+doc:
+	godoc `pwd`
 
-lint:
+webdoc:
+	godoc -http=:44444
+
+format: 
 	go fmt
-	gometalinter 
 
 test:
-	go test -race
-
-check: lint test
+	go test -race 
+	
+check: format test
 
 benchmark:
 	go test -bench=. -benchmem
 
 coverage:
-	go test -cover
-
-report:
 	go test -coverprofile=coverage.out
 	go tool cover -html="coverage.out"
 
-.PHONY: default deps lint test check benchmark coverage report
+lint: format
+	go get github.com/alecthomas/gometalinter
+	gometalinter --install
+	gometalinter 
+
+default: lint test

@@ -139,11 +139,23 @@ var (
 			Help:      "Total number of db keys compacted.",
 		})
 
-	dbTotalSize = prometheus.NewGaugeFunc(prometheus.GaugeOpts{
+	dbTotalSizeDebugging = prometheus.NewGaugeFunc(prometheus.GaugeOpts{
 		Namespace: "etcd_debugging",
 		Subsystem: "mvcc",
 		Name:      "db_total_size_in_bytes",
-		Help:      "Total size of the underlying database in bytes.",
+		Help:      "Total size of the underlying database physically allocated in bytes. Use etcd_mvcc_db_total_size_in_bytes",
+	},
+		func() float64 {
+			reportDbTotalSizeInBytesMu.RLock()
+			defer reportDbTotalSizeInBytesMu.RUnlock()
+			return reportDbTotalSizeInBytes()
+		},
+	)
+	dbTotalSize = prometheus.NewGaugeFunc(prometheus.GaugeOpts{
+		Namespace: "etcd",
+		Subsystem: "mvcc",
+		Name:      "db_total_size_in_bytes",
+		Help:      "Total size of the underlying database physically allocated in bytes.",
 	},
 		func() float64 {
 			reportDbTotalSizeInBytesMu.RLock()
@@ -153,7 +165,79 @@ var (
 	)
 	// overridden by mvcc initialization
 	reportDbTotalSizeInBytesMu sync.RWMutex
-	reportDbTotalSizeInBytes   func() float64 = func() float64 { return 0 }
+	reportDbTotalSizeInBytes   = func() float64 { return 0 }
+
+	dbTotalSizeInUse = prometheus.NewGaugeFunc(prometheus.GaugeOpts{
+		Namespace: "etcd",
+		Subsystem: "mvcc",
+		Name:      "db_total_size_in_use_in_bytes",
+		Help:      "Total size of the underlying database logically in use in bytes.",
+	},
+		func() float64 {
+			reportDbTotalSizeInUseInBytesMu.RLock()
+			defer reportDbTotalSizeInUseInBytesMu.RUnlock()
+			return reportDbTotalSizeInUseInBytes()
+		},
+	)
+	// overridden by mvcc initialization
+	reportDbTotalSizeInUseInBytesMu sync.RWMutex
+	reportDbTotalSizeInUseInBytes   func() float64 = func() float64 { return 0 }
+
+	hashDurations = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Namespace: "etcd",
+		Subsystem: "mvcc",
+		Name:      "hash_duration_seconds",
+		Help:      "The latency distribution of storage hash operation.",
+
+		// 100 MB usually takes 100 ms, so start with 10 MB of 10 ms
+		// lowest bucket start of upper bound 0.01 sec (10 ms) with factor 2
+		// highest bucket start of 0.01 sec * 2^14 == 163.84 sec
+		Buckets: prometheus.ExponentialBuckets(.01, 2, 15),
+	})
+
+	hashRevDurations = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Namespace: "etcd",
+		Subsystem: "mvcc",
+		Name:      "hash_rev_duration_seconds",
+		Help:      "The latency distribution of storage hash by revision operation.",
+
+		// 100 MB usually takes 100 ms, so start with 10 MB of 10 ms
+		// lowest bucket start of upper bound 0.01 sec (10 ms) with factor 2
+		// highest bucket start of 0.01 sec * 2^14 == 163.84 sec
+		Buckets: prometheus.ExponentialBuckets(.01, 2, 15),
+	})
+
+	currentRev = prometheus.NewGaugeFunc(prometheus.GaugeOpts{
+		Namespace: "etcd_debugging",
+		Subsystem: "mvcc",
+		Name:      "current_revision",
+		Help:      "The current revision of store.",
+	},
+		func() float64 {
+			reportCurrentRevMu.RLock()
+			defer reportCurrentRevMu.RUnlock()
+			return reportCurrentRev()
+		},
+	)
+	// overridden by mvcc initialization
+	reportCurrentRevMu sync.RWMutex
+	reportCurrentRev   = func() float64 { return 0 }
+
+	compactRev = prometheus.NewGaugeFunc(prometheus.GaugeOpts{
+		Namespace: "etcd_debugging",
+		Subsystem: "mvcc",
+		Name:      "compact_revision",
+		Help:      "The revision of the last compaction in store.",
+	},
+		func() float64 {
+			reportCompactRevMu.RLock()
+			defer reportCompactRevMu.RUnlock()
+			return reportCompactRev()
+		},
+	)
+	// overridden by mvcc initialization
+	reportCompactRevMu sync.RWMutex
+	reportCompactRev   = func() float64 { return 0 }
 )
 
 func init() {
@@ -171,7 +255,13 @@ func init() {
 	prometheus.MustRegister(dbCompactionPauseDurations)
 	prometheus.MustRegister(dbCompactionTotalDurations)
 	prometheus.MustRegister(dbCompactionKeysCounter)
+	prometheus.MustRegister(dbTotalSizeDebugging)
 	prometheus.MustRegister(dbTotalSize)
+	prometheus.MustRegister(dbTotalSizeInUse)
+	prometheus.MustRegister(hashDurations)
+	prometheus.MustRegister(hashRevDurations)
+	prometheus.MustRegister(currentRev)
+	prometheus.MustRegister(compactRev)
 }
 
 // ReportEventReceived reports that an event is received.
