@@ -15,6 +15,8 @@ package storage
 
 import (
 	"github.com/deepfabric/elasticell/pkg/util"
+	"github.com/fagongzi/util/format"
+	"github.com/fagongzi/util/hack"
 )
 
 type memoryKVEngine struct {
@@ -55,11 +57,11 @@ func (e *memoryKVEngine) IncrBy(key []byte, incrment int64) (int64, error) {
 
 	v := e.kv.Get(key)
 	if len(v) != 0 {
-		value, _ = util.StrInt64(v)
+		value, _ = format.ParseStrInt64(hack.SliceToString(v))
 	}
 
 	value = value + incrment
-	e.kv.Put(key, util.FormatInt64ToBytes(value))
+	e.kv.Put(key, format.Uint64ToBytes(uint64(value)))
 	return value, nil
 }
 

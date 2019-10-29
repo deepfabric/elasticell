@@ -1,10 +1,10 @@
 package raftstore
 
 import (
-	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
 	"github.com/deepfabric/elasticell/pkg/pool"
-	"github.com/deepfabric/elasticell/pkg/util/uuid"
+	"github.com/fagongzi/log"
+	"github.com/fagongzi/util/uuid"
 	"github.com/fagongzi/goetty"
 )
 

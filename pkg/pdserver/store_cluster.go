@@ -25,7 +25,7 @@ import (
 	"github.com/coreos/etcd/clientv3"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
-	"github.com/deepfabric/elasticell/pkg/util"
+	"github.com/fagongzi/util/format"
 	"github.com/pkg/errors"
 )
 
@@ -60,7 +60,7 @@ func (s *pdStore) GetClusterID() (uint64, error) {
 
 	// If the key is "pdClusterIDPath", parse the cluster ID from it.
 	if key == pdClusterIDPath {
-		return util.BytesToUint64(resp.Kvs[0].Value)
+		return format.BytesToUint64(resp.Kvs[0].Value)
 	}
 
 	// Parse the cluster ID from any other keys for compatibility.
@@ -83,7 +83,7 @@ func (s *pdStore) CreateFirstClusterID() (uint64, error) {
 	// Generate a random cluster ID.
 	ts := uint64(time.Now().Unix())
 	clusterID := (ts << 32) + uint64(rand.Uint32())
-	value := util.Uint64ToBytes(clusterID)
+	value := format.Uint64ToBytes(clusterID)
 
 	resp, err := s.client.Txn(ctx).
 		If(clientv3.Compare(clientv3.CreateRevision(pdClusterIDPath), "=", 0)).
@@ -110,7 +110,7 @@ func (s *pdStore) CreateFirstClusterID() (uint64, error) {
 		return 0, errors.Errorf("txn returns invalid range response: %v", resp)
 	}
 
-	return util.BytesToUint64(response.Kvs[0].Value)
+	return format.BytesToUint64(response.Kvs[0].Value)
 }
 
 // SetInitParams store the init cluster params

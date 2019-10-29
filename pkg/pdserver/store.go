@@ -19,7 +19,7 @@ import (
 
 	"github.com/coreos/etcd/clientv3"
 	"github.com/coreos/etcd/embed"
-	"github.com/deepfabric/elasticell/pkg/log"
+	"github.com/fagongzi/log"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
 	"github.com/pkg/errors"

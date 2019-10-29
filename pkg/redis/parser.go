@@ -16,12 +16,12 @@ package redis
 import (
 	"errors"
 
-	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pool"
-	"github.com/deepfabric/elasticell/pkg/util"
 	"github.com/fagongzi/goetty"
 	gredis "github.com/fagongzi/goetty/protocol/redis"
 	pe "github.com/pkg/errors"
+	"github.com/fagongzi/log"
+	"github.com/fagongzi/util/protoc"
 )
 
 var (
@@ -86,7 +86,7 @@ func readCommandByProxyProtocol(in *goetty.ByteBuf) (bool, interface{}, error) {
 	}
 
 	req := pool.AcquireRequest()
-	util.MustUnmarshal(req, data)
+	protoc.MustUnmarshal(req, data)
 	in.Skip(size)
 	return true, req, nil
 }

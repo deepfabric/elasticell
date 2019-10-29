@@ -19,12 +19,12 @@ import (
 	"time"
 
 	"github.com/coreos/etcd/raft/raftpb"
-	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
 	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
 	"github.com/deepfabric/elasticell/pkg/pool"
-	"github.com/deepfabric/elasticell/pkg/util"
+	"github.com/fagongzi/log"
+	"github.com/fagongzi/util/protoc"
 )
 
 type applyMetrics struct {
@@ -279,7 +279,7 @@ func (d *applyDelegate) applyCommittedEntries(commitedEntries []raftpb.Entry) {
 
 func (d *applyDelegate) applyEntry(ctx *applyContext, entry *raftpb.Entry) *execResult {
 	if len(entry.Data) > 0 {
-		util.MustUnmarshal(ctx.req, entry.Data)
+		protoc.MustUnmarshal(ctx.req, entry.Data)
 		return d.doApplyRaftCMD(ctx)
 	}
 
@@ -287,7 +287,7 @@ func (d *applyDelegate) applyEntry(ctx *applyContext, entry *raftpb.Entry) *exec
 	state := d.applyState
 	state.AppliedIndex = entry.Index
 
-	err := d.store.getEngine(d.cell.ID).Set(getApplyStateKey(d.cell.ID), util.MustMarshal(&state))
+	err := d.store.getEngine(d.cell.ID).Set(getApplyStateKey(d.cell.ID), protoc.MustMarshal(&state))
 	if err != nil {
 		log.Fatalf("raftstore-apply[cell-%d]: apply empty entry failed, entry=<%s> errors:\n %+v",
 			d.cell.ID,
@@ -315,8 +315,8 @@ func (d *applyDelegate) applyEntry(ctx *applyContext, entry *raftpb.Entry) *exec
 func (d *applyDelegate) applyConfChange(ctx *applyContext, entry *raftpb.Entry) *execResult {
 	cc := new(raftpb.ConfChange)
 
-	util.MustUnmarshal(cc, entry.Data)
-	util.MustUnmarshal(ctx.req, cc.Context)
+	protoc.MustUnmarshal(cc, entry.Data)
+	protoc.MustUnmarshal(ctx.req, cc.Context)
 
 	result := d.doApplyRaftCMD(ctx)
 	if nil == result {

@@ -16,7 +16,7 @@ package pdserver
 import (
 	"time"
 
-	"github.com/deepfabric/elasticell/pkg/log"
+	"github.com/fagongzi/log"
 	meta "github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
 )

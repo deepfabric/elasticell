@@ -17,7 +17,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/deepfabric/elasticell/pkg/log"
+	"github.com/fagongzi/log"
 	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
 )
 

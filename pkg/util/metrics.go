@@ -22,12 +22,13 @@ import (
 	"os"
 	"strings"
 	"time"
+	"context"
 
-	"github.com/deepfabric/elasticell/pkg/log"
+	"github.com/fagongzi/log"
+	"github.com/fagongzi/util/task"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/expfmt"
 	"github.com/prometheus/common/model"
-	"golang.org/x/net/context"
 )
 
 const contentTypeHeader = "Content-Type"
@@ -51,7 +52,7 @@ func NewMetricCfg(job, instance, address string, durationSync time.Duration) *Me
 }
 
 // InitMetric init the metric
-func InitMetric(runner *Runner, cfg *MetricCfg) {
+func InitMetric(runner *task.Runner, cfg *MetricCfg) {
 	if nil == cfg || cfg.DurationSync == 0 || len(cfg.Address) == 0 {
 		log.Info("metric: disable prometheus push client")
 		return

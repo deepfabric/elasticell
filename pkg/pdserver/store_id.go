@@ -15,7 +15,7 @@ package pdserver
 
 import (
 	"github.com/coreos/etcd/clientv3"
-	"github.com/deepfabric/elasticell/pkg/util"
+	"github.com/fagongzi/util/format"
 )
 
 // GetID returns current id
@@ -29,13 +29,13 @@ func (s *pdStore) GetID() (uint64, error) {
 		return 0, nil
 	}
 
-	return util.BytesToUint64(resp)
+	return format.BytesToUint64(resp)
 }
 
 // CreateID create id alloc info.
 func (s *pdStore) CreateID(leaderSignature string, value uint64) error {
 	cmp := clientv3.Compare(clientv3.CreateRevision(pdIDPath), "=", 0)
-	op := clientv3.OpPut(pdIDPath, string(util.Uint64ToBytes(value)))
+	op := clientv3.OpPut(pdIDPath, string(format.Uint64ToBytes(value)))
 	resp, err := s.leaderTxn(leaderSignature, cmp).Then(op).Commit()
 
 	if err != nil {
@@ -51,8 +51,8 @@ func (s *pdStore) CreateID(leaderSignature string, value uint64) error {
 
 // UpdateID update id for alloc.
 func (s *pdStore) UpdateID(leaderSignature string, old, value uint64) error {
-	cmp := clientv3.Compare(clientv3.Value(pdIDPath), "=", string(util.Uint64ToBytes(old)))
-	op := clientv3.OpPut(pdIDPath, string(util.Uint64ToBytes(value)))
+	cmp := clientv3.Compare(clientv3.Value(pdIDPath), "=", string(format.Uint64ToBytes(old)))
+	op := clientv3.OpPut(pdIDPath, string(format.Uint64ToBytes(value)))
 	resp, err := s.leaderTxn(leaderSignature, cmp).Then(op).Commit()
 
 	if err != nil {

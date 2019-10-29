@@ -25,7 +25,7 @@ import (
 	"github.com/coreos/etcd/embed"
 	"github.com/coreos/etcd/etcdserver"
 	"github.com/coreos/etcd/pkg/types"
-	"github.com/deepfabric/elasticell/pkg/log"
+	"github.com/fagongzi/log"
 	"github.com/deepfabric/elasticell/pkg/pdapi"
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"

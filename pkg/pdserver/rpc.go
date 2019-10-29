@@ -16,7 +16,7 @@ package pdserver
 import (
 	"net"
 
-	"github.com/deepfabric/elasticell/pkg/log"
+	"github.com/fagongzi/log"
 	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"

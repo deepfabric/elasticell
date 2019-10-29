@@ -17,12 +17,14 @@ package storage
 
 import (
 	"bytes"
+	"context"
 	"math"
 
 	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
 	"github.com/deepfabric/elasticell/pkg/util"
 	gonemo "github.com/deepfabric/go-nemo"
-	"golang.org/x/net/context"
+	"github.com/fagongzi/util/format"
+	"github.com/fagongzi/util/hack"
 )
 
 type nemoZSetEngine struct {
@@ -195,7 +197,7 @@ func (e *nemoZSetEngine) ZScore(key []byte, member []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	return util.FormatFloat64ToBytes(value), err
+	return format.Float64ToString(value), err
 }
 
 func isInclude(value []byte) ([]byte, bool) {
@@ -220,6 +222,6 @@ func parseInclude(value []byte) (float64, bool, error) {
 		return math.SmallestNonzeroFloat64, include, nil
 	}
 
-	valueF, err := util.StrFloat64(value)
+	valueF, err := format.ParseStrFloat64(hack.SliceToString(value))
 	return valueF, include, err
 }

@@ -22,9 +22,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/deepfabric/elasticell/pkg/log"
 	server "github.com/deepfabric/elasticell/pkg/pdserver"
 	"github.com/deepfabric/elasticell/pkg/util"
+	"github.com/fagongzi/log"
 )
 
 var (
@@ -61,18 +61,6 @@ func main() {
 	cfg := parseCfg()
 
 	log.InitLog()
-
-	var logFile, etcdLogFile string
-	logFile = log.GetLogFile()
-	etcdLogFile = util.ReplaceFpExt(logFile, "_etcd.log")
-
-	f, err := os.OpenFile(etcdLogFile, os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer f.Close()
-	server.RedirectEmbedEtcdLog(f)
-
 	s := server.NewServer(cfg)
 
 	sc := make(chan os.Signal, 1)

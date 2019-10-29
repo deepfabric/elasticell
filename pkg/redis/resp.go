@@ -18,9 +18,10 @@ import (
 
 	"github.com/deepfabric/elasticell/pkg/pb/querypb"
 	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
-	"github.com/deepfabric/elasticell/pkg/util"
 	"github.com/fagongzi/goetty"
 	gredis "github.com/fagongzi/goetty/protocol/redis"
+	"github.com/fagongzi/util/format"
+	"github.com/fagongzi/util/hack"
 )
 
 const (
@@ -41,7 +42,7 @@ func WriteFVPairArray(lst []*raftcmdpb.FVPair, buf *goetty.ByteBuf) {
 		buf.Write(gredis.NullArray)
 		buf.Write(gredis.Delims)
 	} else {
-		buf.Write(util.StringToSlice(strconv.Itoa(len(lst) * 2)))
+		buf.Write(hack.StringToSlice(strconv.Itoa(len(lst) * 2)))
 		buf.Write(gredis.Delims)
 
 		for i := 0; i < len(lst); i++ {
@@ -59,10 +60,10 @@ func WriteScorePairArray(lst []*raftcmdpb.ScorePair, withScores bool, buf *goett
 		buf.Write(gredis.Delims)
 	} else {
 		if withScores {
-			buf.Write(util.StringToSlice(strconv.Itoa(len(lst) * 2)))
+			buf.Write(hack.StringToSlice(strconv.Itoa(len(lst) * 2)))
 			buf.Write(gredis.Delims)
 		} else {
-			buf.Write(util.StringToSlice(strconv.Itoa(len(lst))))
+			buf.Write(hack.StringToSlice(strconv.Itoa(len(lst))))
 			buf.Write(gredis.Delims)
 		}
 
@@ -70,7 +71,7 @@ func WriteScorePairArray(lst []*raftcmdpb.ScorePair, withScores bool, buf *goett
 			gredis.WriteBulk(lst[i].Member, buf)
 
 			if withScores {
-				gredis.WriteBulk(util.FormatFloat64ToBytes(lst[i].Score), buf)
+				gredis.WriteBulk(format.Float64ToString(lst[i].Score), buf)
 			}
 		}
 	}
@@ -83,12 +84,12 @@ func WriteDocArray(lst []*querypb.Document, buf *goetty.ByteBuf) {
 		buf.Write(gredis.NullArray)
 		buf.Write(gredis.Delims)
 	} else {
-		buf.Write(util.StringToSlice(strconv.Itoa(len(lst))))
+		buf.Write(hack.StringToSlice(strconv.Itoa(len(lst))))
 		buf.Write(gredis.Delims)
 
 		for i := 0; i < len(lst); i++ {
 			buf.WriteByte('*')
-			buf.Write(util.StringToSlice("3"))
+			buf.Write(hack.StringToSlice("3"))
 			buf.Write(gredis.Delims)
 
 			//order
@@ -98,7 +99,7 @@ func WriteDocArray(lst []*querypb.Document, buf *goetty.ByteBuf) {
 				buf.Write(gredis.NullArray)
 				buf.Write(gredis.Delims)
 			} else {
-				buf.Write(util.StringToSlice(strconv.Itoa(len(orders))))
+				buf.Write(hack.StringToSlice(strconv.Itoa(len(orders))))
 				buf.Write(gredis.Delims)
 				for j := 0; j < len(orders); j++ {
 					gredis.WriteInteger(int64(orders[j]), buf)

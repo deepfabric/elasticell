@@ -4,7 +4,7 @@ import (
 	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
 	"github.com/deepfabric/elasticell/pkg/pool"
 	"github.com/deepfabric/elasticell/pkg/redis"
-	"github.com/deepfabric/elasticell/pkg/util"
+	"github.com/fagongzi/util/hack"
 )
 
 func (s *Store) execSAdd(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.Response {
@@ -21,7 +21,7 @@ func (s *Store) execSAdd(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.R
 	value, err := s.getSetEngine(ctx.req.Header.CellId).SAdd(args[0], args[1:]...)
 	if err != nil {
 		rsp := pool.AcquireResponse()
-		rsp.ErrorResult = util.StringToSlice(err.Error())
+		rsp.ErrorResult = hack.StringToSlice(err.Error())
 		return rsp
 	}
 
@@ -59,7 +59,7 @@ func (s *Store) execSRem(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.R
 	value, err := s.getSetEngine(ctx.req.Header.CellId).SRem(args[0], args[1:]...)
 	if err != nil {
 		rsp := pool.AcquireResponse()
-		rsp.ErrorResult = util.StringToSlice(err.Error())
+		rsp.ErrorResult = hack.StringToSlice(err.Error())
 		return rsp
 	}
 
@@ -93,7 +93,7 @@ func (s *Store) execSCard(id uint64, req *raftcmdpb.Request) *raftcmdpb.Response
 	value, err := s.getSetEngine(id).SCard(args[0])
 	if err != nil {
 		rsp := pool.AcquireResponse()
-		rsp.ErrorResult = util.StringToSlice(err.Error())
+		rsp.ErrorResult = hack.StringToSlice(err.Error())
 		return rsp
 	}
 
@@ -117,7 +117,7 @@ func (s *Store) execSMembers(id uint64, req *raftcmdpb.Request) *raftcmdpb.Respo
 	value, err := s.getSetEngine(id).SMembers(args[0])
 	if err != nil {
 		rsp := pool.AcquireResponse()
-		rsp.ErrorResult = util.StringToSlice(err.Error())
+		rsp.ErrorResult = hack.StringToSlice(err.Error())
 		return rsp
 	}
 
@@ -141,7 +141,7 @@ func (s *Store) execSIsMember(id uint64, req *raftcmdpb.Request) *raftcmdpb.Resp
 	value, err := s.getSetEngine(id).SIsMember(args[0], args[1])
 	if err != nil {
 		rsp := pool.AcquireResponse()
-		rsp.ErrorResult = util.StringToSlice(err.Error())
+		rsp.ErrorResult = hack.StringToSlice(err.Error())
 		return rsp
 	}
 
@@ -164,7 +164,7 @@ func (s *Store) execSPop(id uint64, req *raftcmdpb.Request) *raftcmdpb.Response 
 	value, err := s.getSetEngine(id).SPop(args[0])
 	if err != nil {
 		rsp := pool.AcquireResponse()
-		rsp.ErrorResult = util.StringToSlice(err.Error())
+		rsp.ErrorResult = hack.StringToSlice(err.Error())
 		return rsp
 	}
 

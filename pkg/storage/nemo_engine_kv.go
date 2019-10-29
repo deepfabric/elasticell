@@ -16,9 +16,12 @@
 package storage
 
 import (
+	"context"
+
 	"github.com/deepfabric/elasticell/pkg/util"
 	gonemo "github.com/deepfabric/go-nemo"
-	"golang.org/x/net/context"
+	"github.com/fagongzi/util/format"
+	"github.com/fagongzi/util/hack"
 )
 
 type nemoKVEngine struct {
@@ -70,7 +73,7 @@ func (e *nemoKVEngine) IncrBy(key []byte, incrment int64) (int64, error) {
 		return 0, err
 	}
 
-	return util.StrInt64(v)
+	return format.ParseStrInt64(hack.SliceToString(v))
 }
 
 func (e *nemoKVEngine) DecrBy(key []byte, incrment int64) (int64, error) {
@@ -82,7 +85,7 @@ func (e *nemoKVEngine) DecrBy(key []byte, incrment int64) (int64, error) {
 		return 0, err
 	}
 
-	return util.StrInt64(v)
+	return format.ParseStrInt64(hack.SliceToString(v))
 }
 
 func (e *nemoKVEngine) GetSet(key, value []byte) ([]byte, error) {

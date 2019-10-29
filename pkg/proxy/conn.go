@@ -6,10 +6,10 @@ import (
 	"time"
 
 	"github.com/deepfabric/elasticell/pkg/codec"
-	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
-	"github.com/deepfabric/elasticell/pkg/util"
 	"github.com/fagongzi/goetty"
+	"github.com/fagongzi/log"
+	"github.com/fagongzi/util/task"
 	"github.com/pkg/errors"
 )
 
@@ -24,7 +24,7 @@ type backend struct {
 	p    *RedisProxy
 	addr string
 	conn goetty.IOSession
-	reqs *util.Queue
+	reqs *task.Queue
 }
 
 func newBackend(p *RedisProxy, addr string, conn goetty.IOSession) *backend {
@@ -32,7 +32,7 @@ func newBackend(p *RedisProxy, addr string, conn goetty.IOSession) *backend {
 		p:    p,
 		addr: addr,
 		conn: conn,
-		reqs: &util.Queue{},
+		reqs: &task.Queue{},
 	}
 
 	bc.writeLoop()

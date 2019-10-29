@@ -17,14 +17,14 @@ import (
 	"bytes"
 	"errors"
 
-	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
 	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
 	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
 	"github.com/deepfabric/elasticell/pkg/pool"
 	"github.com/deepfabric/elasticell/pkg/storage"
-	"github.com/deepfabric/elasticell/pkg/util"
+	"github.com/fagongzi/log"
+	"github.com/fagongzi/util/protoc"
 )
 
 type redisBatch struct {
@@ -121,7 +121,7 @@ func (d *applyDelegate) doApplyRaftCMD(ctx *applyContext) *execResult {
 
 	ctx.applyState.AppliedIndex = ctx.index
 	if !d.isPendingRemove() {
-		err := ctx.wb.Set(getApplyStateKey(d.cell.ID), util.MustMarshal(&ctx.applyState))
+		err := ctx.wb.Set(getApplyStateKey(d.cell.ID), protoc.MustMarshal(&ctx.applyState))
 		if err != nil {
 			log.Fatalf("raftstore-apply[cell-%d]: save apply context failed, errors:\n %+v",
 				d.cell.ID,
@@ -178,7 +178,7 @@ func (d *applyDelegate) execAdminRequest(ctx *applyContext) (*raftcmdpb.RaftCMDR
 
 func (d *applyDelegate) doExecChangePeer(ctx *applyContext) (*raftcmdpb.RaftCMDResponse, *execResult, error) {
 	req := new(raftcmdpb.ChangePeerRequest)
-	util.MustUnmarshal(req, ctx.req.AdminRequest.Body)
+	protoc.MustUnmarshal(req, ctx.req.AdminRequest.Body)
 
 	log.Infof("raftstore-apply[cell-%d]: exec change conf, type=<%s> epoch=<%+v>",
 		d.cell.ID,
@@ -258,7 +258,7 @@ func (d *applyDelegate) doExecSplit(ctx *applyContext) (*raftcmdpb.RaftCMDRespon
 	ctx.metrics.admin.split++
 
 	req := new(raftcmdpb.SplitRequest)
-	util.MustUnmarshal(req, ctx.req.AdminRequest.Body)
+	protoc.MustUnmarshal(req, ctx.req.AdminRequest.Body)
 
 	if len(req.SplitKey) == 0 {
 		log.Errorf("raftstore-apply[cell-%d]: missing split key",
@@ -365,7 +365,7 @@ func (d *applyDelegate) doExecRaftGC(ctx *applyContext) (*raftcmdpb.RaftCMDRespo
 	ctx.metrics.admin.compact++
 
 	req := new(raftcmdpb.RaftLogGCRequest)
-	util.MustUnmarshal(req, ctx.req.AdminRequest.Body)
+	protoc.MustUnmarshal(req, ctx.req.AdminRequest.Body)
 
 	compactIndex := req.CompactIndex
 	firstIndex := ctx.applyState.TruncatedState.Index + 1
@@ -432,10 +432,10 @@ func (pr *PeerReplicate) doExecReadCmd(c *cmd) {
 	c.resp(resp)
 }
 
-func newAdminRaftCMDResponse(adminType raftcmdpb.AdminCmdType, subRsp util.Marashal) *raftcmdpb.RaftCMDResponse {
+func newAdminRaftCMDResponse(adminType raftcmdpb.AdminCmdType, subRsp protoc.PB) *raftcmdpb.RaftCMDResponse {
 	adminResp := new(raftcmdpb.AdminResponse)
 	adminResp.Type = adminType
-	adminResp.Body = util.MustMarshal(subRsp)
+	adminResp.Body = protoc.MustMarshal(subRsp)
 
 	resp := pool.AcquireRaftCMDResponse()
 	resp.AdminResponse = adminResp

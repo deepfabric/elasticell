@@ -26,11 +26,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/coreos/etcd/raft"
-	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/server"
 	"github.com/deepfabric/elasticell/pkg/util"
+	"github.com/fagongzi/log"
 )
 
 const (
@@ -103,7 +102,6 @@ func main() {
 	}
 
 	log.InitLog()
-	raft.SetLogger(log.DefaultLogger())
 
 	if "" != *pprof {
 		log.Infof("bootstrap: start pprof at: %s", *pprof)

@@ -19,11 +19,12 @@ import (
 	"time"
 
 	"github.com/deepfabric/elasticell/pkg/codec"
-	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
 	"github.com/deepfabric/elasticell/pkg/pd"
 	"github.com/deepfabric/elasticell/pkg/util"
 	"github.com/fagongzi/goetty"
+	"github.com/fagongzi/log"
+	"github.com/fagongzi/util/task"
 )
 
 var (
@@ -103,7 +104,7 @@ func (state *watcherState) resetTimeout(timeout time.Duration, fn func(interface
 type watcherNotifier struct {
 	sync.RWMutex
 
-	notifies *util.Queue
+	notifies *task.Queue
 	pool     *goetty.AddressBasedPool
 	watchers map[string]*watcherState
 	timeout  time.Duration
@@ -111,7 +112,7 @@ type watcherNotifier struct {
 
 func newWatcherNotifier(timeout time.Duration) *watcherNotifier {
 	wn := &watcherNotifier{
-		notifies: util.New(1024),
+		notifies: task.New(1024),
 		watchers: make(map[string]*watcherState),
 		timeout:  timeout,
 	}

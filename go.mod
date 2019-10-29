@@ -4,14 +4,17 @@ go 1.13
 
 require (
 	github.com/StackExchange/wmi v0.0.0-20190523213315-cbe66965904d // indirect
-	github.com/Workiva/go-datastructures v1.0.50
 	github.com/coreos/bbolt v1.3.3 // indirect
 	github.com/coreos/etcd v3.3.17+incompatible
 	github.com/coreos/go-semver v0.3.0 // indirect
 	github.com/coreos/go-systemd v0.0.0-20190719114852-fd7a80b32e1f // indirect
 	github.com/coreos/pkg v0.0.0-20180928190104-399ea9e2e55f
+	github.com/deepfabric/c-nemo v0.0.0-20190419083223-23fa413d9df4 // indirect
+	github.com/deepfabric/go-nemo v0.0.0-20190419084252-5ec7afa882c6
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible // indirect
 	github.com/fagongzi/goetty v1.3.1
+	github.com/fagongzi/log v0.0.0-20190424080438-6b79fa3fda5a
+	github.com/fagongzi/util v0.0.0-20191029074511-8ce736c4f671
 	github.com/funny/slab v0.0.0-20180511031532-b1fad5e5d478 // indirect
 	github.com/funny/utest v0.0.0-20161029064919-43870a374500 // indirect
 	github.com/garyburd/redigo v1.6.0
@@ -32,10 +35,8 @@ require (
 	github.com/pkg/errors v0.8.1
 	github.com/prometheus/client_golang v1.2.1
 	github.com/prometheus/common v0.7.0
-	github.com/satori/go.uuid v1.2.0
 	github.com/shirou/gopsutil v2.19.9+incompatible
 	github.com/soheilhy/cmux v0.1.4 // indirect
-	github.com/stretchr/testify v1.4.0
 	github.com/tmc/grpc-websocket-proxy v0.0.0-20190109142713-0ad062ec5ee5 // indirect
 	github.com/unrolled/render v1.0.1
 	github.com/urfave/negroni v1.0.0

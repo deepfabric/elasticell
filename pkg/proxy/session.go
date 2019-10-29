@@ -3,19 +3,20 @@ package proxy
 import (
 	"sync"
 
-	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
 	credis "github.com/deepfabric/elasticell/pkg/redis"
-	"github.com/deepfabric/elasticell/pkg/util"
 	"github.com/fagongzi/goetty"
 	"github.com/fagongzi/goetty/protocol/redis"
+	"github.com/fagongzi/log"
+	"github.com/fagongzi/util/hack"
+	"github.com/fagongzi/util/task"
 )
 
 type redisSession struct {
 	sync.RWMutex
 
 	session goetty.IOSession
-	resps   *util.Queue
+	resps   *task.Queue
 	addr    string
 
 	aggLock      sync.RWMutex
@@ -25,7 +26,7 @@ type redisSession struct {
 func newSession(session goetty.IOSession) *redisSession {
 	return &redisSession{
 		session:      session,
-		resps:        &util.Queue{},
+		resps:        &task.Queue{},
 		addr:         session.RemoteAddr(),
 		aggregations: make(map[string]*aggregationReq),
 	}
@@ -62,7 +63,7 @@ func (rs *redisSession) resp(rsp *raftcmdpb.Response) {
 
 func (rs *redisSession) errorResp(err error) {
 	rs.resp(&raftcmdpb.Response{
-		ErrorResult: util.StringToSlice(err.Error()),
+		ErrorResult: hack.StringToSlice(err.Error()),
 	})
 }
 

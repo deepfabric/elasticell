@@ -18,9 +18,9 @@ import (
 	"encoding/binary"
 	"fmt"
 
-	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/fagongzi/goetty"
+	"github.com/fagongzi/log"
 )
 
 // for cell meta

@@ -14,6 +14,7 @@
 package raftstore
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sync/atomic"
@@ -21,15 +22,15 @@ import (
 
 	"github.com/coreos/etcd/raft"
 	"github.com/coreos/etcd/raft/raftpb"
-	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
 	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
 	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
 	"github.com/deepfabric/elasticell/pkg/pd"
-	"github.com/deepfabric/elasticell/pkg/pool"
 	"github.com/deepfabric/elasticell/pkg/util"
-	"golang.org/x/net/context"
+	"github.com/deepfabric/elasticell/pkg/pool"
+	"github.com/fagongzi/log"
+	"github.com/fagongzi/util/protoc"
 )
 
 var (
@@ -155,7 +156,7 @@ func (pr *PeerReplicate) handleAction(items []interface{}) {
 		case doCampaign:
 			_, err := pr.maybeCampaign()
 			if err != nil {
-				log.Fatalf("raftstore[cell-%d]: new split cell campaign failed, newCell=<%d> errors:\n %+v",
+				log.Fatalf("raftstore[cell-%d]: new split cell campaign failed, newCell=<%+v> errors:\n %+v",
 					pr.cellID,
 					pr.getCell(),
 					err)
@@ -258,7 +259,7 @@ func (pr *PeerReplicate) handleCheckSplit() {
 	for id, p := range pr.rn.Status().Progress {
 		// If a peer is apply snapshot, skip split, avoid sent snapshot again in future.
 		if p.State == raft.ProgressStateSnapshot {
-			log.Infof("raftstore-split[cell-%d]: peer is applying snapshot",
+			log.Infof("raftstore-split[cell-%d]: peer %d is applying snapshot",
 				pr.cellID,
 				id)
 			return
@@ -464,7 +465,7 @@ func (pr *PeerReplicate) handleReady() {
 	// If snapshot is received, further handling
 	if !raft.IsEmptySnap(rd.Snapshot) {
 		ctx.snap = &mraft.SnapshotMessage{}
-		util.MustUnmarshal(ctx.snap, rd.Snapshot.Data)
+		protoc.MustUnmarshal(ctx.snap, rd.Snapshot.Data)
 
 		if !pr.stopRaftTick {
 			// When we apply snapshot, stop raft tick and resume until the snapshot applied
@@ -729,7 +730,7 @@ func (pr *PeerReplicate) proposeNormal(c *cmd) bool {
 		return false
 	}
 
-	data := util.MustMarshal(c.req)
+	data := protoc.MustMarshal(c.req)
 	size := uint64(len(data))
 
 	raftFlowProposalSizeHistogram.Observe(float64(size))
@@ -767,7 +768,7 @@ func (pr *PeerReplicate) proposeConfChange(c *cmd) bool {
 	}
 
 	changePeer := new(raftcmdpb.ChangePeerRequest)
-	util.MustUnmarshal(changePeer, c.req.AdminRequest.Body)
+	protoc.MustUnmarshal(changePeer, c.req.AdminRequest.Body)
 
 	cc := new(raftpb.ConfChange)
 	switch changePeer.ChangeType {
@@ -777,7 +778,7 @@ func (pr *PeerReplicate) proposeConfChange(c *cmd) bool {
 		cc.Type = raftpb.ConfChangeRemoveNode
 	}
 	cc.NodeID = changePeer.Peer.ID
-	cc.Context = util.MustMarshal(c.req)
+	cc.Context = protoc.MustMarshal(c.req)
 
 	idx := pr.nextProposalIndex()
 	err = pr.rn.ProposeConfChange(*cc)
@@ -802,7 +803,7 @@ func (pr *PeerReplicate) proposeConfChange(c *cmd) bool {
 
 func (pr *PeerReplicate) proposeTransferLeader(c *cmd) bool {
 	req := new(raftcmdpb.TransferLeaderRequest)
-	util.MustUnmarshal(req, c.req.AdminRequest.Body)
+	protoc.MustUnmarshal(req, c.req.AdminRequest.Body)
 
 	if pr.isTransferLeaderAllowed(&req.Peer) {
 		pr.doTransferLeader(&req.Peer)
@@ -859,7 +860,7 @@ func (pr *PeerReplicate) isTransferLeaderAllowed(newLeaderPeer *metapb.Peer) boo
 func (pr *PeerReplicate) checkConfChange(c *cmd) error {
 	data := c.req.AdminRequest.Body
 	changePeer := new(raftcmdpb.ChangePeerRequest)
-	util.MustUnmarshal(changePeer, data)
+	protoc.MustUnmarshal(changePeer, data)
 
 	total := len(pr.rn.Status().Progress)
 

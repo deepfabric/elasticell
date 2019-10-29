@@ -18,13 +18,14 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
 	"github.com/deepfabric/elasticell/pkg/pool"
 	"github.com/deepfabric/elasticell/pkg/raftstore"
 	"github.com/deepfabric/elasticell/pkg/redis"
-	"github.com/deepfabric/elasticell/pkg/util"
 	"github.com/fagongzi/goetty"
+	"github.com/fagongzi/log"
+	"github.com/fagongzi/util/hack"
+	"github.com/fagongzi/util/protoc"
 )
 
 // RedisServer is provide a redis like server
@@ -171,7 +172,7 @@ func (s *RedisServer) doConnection(session goetty.IOSession) error {
 			if err != nil {
 				log.Debugf("onRedisCommand faied. req=<%+v>, err=<%+v>", req, err)
 				rsp := pool.AcquireResponse()
-				rsp.ErrorResult = util.StringToSlice(err.Error())
+				rsp.ErrorResult = hack.StringToSlice(err.Error())
 				rs.onResp(rsp)
 			}
 		} else if req, ok := value.(*raftcmdpb.Request); ok {
@@ -186,7 +187,7 @@ func (s *RedisServer) doConnection(session goetty.IOSession) error {
 			if err != nil {
 				log.Debugf("onProxyReq faied. req=<%+v>, err=<%+v>", req, err)
 				rsp := pool.AcquireResponse()
-				rsp.ErrorResult = util.StringToSlice(err.Error())
+				rsp.ErrorResult = hack.StringToSlice(err.Error())
 				rsp.UUID = req.UUID
 				rs.onResp(rsp)
 				pool.ReleaseRequest(req)
@@ -210,7 +211,7 @@ func (s *RedisServer) onResp(resp *raftcmdpb.RaftCMDResponse) {
 				}
 
 				if errorResult == nil {
-					errorResult = util.MustMarshal(resp.Header)
+					errorResult = protoc.MustMarshal(resp.Header)
 				}
 
 				rsp.ErrorResult = errorResult
@@ -226,7 +227,7 @@ func (s *RedisServer) onResp(resp *raftcmdpb.RaftCMDResponse) {
 }
 
 func (s *RedisServer) onProxyReq(req *raftcmdpb.Request, session *session) error {
-	req.Type = s.typeMapping[strings.ToLower(util.SliceToString(req.Cmd[0]))]
+	req.Type = s.typeMapping[strings.ToLower(hack.SliceToString(req.Cmd[0]))]
 	req.SessionID = session.id
 
 	if h, ok := s.localHandlers[req.Type]; ok {

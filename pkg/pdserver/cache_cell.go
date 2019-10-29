@@ -17,11 +17,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
 	"github.com/deepfabric/elasticell/pkg/pd"
 	"github.com/deepfabric/elasticell/pkg/util"
+	"github.com/fagongzi/log"
 )
 
 // CellInfo The cell info

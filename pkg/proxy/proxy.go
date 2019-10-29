@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -10,7 +11,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
 	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
@@ -19,9 +19,10 @@ import (
 	"github.com/deepfabric/elasticell/pkg/util"
 	"github.com/fagongzi/goetty"
 	"github.com/fagongzi/goetty/protocol/redis"
+	"github.com/fagongzi/log"
+	"github.com/fagongzi/util/task"
+	"github.com/fagongzi/util/uuid"
 	"github.com/pkg/errors"
-	uuid "github.com/satori/go.uuid"
-	"golang.org/x/net/context"
 )
 
 const (
@@ -88,8 +89,8 @@ type RedisProxy struct {
 	bcs             map[string]*backend // store addr -> netconn
 	routing         *routing            // uuid -> session
 	syncEpoch       uint64
-	reqs            []*util.Queue
-	retries         *util.Queue
+	reqs            []*task.Queue
+	retries         *task.Queue
 	pings           chan string
 	bcAddrs         []string // store addrs
 	rrNext          int64    // round robin of bcAddrs
@@ -130,8 +131,8 @@ func NewRedisProxy(cfg *Cfg) *RedisProxy {
 		cellLeaderAddrs: make(map[uint64]string),
 		bcs:             make(map[string]*backend),
 		stopC:           make(chan struct{}),
-		reqs:            make([]*util.Queue, cfg.WorkerCount),
-		retries:         &util.Queue{},
+		reqs:            make([]*task.Queue, cfg.WorkerCount),
+		retries:         &task.Queue{},
 		pings:           make(chan string),
 		bcAddrs:         make([]string, 0),
 	}
@@ -223,7 +224,7 @@ func (p *RedisProxy) initWatcher() {
 
 func (p *RedisProxy) initQueues() {
 	for index := uint64(0); index < p.cfg.WorkerCount; index++ {
-		p.reqs[index] = &util.Queue{}
+		p.reqs[index] = &task.Queue{}
 	}
 }
 
@@ -406,7 +407,7 @@ func (p *RedisProxy) addToForward(r *req) {
 
 func (p *RedisProxy) readyToHandleReq(ctx context.Context) {
 	for _, q := range p.reqs {
-		go func(q *util.Queue) {
+		go func(q *task.Queue) {
 			log.Infof("bootstrap: handle redis command started")
 			items := make([]interface{}, batch, batch)
 

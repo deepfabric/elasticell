@@ -17,7 +17,8 @@ import (
 	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
 	"github.com/deepfabric/elasticell/pkg/pool"
 	"github.com/deepfabric/elasticell/pkg/redis"
-	"github.com/deepfabric/elasticell/pkg/util"
+	"github.com/fagongzi/util/format"
+	"github.com/fagongzi/util/hack"
 )
 
 func (s *Store) execHSet(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.Response {
@@ -34,7 +35,7 @@ func (s *Store) execHSet(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.R
 	n, err := s.getHashEngine(ctx.req.Header.CellId).HSet(args[0], args[1], args[2])
 	if err != nil {
 		rsp := pool.AcquireResponse()
-		rsp.ErrorResult = util.StringToSlice(err.Error())
+		rsp.ErrorResult = hack.StringToSlice(err.Error())
 
 		return rsp
 	}
@@ -65,7 +66,7 @@ func (s *Store) execHDel(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.R
 	n, err := s.getHashEngine(ctx.req.Header.CellId).HDel(args[0], args[1:]...)
 	if err != nil {
 		rsp := pool.AcquireResponse()
-		rsp.ErrorResult = util.StringToSlice(err.Error())
+		rsp.ErrorResult = hack.StringToSlice(err.Error())
 
 		return rsp
 	}
@@ -115,7 +116,7 @@ func (s *Store) execHMSet(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.
 	err := s.getHashEngine(ctx.req.Header.CellId).HMSet(key, fields, values)
 	if err != nil {
 		rsp := pool.AcquireResponse()
-		rsp.ErrorResult = util.StringToSlice(err.Error())
+		rsp.ErrorResult = hack.StringToSlice(err.Error())
 
 		return rsp
 	}
@@ -144,7 +145,7 @@ func (s *Store) execHSetNX(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb
 	value, err := s.getHashEngine(ctx.req.Header.CellId).HSetNX(args[0], args[1], args[2])
 	if err != nil {
 		rsp := pool.AcquireResponse()
-		rsp.ErrorResult = util.StringToSlice(err.Error())
+		rsp.ErrorResult = hack.StringToSlice(err.Error())
 
 		return rsp
 	}
@@ -171,10 +172,10 @@ func (s *Store) execHIncrBy(ctx *applyContext, req *raftcmdpb.Request) *raftcmdp
 		return rsp
 	}
 
-	incrment, err := util.StrInt64(args[2])
+	incrment, err := format.ParseStrInt64(hack.SliceToString(args[2]))
 	if err != nil {
 		rsp := pool.AcquireResponse()
-		rsp.ErrorResult = util.StringToSlice(err.Error())
+		rsp.ErrorResult = hack.StringToSlice(err.Error())
 
 		return rsp
 	}
@@ -182,15 +183,15 @@ func (s *Store) execHIncrBy(ctx *applyContext, req *raftcmdpb.Request) *raftcmdp
 	value, err := s.getHashEngine(ctx.req.Header.CellId).HIncrBy(args[0], args[1], incrment)
 	if err != nil {
 		rsp := pool.AcquireResponse()
-		rsp.ErrorResult = util.StringToSlice(err.Error())
+		rsp.ErrorResult = hack.StringToSlice(err.Error())
 
 		return rsp
 	}
 
-	v, err := util.StrInt64(value)
+	v, err := format.ParseStrInt64(hack.SliceToString(value))
 	if err != nil {
 		rsp := pool.AcquireResponse()
-		rsp.ErrorResult = util.StringToSlice(err.Error())
+		rsp.ErrorResult = hack.StringToSlice(err.Error())
 
 		return rsp
 	}
@@ -214,7 +215,7 @@ func (s *Store) execHGet(id uint64, req *raftcmdpb.Request) *raftcmdpb.Response 
 	value, err := s.getHashEngine(id).HGet(args[0], args[1])
 	if err != nil {
 		rsp := pool.AcquireResponse()
-		rsp.ErrorResult = util.StringToSlice(err.Error())
+		rsp.ErrorResult = hack.StringToSlice(err.Error())
 
 		return rsp
 	}
@@ -240,7 +241,7 @@ func (s *Store) execHExists(id uint64, req *raftcmdpb.Request) *raftcmdpb.Respon
 	exists, err := s.getHashEngine(id).HExists(args[0], args[1])
 	if err != nil {
 		rsp := pool.AcquireResponse()
-		rsp.ErrorResult = util.StringToSlice(err.Error())
+		rsp.ErrorResult = hack.StringToSlice(err.Error())
 
 		return rsp
 	}
@@ -269,7 +270,7 @@ func (s *Store) execHKeys(id uint64, req *raftcmdpb.Request) *raftcmdpb.Response
 	value, err := s.getHashEngine(id).HKeys(args[0])
 	if err != nil {
 		rsp := pool.AcquireResponse()
-		rsp.ErrorResult = util.StringToSlice(err.Error())
+		rsp.ErrorResult = hack.StringToSlice(err.Error())
 
 		return rsp
 	}
@@ -295,7 +296,7 @@ func (s *Store) execHVals(id uint64, req *raftcmdpb.Request) *raftcmdpb.Response
 	value, err := s.getHashEngine(id).HVals(args[0])
 	if err != nil {
 		rsp := pool.AcquireResponse()
-		rsp.ErrorResult = util.StringToSlice(err.Error())
+		rsp.ErrorResult = hack.StringToSlice(err.Error())
 
 		return rsp
 	}
@@ -321,7 +322,7 @@ func (s *Store) execHGetAll(id uint64, req *raftcmdpb.Request) *raftcmdpb.Respon
 	value, err := s.getHashEngine(id).HGetAll(args[0])
 	if err != nil {
 		rsp := pool.AcquireResponse()
-		rsp.ErrorResult = util.StringToSlice(err.Error())
+		rsp.ErrorResult = hack.StringToSlice(err.Error())
 
 		return rsp
 	}
@@ -343,17 +344,17 @@ func (s *Store) execHScanGet(id uint64, req *raftcmdpb.Request) *raftcmdpb.Respo
 		return rsp
 	}
 
-	count, err := util.StrInt64(args[2])
+	count, err := format.ParseStrInt64(hack.SliceToString(args[2]))
 	if err != nil {
 		rsp := pool.AcquireResponse()
-		rsp.ErrorResult = util.StringToSlice(err.Error())
+		rsp.ErrorResult = hack.StringToSlice(err.Error())
 		return rsp
 	}
 
 	value, err := s.getHashEngine(id).HScanGet(args[0], args[1], int(count))
 	if err != nil {
 		rsp := pool.AcquireResponse()
-		rsp.ErrorResult = util.StringToSlice(err.Error())
+		rsp.ErrorResult = hack.StringToSlice(err.Error())
 		return rsp
 	}
 
@@ -378,7 +379,7 @@ func (s *Store) execHLen(id uint64, req *raftcmdpb.Request) *raftcmdpb.Response 
 	value, err := s.getHashEngine(id).HLen(args[0])
 	if err != nil {
 		rsp := pool.AcquireResponse()
-		rsp.ErrorResult = util.StringToSlice(err.Error())
+		rsp.ErrorResult = hack.StringToSlice(err.Error())
 
 		return rsp
 	}
@@ -403,7 +404,7 @@ func (s *Store) execHMGet(id uint64, req *raftcmdpb.Request) *raftcmdpb.Response
 	if len(errs) > 0 {
 		errors := make([][]byte, len(errs))
 		for idx, err := range errs {
-			errors[idx] = util.StringToSlice(err.Error())
+			errors[idx] = hack.StringToSlice(err.Error())
 		}
 
 		rsp := pool.AcquireResponse()
@@ -434,7 +435,7 @@ func (s *Store) execHStrLen(id uint64, req *raftcmdpb.Request) *raftcmdpb.Respon
 	value, err := s.getHashEngine(id).HStrLen(args[0], args[1])
 	if err != nil {
 		rsp := pool.AcquireResponse()
-		rsp.ErrorResult = util.StringToSlice(err.Error())
+		rsp.ErrorResult = hack.StringToSlice(err.Error())
 
 		return rsp
 	}

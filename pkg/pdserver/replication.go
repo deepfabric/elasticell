@@ -16,7 +16,7 @@ package pdserver
 import (
 	"math"
 
-	"github.com/deepfabric/elasticell/pkg/log"
+	"github.com/fagongzi/log"
 	meta "github.com/deepfabric/elasticell/pkg/pb/metapb"
 )
 

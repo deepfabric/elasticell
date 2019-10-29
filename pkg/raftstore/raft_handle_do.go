@@ -15,22 +15,23 @@ package raftstore
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"sync/atomic"
 	"time"
 
 	"github.com/coreos/etcd/raft"
 	"github.com/coreos/etcd/raft/raftpb"
-	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
 	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
 	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
 	"github.com/deepfabric/elasticell/pkg/pd"
 	"github.com/deepfabric/elasticell/pkg/storage"
-	"github.com/deepfabric/elasticell/pkg/util"
+	"github.com/fagongzi/log"
+	"github.com/fagongzi/util/protoc"
+	"github.com/fagongzi/util/task"
 	"github.com/pkg/errors"
-	"golang.org/x/net/context"
 )
 
 type readyContext struct {
@@ -171,7 +172,7 @@ func (ps *peerStorage) doAppendEntries(ctx *readyContext, entries []raftpb.Entry
 	lastTerm := entries[c-1].Term
 
 	for _, e := range entries {
-		d := util.MustMarshal(&e)
+		d := protoc.MustMarshal(&e)
 		err := ctx.wb.Set(getRaftLogKey(ps.getCell().ID, e.Index), d)
 		if err != nil {
 			log.Fatalf("raftstore[cell-%d]: append entry failure, entry=<%s> errors:\n %+v",
@@ -213,7 +214,7 @@ func (pr *PeerReplicate) doSaveRaftState(ctx *readyContext) error {
 }
 
 func (pr *PeerReplicate) doSaveApplyState(ctx *readyContext) error {
-	err := ctx.wb.Set(getApplyStateKey(pr.ps.getCell().ID), util.MustMarshal(&ctx.applyState))
+	err := ctx.wb.Set(getApplyStateKey(pr.ps.getCell().ID), protoc.MustMarshal(&ctx.applyState))
 	if err != nil {
 		log.Errorf("raftstore[cell-%d]: save temp apply state failure, errors:\n %+v",
 			pr.ps.getCell().ID,
@@ -368,7 +369,7 @@ func (pr *PeerReplicate) doAskSplit(cell metapb.Cell, peer metapb.Peer, splitKey
 
 	adminReq := new(raftcmdpb.AdminRequest)
 	adminReq.Type = raftcmdpb.Split
-	adminReq.Body = util.MustMarshal(splitReq)
+	adminReq.Body = protoc.MustMarshal(splitReq)
 
 	pr.onAdminRequest(adminReq)
 	return nil
@@ -506,7 +507,7 @@ func (s *Store) doApplySplit(cellID uint64, result *splitResult) {
 	if err != nil {
 		// peer information is already written into db, can't recover.
 		// there is probably a bug.
-		log.Fatalf("raftstore-apply[cell-%d]: create new split cell failed, newCell=<%d> errors:\n %+v",
+		log.Fatalf("raftstore-apply[cell-%d]: create new split cell failed, newCell=<%+v> errors:\n %+v",
 			cellID,
 			right,
 			err)
@@ -734,7 +735,7 @@ func (ps *peerStorage) Entries(low, high, maxSize uint64) ([]raftpb.Entry, error
 	endKey := getRaftLogKey(ps.getCell().ID, high)
 	err = ps.store.getEngine(ps.cell.ID).Scan(startKey, endKey, func(key, value []byte) (bool, error) {
 		e := acquireEntry()
-		util.MustUnmarshal(e, value)
+		protoc.MustUnmarshal(e, value)
 
 		// May meet gap or has been compacted.
 		if e.Index != nextIndex {
@@ -858,11 +859,11 @@ func (ps *peerStorage) Snapshot() (raftpb.Snapshot, error) {
 	return raftpb.Snapshot{}, raft.ErrSnapshotTemporarilyUnavailable
 }
 
-func (ps *peerStorage) setGenSnapJob(job *util.Job) {
+func (ps *peerStorage) setGenSnapJob(job *task.Job) {
 	ps.genSnapJob = job
 }
 
-func (ps *peerStorage) setApplySnapJob(job *util.Job) {
+func (ps *peerStorage) setApplySnapJob(job *task.Job) {
 	ps.applySnapJob = job
 }
 

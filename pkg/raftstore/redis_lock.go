@@ -20,7 +20,7 @@ import (
 	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
 	"github.com/deepfabric/elasticell/pkg/pool"
 	"github.com/deepfabric/elasticell/pkg/redis"
-	"github.com/deepfabric/elasticell/pkg/util"
+	"github.com/fagongzi/util/hack"
 )
 
 func (s *Store) execLock(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.Response {
@@ -42,14 +42,14 @@ func (s *Store) execLock(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.R
 	values, errs := hash.HMGet(resource, keys...)
 	if len(errs) > 0 {
 		rsp := pool.AcquireResponse()
-		rsp.ErrorResult = util.StringToSlice(errs[0].Error())
+		rsp.ErrorResult = hack.StringToSlice(errs[0].Error())
 		return rsp
 	}
 
 	for idx, value := range values {
 		if len(value) > 0 && bytes.Compare(value, target) != 0 {
 			rsp := pool.AcquireResponse()
-			rsp.StatusResult = util.StringToSlice(fmt.Sprintf("%s already locked by %s", keys[idx], value))
+			rsp.StatusResult = hack.StringToSlice(fmt.Sprintf("%s already locked by %s", keys[idx], value))
 			return rsp
 		}
 	}
@@ -61,7 +61,7 @@ func (s *Store) execLock(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.R
 	err := hash.HMSet(resource, keys, targets)
 	if err != nil {
 		rsp := pool.AcquireResponse()
-		rsp.StatusResult = util.StringToSlice(err.Error())
+		rsp.StatusResult = hack.StringToSlice(err.Error())
 		return rsp
 	}
 
@@ -89,7 +89,7 @@ func (s *Store) execLockable(id uint64, req *raftcmdpb.Request) *raftcmdpb.Respo
 	values, errs := hash.HMGet(resource, keys...)
 	if len(errs) > 0 {
 		rsp := pool.AcquireResponse()
-		rsp.ErrorResult = util.StringToSlice(errs[0].Error())
+		rsp.ErrorResult = hack.StringToSlice(errs[0].Error())
 
 		return rsp
 	}
@@ -97,7 +97,7 @@ func (s *Store) execLockable(id uint64, req *raftcmdpb.Request) *raftcmdpb.Respo
 	for idx, value := range values {
 		if len(value) > 0 && bytes.Compare(value, target) != 0 {
 			rsp := pool.AcquireResponse()
-			rsp.StatusResult = util.StringToSlice(fmt.Sprintf("%s already locked by %s", keys[idx], value))
+			rsp.StatusResult = hack.StringToSlice(fmt.Sprintf("%s already locked by %s", keys[idx], value))
 			return rsp
 		}
 	}
@@ -125,7 +125,7 @@ func (s *Store) execUnlock(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb
 	_, err := hash.HDel(resource, keys...)
 	if err != nil {
 		rsp := pool.AcquireResponse()
-		rsp.ErrorResult = util.StringToSlice(err.Error())
+		rsp.ErrorResult = hack.StringToSlice(err.Error())
 		return rsp
 	}
 

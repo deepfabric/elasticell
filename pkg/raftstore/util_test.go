@@ -6,7 +6,7 @@ import (
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
 	"github.com/deepfabric/elasticell/pkg/storage"
-	"github.com/deepfabric/elasticell/pkg/util"
+	"github.com/fagongzi/util/protoc"
 	. "github.com/pingcap/check"
 )
 
@@ -100,7 +100,7 @@ func (s *utilTestSuite) TestSaveCell(c *C) {
 	ls := new(mraft.CellLocalState)
 	data, err := d.GetEngine().Get(getCellStateKey(cell.ID))
 	c.Assert(err, IsNil)
-	util.MustUnmarshal(ls, data)
+	protoc.MustUnmarshal(ls, data)
 	c.Assert(ls.State == mraft.Normal, IsTrue)
 	c.Assert(ls.Cell.ID == cell.ID, IsTrue)
 	c.Assert(bytes.Compare(ls.Cell.Start, cell.Start) == 0, IsTrue)
@@ -114,7 +114,7 @@ func (s *utilTestSuite) TestSaveCell(c *C) {
 	rs := new(mraft.RaftLocalState)
 	data, err = d.GetEngine().Get(getRaftStateKey(cell.ID))
 	c.Assert(err, IsNil)
-	util.MustUnmarshal(rs, data)
+	protoc.MustUnmarshal(rs, data)
 	c.Assert(rs.LastIndex == raftInitLogIndex, IsTrue)
 	c.Assert(rs.HardState.Commit == raftInitLogIndex, IsTrue)
 	c.Assert(rs.HardState.Term == raftInitLogTerm, IsTrue)
@@ -122,7 +122,7 @@ func (s *utilTestSuite) TestSaveCell(c *C) {
 	as := new(mraft.RaftApplyState)
 	data, err = d.GetEngine().Get(getApplyStateKey(cell.ID))
 	c.Assert(err, IsNil)
-	util.MustUnmarshal(as, data)
+	protoc.MustUnmarshal(as, data)
 	c.Assert(as.AppliedIndex == raftInitLogIndex, IsTrue)
 	c.Assert(as.TruncatedState.Index == raftInitLogIndex, IsTrue)
 	c.Assert(as.TruncatedState.Term == raftInitLogTerm, IsTrue)

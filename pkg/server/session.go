@@ -16,13 +16,14 @@ package server
 import (
 	"sync"
 
-	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
 	"github.com/deepfabric/elasticell/pkg/pool"
 	"github.com/deepfabric/elasticell/pkg/redis"
-	"github.com/deepfabric/elasticell/pkg/util"
 	"github.com/fagongzi/goetty"
 	gedis "github.com/fagongzi/goetty/protocol/redis"
+	"github.com/fagongzi/log"
+	"github.com/fagongzi/util/protoc"
+	"github.com/fagongzi/util/task"
 )
 
 type session struct {
@@ -31,7 +32,7 @@ type session struct {
 	id int64
 
 	closed bool
-	resps  *util.Queue
+	resps  *task.Queue
 
 	conn goetty.IOSession
 	addr string
@@ -42,7 +43,7 @@ type session struct {
 func newSession(conn goetty.IOSession) *session {
 	return &session{
 		id:    conn.ID().(int64),
-		resps: &util.Queue{},
+		resps: &task.Queue{},
 		conn:  conn,
 		addr:  conn.RemoteAddr(),
 	}
@@ -114,7 +115,7 @@ func (s *session) doResp(resp *raftcmdpb.Response, buf *goetty.ByteBuf) {
 
 		index := buf.GetWriteIndex()
 		buf.Expansion(size)
-		util.MustMarshalTo(resp, buf.RawBuf()[index:index+size])
+		protoc.MustMarshalTo(resp, buf.RawBuf()[index:index+size])
 		buf.SetWriterIndex(index + size)
 		return
 	}

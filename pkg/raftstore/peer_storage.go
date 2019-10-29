@@ -21,11 +21,12 @@ import (
 
 	"github.com/coreos/etcd/raft"
 	"github.com/coreos/etcd/raft/raftpb"
-	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
 	"github.com/deepfabric/elasticell/pkg/storage"
-	"github.com/deepfabric/elasticell/pkg/util"
+	"github.com/fagongzi/log"
+	"github.com/fagongzi/util/protoc"
+	"github.com/fagongzi/util/task"
 	"github.com/pkg/errors"
 )
 
@@ -68,8 +69,8 @@ type peerStorage struct {
 	applyState       mraft.RaftApplyState
 
 	snapTriedCnt     int
-	genSnapJob       *util.Job
-	applySnapJob     *util.Job
+	genSnapJob       *task.Job
+	applySnapJob     *task.Job
 	applySnapJobLock sync.RWMutex
 
 	pendingReads *readIndexQueue
@@ -334,19 +335,19 @@ func (ps *peerStorage) loadLogEntry(index uint64) (*raftpb.Entry, error) {
 	return ps.unmarshal(v, index)
 }
 
-func (ps *peerStorage) loadCellLocalState(job *util.Job) (*mraft.CellLocalState, error) {
+func (ps *peerStorage) loadCellLocalState(job *task.Job) (*mraft.CellLocalState, error) {
 	if nil != job &&
 		job.IsCancelling() {
-		return nil, util.ErrJobCancelled
+		return nil, task.ErrJobCancelled
 	}
 
 	return loadCellLocalState(ps.cell.ID, ps.store.getDriver(ps.cell.ID), false)
 }
 
-func (ps *peerStorage) applySnapshot(job *util.Job) error {
+func (ps *peerStorage) applySnapshot(job *task.Job) error {
 	if nil != job &&
 		job.IsCancelling() {
-		return util.ErrJobCancelled
+		return task.ErrJobCancelled
 	}
 
 	snap := &mraft.SnapshotMessage{}
@@ -483,18 +484,18 @@ func (ps *peerStorage) writeInitialState(cellID uint64, wb storage.WriteBatch) e
 	applyState.TruncatedState.Index = raftInitLogIndex
 	applyState.TruncatedState.Term = raftInitLogTerm
 
-	err := wb.Set(getRaftStateKey(cellID), util.MustMarshal(raftState))
+	err := wb.Set(getRaftStateKey(cellID), protoc.MustMarshal(raftState))
 	if err != nil {
 		return err
 	}
 
-	return wb.Set(getApplyStateKey(cellID), util.MustMarshal(applyState))
+	return wb.Set(getApplyStateKey(cellID), protoc.MustMarshal(applyState))
 }
 
-func (ps *peerStorage) deleteAllInRange(start, end []byte, job *util.Job) error {
+func (ps *peerStorage) deleteAllInRange(start, end []byte, job *task.Job) error {
 	if job != nil &&
 		job.IsCancelling() {
-		return util.ErrJobCancelled
+		return task.ErrJobCancelled
 	}
 
 	return ps.store.getDataEngine(ps.cell.ID).RangeDelete(start, end)

@@ -4,7 +4,8 @@ import (
 	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
 	"github.com/deepfabric/elasticell/pkg/pool"
 	"github.com/deepfabric/elasticell/pkg/redis"
-	"github.com/deepfabric/elasticell/pkg/util"
+	"github.com/fagongzi/util/format"
+	"github.com/fagongzi/util/hack"
 )
 
 func (s *Store) execZAdd(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.Response {
@@ -18,17 +19,17 @@ func (s *Store) execZAdd(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.R
 		return rsp
 	}
 
-	score, err := util.StrFloat64(args[1])
+	score, err := format.ParseStrFloat64(hack.SliceToString(args[1]))
 	if err != nil {
 		rsp := pool.AcquireResponse()
-		rsp.ErrorResult = util.StringToSlice(err.Error())
+		rsp.ErrorResult = hack.StringToSlice(err.Error())
 		return rsp
 	}
 
 	value, err := s.getZSetEngine(ctx.req.Header.CellId).ZAdd(args[0], score, args[2])
 	if err != nil {
 		rsp := pool.AcquireResponse()
-		rsp.ErrorResult = util.StringToSlice(err.Error())
+		rsp.ErrorResult = hack.StringToSlice(err.Error())
 		return rsp
 	}
 
@@ -66,7 +67,7 @@ func (s *Store) execZCard(id uint64, req *raftcmdpb.Request) *raftcmdpb.Response
 	value, err := s.getZSetEngine(id).ZCard(args[0])
 	if err != nil {
 		rsp := pool.AcquireResponse()
-		rsp.ErrorResult = util.StringToSlice(err.Error())
+		rsp.ErrorResult = hack.StringToSlice(err.Error())
 		return rsp
 	}
 
@@ -89,7 +90,7 @@ func (s *Store) execZCount(id uint64, req *raftcmdpb.Request) *raftcmdpb.Respons
 	value, err := s.getZSetEngine(id).ZCount(args[0], args[1], args[2])
 	if err != nil {
 		rsp := pool.AcquireResponse()
-		rsp.ErrorResult = util.StringToSlice(err.Error())
+		rsp.ErrorResult = hack.StringToSlice(err.Error())
 		return rsp
 	}
 
@@ -109,17 +110,17 @@ func (s *Store) execZIncrBy(ctx *applyContext, req *raftcmdpb.Request) *raftcmdp
 		return rsp
 	}
 
-	by, err := util.StrFloat64(args[2])
+	by, err := format.ParseStrFloat64(hack.SliceToString(args[2]))
 	if err != nil {
 		rsp := pool.AcquireResponse()
-		rsp.ErrorResult = util.StringToSlice(err.Error())
+		rsp.ErrorResult = hack.StringToSlice(err.Error())
 		return rsp
 	}
 
 	value, err := s.getZSetEngine(ctx.req.Header.CellId).ZIncrBy(args[0], args[1], by)
 	if err != nil {
 		rsp := pool.AcquireResponse()
-		rsp.ErrorResult = util.StringToSlice(err.Error())
+		rsp.ErrorResult = hack.StringToSlice(err.Error())
 		return rsp
 	}
 
@@ -143,7 +144,7 @@ func (s *Store) execZLexCount(id uint64, req *raftcmdpb.Request) *raftcmdpb.Resp
 	value, err := s.getZSetEngine(id).ZLexCount(args[0], args[1], args[2])
 	if err != nil {
 		rsp := pool.AcquireResponse()
-		rsp.ErrorResult = util.StringToSlice(err.Error())
+		rsp.ErrorResult = hack.StringToSlice(err.Error())
 		return rsp
 	}
 
@@ -163,17 +164,17 @@ func (s *Store) execZRange(id uint64, req *raftcmdpb.Request) *raftcmdpb.Respons
 		return rsp
 	}
 
-	start, err := util.StrInt64(args[1])
+	start, err := format.ParseStrInt64(hack.SliceToString(args[1]))
 	if err != nil {
 		rsp := pool.AcquireResponse()
-		rsp.ErrorResult = util.StringToSlice(err.Error())
+		rsp.ErrorResult = hack.StringToSlice(err.Error())
 		return rsp
 	}
 
-	stop, err := util.StrInt64(args[2])
+	stop, err := format.ParseStrInt64(hack.SliceToString(args[2]))
 	if err != nil {
 		rsp := pool.AcquireResponse()
-		rsp.ErrorResult = util.StringToSlice(err.Error())
+		rsp.ErrorResult = hack.StringToSlice(err.Error())
 		return rsp
 	}
 
@@ -181,7 +182,7 @@ func (s *Store) execZRange(id uint64, req *raftcmdpb.Request) *raftcmdpb.Respons
 	value, err := s.getZSetEngine(id).ZRange(args[0], start, stop)
 	if err != nil {
 		rsp := pool.AcquireResponse()
-		rsp.ErrorResult = util.StringToSlice(err.Error())
+		rsp.ErrorResult = hack.StringToSlice(err.Error())
 		return rsp
 	}
 
@@ -206,7 +207,7 @@ func (s *Store) execZRangeByLex(id uint64, req *raftcmdpb.Request) *raftcmdpb.Re
 	value, err := s.getZSetEngine(id).ZRangeByLex(args[0], args[1], args[2])
 	if err != nil {
 		rsp := pool.AcquireResponse()
-		rsp.ErrorResult = util.StringToSlice(err.Error())
+		rsp.ErrorResult = hack.StringToSlice(err.Error())
 		return rsp
 	}
 
@@ -230,7 +231,7 @@ func (s *Store) execZRangeByScore(id uint64, req *raftcmdpb.Request) *raftcmdpb.
 	value, err := s.getZSetEngine(id).ZRangeByScore(args[0], args[1], args[2])
 	if err != nil {
 		rsp := pool.AcquireResponse()
-		rsp.ErrorResult = util.StringToSlice(err.Error())
+		rsp.ErrorResult = hack.StringToSlice(err.Error())
 		return rsp
 	}
 
@@ -255,7 +256,7 @@ func (s *Store) execZRank(id uint64, req *raftcmdpb.Request) *raftcmdpb.Response
 	value, err := s.getZSetEngine(id).ZRank(args[0], args[1])
 	if err != nil {
 		rsp := pool.AcquireResponse()
-		rsp.ErrorResult = util.StringToSlice(err.Error())
+		rsp.ErrorResult = hack.StringToSlice(err.Error())
 		return rsp
 	}
 
@@ -285,7 +286,7 @@ func (s *Store) execZRem(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.R
 	value, err := s.getZSetEngine(ctx.req.Header.CellId).ZRem(args[0], args[1:]...)
 	if err != nil {
 		rsp := pool.AcquireResponse()
-		rsp.ErrorResult = util.StringToSlice(err.Error())
+		rsp.ErrorResult = hack.StringToSlice(err.Error())
 		return rsp
 	}
 
@@ -318,7 +319,7 @@ func (s *Store) execZRemRangeByLex(ctx *applyContext, req *raftcmdpb.Request) *r
 	value, err := s.getZSetEngine(ctx.req.Header.CellId).ZRemRangeByLex(args[0], args[1], args[2])
 	if err != nil {
 		rsp := pool.AcquireResponse()
-		rsp.ErrorResult = util.StringToSlice(err.Error())
+		rsp.ErrorResult = hack.StringToSlice(err.Error())
 		return rsp
 	}
 
@@ -338,24 +339,24 @@ func (s *Store) execZRemRangeByRank(ctx *applyContext, req *raftcmdpb.Request) *
 		return rsp
 	}
 
-	start, err := util.StrInt64(args[1])
+	start, err := format.ParseStrInt64(hack.SliceToString(args[1]))
 	if err != nil {
 		rsp := pool.AcquireResponse()
-		rsp.ErrorResult = util.StringToSlice(err.Error())
+		rsp.ErrorResult = hack.StringToSlice(err.Error())
 		return rsp
 	}
 
-	stop, err := util.StrInt64(args[2])
+	stop, err := format.ParseStrInt64(hack.SliceToString(args[2]))
 	if err != nil {
 		rsp := pool.AcquireResponse()
-		rsp.ErrorResult = util.StringToSlice(err.Error())
+		rsp.ErrorResult = hack.StringToSlice(err.Error())
 		return rsp
 	}
 
 	value, err := s.getZSetEngine(ctx.req.Header.CellId).ZRemRangeByRank(args[0], start, stop)
 	if err != nil {
 		rsp := pool.AcquireResponse()
-		rsp.ErrorResult = util.StringToSlice(err.Error())
+		rsp.ErrorResult = hack.StringToSlice(err.Error())
 		return rsp
 	}
 
@@ -378,7 +379,7 @@ func (s *Store) execZRemRangeByScore(ctx *applyContext, req *raftcmdpb.Request) 
 	value, err := s.getZSetEngine(ctx.req.Header.CellId).ZRemRangeByScore(args[0], args[1], args[2])
 	if err != nil {
 		rsp := pool.AcquireResponse()
-		rsp.ErrorResult = util.StringToSlice(err.Error())
+		rsp.ErrorResult = hack.StringToSlice(err.Error())
 		return rsp
 	}
 
@@ -401,7 +402,7 @@ func (s *Store) execZScore(id uint64, req *raftcmdpb.Request) *raftcmdpb.Respons
 	value, err := s.getZSetEngine(id).ZScore(args[0], args[1])
 	if err != nil {
 		rsp := pool.AcquireResponse()
-		rsp.ErrorResult = util.StringToSlice(err.Error())
+		rsp.ErrorResult = hack.StringToSlice(err.Error())
 		return rsp
 	}
 

@@ -16,17 +16,17 @@ package node
 import (
 	"encoding/json"
 	"sync"
+	"context"
 
-	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
 	"github.com/deepfabric/elasticell/pkg/pd"
 	"github.com/deepfabric/elasticell/pkg/pdapi"
 	"github.com/deepfabric/elasticell/pkg/raftstore"
 	"github.com/deepfabric/elasticell/pkg/storage"
-	"github.com/deepfabric/elasticell/pkg/util"
+	"github.com/fagongzi/util/task"
+	"github.com/fagongzi/log"
 	"github.com/pkg/errors"
-	"golang.org/x/net/context"
 )
 
 // Node node
@@ -41,7 +41,7 @@ type Node struct {
 	storeMeta   metapb.Store
 	store       *raftstore.Store
 
-	runner *util.Runner
+	runner *task.Runner
 }
 
 // NewNode create a node instance, then init store, pd connection and init the cluster ID
@@ -52,7 +52,7 @@ func NewNode(clientAddr string, cfg *Cfg, drivers []storage.Driver) (*Node, erro
 	n.driversMask = uint64(len(drivers) - 1)
 	n.clusterID = cfg.ClusterID
 	n.storeMeta = newStore(clientAddr, cfg)
-	n.runner = util.NewRunner()
+	n.runner = task.NewRunner()
 
 	err := n.initPDClient()
 	if err != nil {

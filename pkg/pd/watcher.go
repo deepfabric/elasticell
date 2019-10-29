@@ -17,12 +17,12 @@ import (
 	"errors"
 	"sync"
 	"time"
+	"context"
 
 	"github.com/deepfabric/elasticell/pkg/codec"
-	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
 	"github.com/fagongzi/goetty"
-	"golang.org/x/net/context"
+	"github.com/fagongzi/log"
 )
 
 var (

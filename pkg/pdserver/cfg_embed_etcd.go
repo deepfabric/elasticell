@@ -14,8 +14,9 @@
 package pdserver
 
 import (
-	"github.com/coreos/etcd/embed"
 	"github.com/deepfabric/elasticell/pkg/util"
+	"github.com/coreos/etcd/embed"
+	"github.com/fagongzi/util/adjust"
 )
 
 func (c *Cfg) getEmbedEtcdConfig() (*embed.Config, error) {
@@ -34,7 +35,7 @@ func (c *Cfg) getEmbedEtcdConfig() (*embed.Config, error) {
 		return nil, err
 	}
 
-	cfg.APUrls, err = util.ParseUrls(util.GetStringValue(c.URLsAdvertisePeer, c.URLsPeer))
+	cfg.APUrls, err = util.ParseUrls(adjust.String(c.URLsAdvertisePeer, c.URLsPeer))
 	if err != nil {
 		return nil, err
 	}
@@ -44,7 +45,7 @@ func (c *Cfg) getEmbedEtcdConfig() (*embed.Config, error) {
 		return nil, err
 	}
 
-	cfg.ACUrls, err = util.ParseUrls(util.GetStringValue(c.URLsAdvertiseClient, c.URLsClient))
+	cfg.ACUrls, err = util.ParseUrls(adjust.String(c.URLsAdvertiseClient, c.URLsClient))
 	if err != nil {
 		return nil, err
 	}

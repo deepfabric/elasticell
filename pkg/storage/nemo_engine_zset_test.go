@@ -18,7 +18,8 @@ package storage
 import (
 	"os"
 
-	"github.com/deepfabric/elasticell/pkg/util"
+	"github.com/fagongzi/util/format"
+	"github.com/fagongzi/util/hack"
 	. "github.com/pingcap/check"
 )
 
@@ -113,13 +114,13 @@ func (s *testNemoZSetSuite) TestZIncrBy(c *C) {
 
 	v, err := s.driver.GetZSetEngine().ZIncrBy(key, m1, 1.0)
 	c.Assert(err, IsNil)
-	vf, _ := util.StrFloat64(v)
+	vf, _ := format.ParseStrFloat64(hack.SliceToString(v))
 	c.Assert(int(vf), Equals, 1)
 
 	s.driver.GetZSetEngine().ZAdd(key, score, m1)
 	v, err = s.driver.GetZSetEngine().ZIncrBy(key, m1, 1.0)
 	c.Assert(err, IsNil)
-	vf, _ = util.StrFloat64(v)
+	vf, _ = format.ParseStrFloat64(hack.SliceToString(v))
 	c.Assert(int(vf), Equals, 2)
 }
 
@@ -623,17 +624,17 @@ func (s *testNemoZSetSuite) TestZScore(c *C) {
 	s.driver.GetZSetEngine().ZAdd(key, score3, m3)
 
 	tmp, err = s.driver.GetZSetEngine().ZScore(key, m1)
-	score, _ := util.StrFloat64(tmp)
+	score, _ := format.ParseStrFloat64(hack.SliceToString(tmp))
 	c.Assert(err, IsNil)
 	c.Assert(int(score), Equals, 1)
 
 	tmp, err = s.driver.GetZSetEngine().ZScore(key, m2)
-	score, _ = util.StrFloat64(tmp)
+	score, _ = format.ParseStrFloat64(hack.SliceToString(tmp))
 	c.Assert(err, IsNil)
 	c.Assert(int(score), Equals, 2)
 
 	tmp, err = s.driver.GetZSetEngine().ZScore(key, m3)
-	score, _ = util.StrFloat64(tmp)
+	score, _ = format.ParseStrFloat64(hack.SliceToString(tmp))
 	c.Assert(err, IsNil)
 	c.Assert(int(score), Equals, 3)
 }

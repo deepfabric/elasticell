@@ -17,7 +17,7 @@ import (
 	"bytes"
 	"strings"
 
-	"github.com/deepfabric/elasticell/pkg/util"
+	"github.com/fagongzi/util/hack"
 )
 
 const (
@@ -49,7 +49,7 @@ func (c Command) Cmd() []byte {
 
 // CmdString returns redis command use lower string
 func (c Command) CmdString() string {
-	return strings.ToLower(util.SliceToString(c[0]))
+	return strings.ToLower(hack.SliceToString(c[0]))
 }
 
 // Args returns redis command args

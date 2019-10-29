@@ -17,13 +17,14 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/node"
 	"github.com/deepfabric/elasticell/pkg/raftstore"
 	"github.com/deepfabric/elasticell/pkg/redis"
 	"github.com/deepfabric/elasticell/pkg/storage"
 	"github.com/deepfabric/elasticell/pkg/util"
 	"github.com/fagongzi/goetty"
+	"github.com/fagongzi/log"
+	"github.com/fagongzi/util/task"
 )
 
 // Server a server provide kv cache based on redis protocol
@@ -35,7 +36,7 @@ type Server struct {
 	stopWG   sync.WaitGroup
 	stopC    chan interface{}
 
-	runner *util.Runner
+	runner *task.Runner
 }
 
 // NewServer create a server use spec cfg
@@ -44,7 +45,7 @@ func NewServer(cfg *Cfg) *Server {
 
 	s := new(Server)
 	s.stopC = make(chan interface{})
-	s.runner = util.NewRunner()
+	s.runner = task.NewRunner()
 
 	s.initNode()
 	s.initRedis()

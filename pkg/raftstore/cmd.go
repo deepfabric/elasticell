@@ -14,12 +14,12 @@
 package raftstore
 
 import (
-	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/errorpb"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
 	"github.com/deepfabric/elasticell/pkg/pool"
-	"github.com/deepfabric/elasticell/pkg/util/uuid"
+	"github.com/fagongzi/log"
+	"github.com/fagongzi/util/uuid"
 )
 
 type cmd struct {

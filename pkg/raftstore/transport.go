@@ -14,6 +14,7 @@
 package raftstore
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"sync"
@@ -21,7 +22,6 @@ import (
 	"time"
 
 	"github.com/coreos/etcd/raft/raftpb"
-	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
 	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
 	"github.com/deepfabric/elasticell/pkg/pb/querypb"
@@ -29,8 +29,10 @@ import (
 	"github.com/deepfabric/elasticell/pkg/pool"
 	"github.com/deepfabric/elasticell/pkg/util"
 	"github.com/fagongzi/goetty"
+	"github.com/fagongzi/log"
+	"github.com/fagongzi/util/protoc"
+	"github.com/fagongzi/util/task"
 	"github.com/pkg/errors"
-	"golang.org/x/net/context"
 )
 
 var (
@@ -55,8 +57,8 @@ type transport struct {
 	getStoreAddrFun func(storeID uint64) (string, error)
 
 	conns     map[uint64]goetty.IOSessionPool
-	msgs      []*util.Queue
-	snapshots []*util.Queue
+	msgs      []*task.Queue
+	snapshots []*task.Queue
 	mask      uint64
 	snapMask  uint64
 
@@ -77,8 +79,8 @@ func newTransport(store *Store, client *pd.Client, handler func(interface{})) *t
 		conns:            make(map[uint64]goetty.IOSessionPool),
 		addrs:            make(map[uint64]string),
 		addrsRevert:      make(map[string]uint64),
-		msgs:             make([]*util.Queue, globalCfg.WorkerCountSent, globalCfg.WorkerCountSent),
-		snapshots:        make([]*util.Queue, globalCfg.WorkerCountSentSnap, globalCfg.WorkerCountSentSnap),
+		msgs:             make([]*task.Queue, globalCfg.WorkerCountSent, globalCfg.WorkerCountSent),
+		snapshots:        make([]*task.Queue, globalCfg.WorkerCountSentSnap, globalCfg.WorkerCountSentSnap),
 		mask:             globalCfg.WorkerCountSent - 1,
 		snapMask:         globalCfg.WorkerCountSentSnap - 1,
 		sendingSnapshots: make(map[uint64]*mraft.RaftMessage),
@@ -95,12 +97,12 @@ func newTransport(store *Store, client *pd.Client, handler func(interface{})) *t
 
 func (t *transport) start() error {
 	for i := uint64(0); i < globalCfg.WorkerCountSent; i++ {
-		t.msgs[i] = &util.Queue{}
+		t.msgs[i] = &task.Queue{}
 		go t.readyToSendRaft(t.msgs[i])
 	}
 
 	for i := uint64(0); i < globalCfg.WorkerCountSentSnap; i++ {
-		t.snapshots[i] = &util.Queue{}
+		t.snapshots[i] = &task.Queue{}
 		go t.readyToSendSnapshots(t.snapshots[i])
 	}
 
@@ -192,7 +194,7 @@ func (t *transport) sendRaftMessage(msg *mraft.RaftMessage) {
 		}
 
 		snapMsg := &mraft.SnapshotMessage{}
-		util.MustUnmarshal(snapMsg, msg.Message.Snapshot.Data)
+		protoc.MustUnmarshal(snapMsg, msg.Message.Snapshot.Data)
 		snapMsg.Header.FromPeer = msg.FromPeer
 		snapMsg.Header.ToPeer = msg.ToPeer
 		snapMsg.Ask = &mraft.SnapshotAskMessage{}
@@ -203,7 +205,7 @@ func (t *transport) sendRaftMessage(msg *mraft.RaftMessage) {
 	t.msgs[t.mask&storeID].Put(msg)
 }
 
-func (t *transport) readyToSendRaft(q *util.Queue) {
+func (t *transport) readyToSendRaft(q *task.Queue) {
 	items := make([]interface{}, globalCfg.BatchSizeSent, globalCfg.BatchSizeSent)
 
 	for {
@@ -227,7 +229,7 @@ func (t *transport) readyToSendRaft(q *util.Queue) {
 	}
 }
 
-func (t *transport) readyToSendSnapshots(q *util.Queue) {
+func (t *transport) readyToSendSnapshots(q *task.Queue) {
 	items := make([]interface{}, globalCfg.BatchSizeSent, globalCfg.BatchSizeSent)
 
 	for {
@@ -334,7 +336,7 @@ func (t *transport) addPendingSnapshot(msg *mraft.RaftMessage) error {
 		check.Message.Snapshot.Metadata.Index < msg.Message.Snapshot.Metadata.Index) {
 
 		snap := &mraft.RaftMessage{}
-		util.MustUnmarshal(snap, util.MustMarshal(msg))
+		protoc.MustUnmarshal(snap, protoc.MustMarshal(msg))
 		t.sendingSnapshots[msg.ToPeer.ID] = snap
 		log.Infof("raftstore-snap[cell-%d]: pending snap added, epoch=<%s> term=<%d> index=<%d>",
 			msg.CellID,

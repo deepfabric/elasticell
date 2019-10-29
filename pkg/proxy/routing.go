@@ -4,7 +4,7 @@ import (
 	"hash/crc32"
 	"sync"
 
-	"github.com/deepfabric/elasticell/pkg/util"
+	"github.com/fagongzi/util/hack"
 )
 
 const (
@@ -51,11 +51,11 @@ func newRouting() *routing {
 }
 
 func (r *routing) put(uuid []byte, value *req) {
-	r.rms[getIndex(uuid)].put(util.SliceToString(uuid), value)
+	r.rms[getIndex(uuid)].put(hack.SliceToString(uuid), value)
 }
 
 func (r *routing) delete(uuid []byte) *req {
-	return r.rms[getIndex(uuid)].delete(util.SliceToString(uuid))
+	return r.rms[getIndex(uuid)].delete(hack.SliceToString(uuid))
 }
 
 func getIndex(key []byte) int {

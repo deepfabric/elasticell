@@ -17,14 +17,14 @@ import (
 	"bytes"
 
 	"github.com/coreos/etcd/raft/raftpb"
-	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/errorpb"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
 	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
 	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
 	"github.com/deepfabric/elasticell/pkg/storage"
-	"github.com/deepfabric/elasticell/pkg/util"
+	"github.com/fagongzi/log"
+	"github.com/fagongzi/util/protoc"
 )
 
 const (
@@ -111,7 +111,7 @@ func newChangePeerRequest(changeType pdpb.ConfChangeType, peer metapb.Peer) *raf
 	subReq := new(raftcmdpb.ChangePeerRequest)
 	subReq.ChangeType = changeType
 	subReq.Peer = peer
-	req.Body = util.MustMarshal(subReq)
+	req.Body = protoc.MustMarshal(subReq)
 
 	return req
 }
@@ -122,7 +122,7 @@ func newTransferLeaderRequest(rsp *pdpb.TransferLeader) *raftcmdpb.AdminRequest 
 
 	subReq := new(raftcmdpb.TransferLeaderRequest)
 	subReq.Peer = rsp.Peer
-	req.Body = util.MustMarshal(subReq)
+	req.Body = protoc.MustMarshal(subReq)
 
 	return req
 }
@@ -134,7 +134,7 @@ func newCompactLogRequest(index, term uint64) *raftcmdpb.AdminRequest {
 	subReq := new(raftcmdpb.RaftLogGCRequest)
 	subReq.CompactIndex = index
 	subReq.CompactTerm = term
-	req.Body = util.MustMarshal(subReq)
+	req.Body = protoc.MustMarshal(subReq)
 
 	return req
 }
@@ -144,7 +144,7 @@ func SaveCell(driver storage.Driver, cell metapb.Cell) error {
 	wb := driver.NewWriteBatch()
 
 	// save state
-	err := wb.Set(getCellStateKey(cell.ID), util.MustMarshal(&mraft.CellLocalState{Cell: cell}))
+	err := wb.Set(getCellStateKey(cell.ID), protoc.MustMarshal(&mraft.CellLocalState{Cell: cell}))
 	if err != nil {
 		return err
 	}
@@ -156,7 +156,7 @@ func SaveCell(driver storage.Driver, cell metapb.Cell) error {
 		Commit: raftInitLogIndex,
 	}
 
-	err = wb.Set(getRaftStateKey(cell.ID), util.MustMarshal(raftState))
+	err = wb.Set(getRaftStateKey(cell.ID), protoc.MustMarshal(raftState))
 	if err != nil {
 		return err
 	}
@@ -167,7 +167,7 @@ func SaveCell(driver storage.Driver, cell metapb.Cell) error {
 		Term:  raftInitLogTerm,
 		Index: raftInitLogIndex,
 	}
-	err = wb.Set(getApplyStateKey(cell.ID), util.MustMarshal(applyState))
+	err = wb.Set(getApplyStateKey(cell.ID), protoc.MustMarshal(applyState))
 	if err != nil {
 		return err
 	}

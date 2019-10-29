@@ -14,20 +14,19 @@
 package raftstore
 
 import (
+	"context"
 	"fmt"
 	"time"
 
-	"github.com/Workiva/go-datastructures/queue"
 	"github.com/coreos/etcd/raft"
-	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
 	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
 	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
 	"github.com/deepfabric/elasticell/pkg/pd"
 	"github.com/deepfabric/elasticell/pkg/pool"
-	"github.com/deepfabric/elasticell/pkg/util"
-	"golang.org/x/net/context"
+	"github.com/fagongzi/log"
+	"github.com/fagongzi/util/task"
 )
 
 type action int
@@ -46,17 +45,17 @@ type PeerReplicate struct {
 	store             *Store
 	ps                *peerStorage
 	batch             *proposeBatch
-	events            *queue.RingBuffer
-	ticks             *util.Queue
-	steps             *util.Queue
-	reports           *util.Queue
-	applyResults      *util.Queue
-	requests          *util.Queue
-	actions           *util.Queue
+	events            *task.RingBuffer
+	ticks             *task.Queue
+	steps             *task.Queue
+	reports           *task.Queue
+	applyResults      *task.Queue
+	requests          *task.Queue
+	actions           *task.Queue
 	stopRaftTick      bool
 	peerHeartbeatsMap *peerHeartbeatsMap
 	pendingReads      *readIndexQueue
-	lastHBJob         *util.Job
+	lastHBJob         *task.Job
 	writtenKeys       uint64
 	writtenBytes      uint64
 	sizeDiffHint      uint64
@@ -119,13 +118,13 @@ func newPeerReplicate(store *Store, cell *metapb.Cell, peerID uint64) (*PeerRepl
 	}
 
 	pr.rn = rn
-	pr.events = queue.NewRingBuffer(2)
-	pr.ticks = &util.Queue{}
-	pr.steps = &util.Queue{}
-	pr.reports = &util.Queue{}
-	pr.applyResults = &util.Queue{}
-	pr.requests = &util.Queue{}
-	pr.actions = &util.Queue{}
+	pr.events = task.NewRingBuffer(2)
+	pr.ticks = &task.Queue{}
+	pr.steps = &task.Queue{}
+	pr.reports = &task.Queue{}
+	pr.applyResults = &task.Queue{}
+	pr.requests = &task.Queue{}
+	pr.actions = &task.Queue{}
 
 	pr.store = store
 	pr.pendingReads = &readIndexQueue{
@@ -247,7 +246,7 @@ func (pr *PeerReplicate) handleHeartbeat() {
 	}
 }
 
-func (pr *PeerReplicate) setLastHBJob(job *util.Job) {
+func (pr *PeerReplicate) setLastHBJob(job *task.Job) {
 	pr.lastHBJob = job
 }
 

@@ -19,7 +19,7 @@ import (
 	"time"
 
 	"github.com/coreos/etcd/embed"
-	"github.com/deepfabric/elasticell/pkg/log"
+	"github.com/fagongzi/log"
 	"github.com/deepfabric/elasticell/pkg/pd"
 	"google.golang.org/grpc"
 )

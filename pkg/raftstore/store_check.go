@@ -18,11 +18,11 @@ import (
 	"fmt"
 
 	"github.com/coreos/etcd/raft/raftpb"
-	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/errorpb"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
 	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
+	"github.com/fagongzi/log"
 )
 
 func (s *Store) isRaftMsgValid(msg *mraft.RaftMessage) bool {

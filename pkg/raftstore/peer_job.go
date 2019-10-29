@@ -19,11 +19,11 @@ import (
 	"time"
 
 	"github.com/coreos/etcd/raft/raftpb"
-	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
 	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
-	"github.com/deepfabric/elasticell/pkg/util"
+	"github.com/fagongzi/log"
+	"github.com/fagongzi/util/protoc"
 )
 
 func (pr *PeerReplicate) startApplyingSnapJob() {
@@ -299,7 +299,7 @@ func (ps *peerStorage) doGenerateSnapshotJob() error {
 		}
 	}
 
-	snapshot.Data = util.MustMarshal(msg)
+	snapshot.Data = protoc.MustMarshal(msg)
 	ps.genSnapJob.SetResult(snapshot)
 
 	cost := observeSnapshotBuild(start)

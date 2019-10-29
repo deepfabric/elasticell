@@ -26,3 +26,7 @@ _testmain.go
 *.exe
 *.test
 *.prof
+
+dist/
+vendor/github.com/deepfabric/c-nemo
+vendor/github.com/deepfabric/go-nemo

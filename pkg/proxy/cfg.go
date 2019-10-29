@@ -5,7 +5,7 @@ import (
 	"flag"
 	"io/ioutil"
 
-	"github.com/deepfabric/elasticell/pkg/log"
+	"github.com/fagongzi/log"
 )
 
 var (

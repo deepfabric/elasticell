@@ -14,12 +14,12 @@
 package raftstore
 
 import (
-	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
 	"github.com/deepfabric/elasticell/pkg/pb/querypb"
 	"github.com/deepfabric/elasticell/pkg/pool"
-	"github.com/deepfabric/elasticell/pkg/util"
 	"github.com/fagongzi/goetty"
+	"github.com/fagongzi/log"
+	"github.com/fagongzi/util/protoc"
 )
 
 var (
@@ -60,27 +60,27 @@ func (decoder raftDecoder) Decode(in *goetty.ByteBuf) (bool, interface{}, error)
 	switch t {
 	case typeSnap:
 		msg := &mraft.SnapshotMessage{}
-		util.MustUnmarshal(msg, data)
+		protoc.MustUnmarshal(msg, data)
 		in.MarkedBytesReaded()
 		return true, msg, nil
 	case typeRaft:
 		msg := pool.AcquireRaftMessage()
-		util.MustUnmarshal(msg, data)
+		protoc.MustUnmarshal(msg, data)
 		in.MarkedBytesReaded()
 		return true, msg, nil
 	case typeAck:
 		msg := &mraft.ACKMessage{}
-		util.MustUnmarshal(msg, data)
+		protoc.MustUnmarshal(msg, data)
 		in.MarkedBytesReaded()
 		return true, msg, nil
 	case typeQueryReq:
 		msg := &querypb.QueryReq{}
-		util.MustUnmarshal(msg, data)
+		protoc.MustUnmarshal(msg, data)
 		in.MarkedBytesReaded()
 		return true, msg, nil
 	case typeQueryRsp:
 		msg := &querypb.QueryRsp{}
-		util.MustUnmarshal(msg, data)
+		protoc.MustUnmarshal(msg, data)
 		in.MarkedBytesReaded()
 		return true, msg, nil
 	}
@@ -91,7 +91,7 @@ func (decoder raftDecoder) Decode(in *goetty.ByteBuf) (bool, interface{}, error)
 
 func (e raftEncoder) Encode(data interface{}, out *goetty.ByteBuf) error {
 	t := typeRaft
-	var m util.Marashal
+	var m protoc.PB
 
 	if msg, ok := data.(*mraft.RaftMessage); ok {
 		t = typeRaft
@@ -119,7 +119,7 @@ func (e raftEncoder) Encode(data interface{}, out *goetty.ByteBuf) error {
 	if size > 0 {
 		index := out.GetWriteIndex()
 		out.Expansion(size)
-		util.MustMarshalTo(m, out.RawBuf()[index:index+size])
+		protoc.MustMarshalTo(m, out.RawBuf()[index:index+size])
 		out.SetWriterIndex(index + size)
 	}
 

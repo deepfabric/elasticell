@@ -4,7 +4,7 @@ import (
 	"time"
 
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
-	"github.com/deepfabric/elasticell/pkg/util"
+	"github.com/fagongzi/util/task"
 	. "github.com/pingcap/check"
 )
 
@@ -27,7 +27,7 @@ func (s *transportTestSuite) SetUpSuite(c *C) {
 	s1 := new(Store)
 	s1.id = s.fromID
 	globalCfg = newTestStoreCfg(s.fromAddr)
-	s1.runner = util.NewRunner()
+	s1.runner = task.NewRunner()
 	s.from = newTransport(s1, nil, nil)
 	s.from.getStoreAddrFun = s.parse
 	go s.from.start()
@@ -36,7 +36,7 @@ func (s *transportTestSuite) SetUpSuite(c *C) {
 	s2 := new(Store)
 	s2.id = s.toID
 	globalCfg = newTestStoreCfg(s.toAddr)
-	s2.runner = util.NewRunner()
+	s2.runner = task.NewRunner()
 	s.to = newTransport(s2, nil, nil)
 	s.to.getStoreAddrFun = s.parse
 

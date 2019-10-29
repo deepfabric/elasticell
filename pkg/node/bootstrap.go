@@ -14,18 +14,20 @@
 package node
 
 import (
+	"context"
 	"math"
 	"time"
 
-	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
 	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
+	"github.com/deepfabric/elasticell/pkg/util"
 	"github.com/deepfabric/elasticell/pkg/pd"
 	"github.com/deepfabric/elasticell/pkg/raftstore"
-	"github.com/deepfabric/elasticell/pkg/util"
-	"golang.org/x/net/context"
+	"github.com/fagongzi/log"
+	"github.com/fagongzi/util/format"
+	"github.com/fagongzi/util/protoc"
 )
 
 func (n *Node) checkClusterBootstrapped() bool {
@@ -54,7 +56,7 @@ func (n *Node) checkStore() uint64 {
 	}
 
 	st := new(mraft.StoreIdent)
-	util.MustUnmarshal(st, data)
+	protoc.MustUnmarshal(st, data)
 
 	if st.ClusterID != n.clusterID {
 		log.Fatalf("bootstrap: check store failed, cluster id mismatch, local=<%d> remote=<%d>",
@@ -96,7 +98,7 @@ func (n *Node) bootstrapStore() uint64 {
 	st.ClusterID = n.clusterID
 	st.StoreID = storeID
 
-	err = n.drivers[0].GetEngine().Set(raftstore.GetStoreIdentKey(), util.MustMarshal(st))
+	err = n.drivers[0].GetEngine().Set(raftstore.GetStoreIdentKey(), protoc.MustMarshal(st))
 	if err != nil {
 		log.Fatalf("bootstrap: bootstrap store failed, errors:\n %v", err)
 	}
@@ -130,7 +132,7 @@ func (n *Node) bootstrapCells() []metapb.Cell {
 			end = math.MaxUint64
 		}
 
-		cells = append(cells, n.createCell(util.Uint64ToBytes(start), util.Uint64ToBytes(end)))
+		cells = append(cells, n.createCell(format.Uint64ToBytes(start), format.Uint64ToBytes(end)))
 		start = end
 		end = start + step
 	}

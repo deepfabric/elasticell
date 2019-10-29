@@ -16,12 +16,12 @@ package pdserver
 import (
 	"sync"
 	"time"
+	"context"
 
-	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
-	"github.com/deepfabric/elasticell/pkg/util"
+	"github.com/fagongzi/log"
+	"github.com/fagongzi/util/task"
 	"github.com/pkg/errors"
-	"golang.org/x/net/context"
 )
 
 var (
@@ -39,7 +39,7 @@ type coordinator struct {
 	opts       map[uint64]Operator
 	storeOpts  map[uint64]StoreOperator
 	schedulers map[string]*scheduleController
-	runner     *util.Runner
+	runner     *task.Runner
 }
 
 func newCoordinator(cfg *Cfg, cache *cache) *coordinator {
@@ -51,7 +51,7 @@ func newCoordinator(cfg *Cfg, cache *cache) *coordinator {
 	c.opts = make(map[uint64]Operator)
 	c.storeOpts = make(map[uint64]StoreOperator)
 	c.schedulers = make(map[string]*scheduleController)
-	c.runner = util.NewRunner()
+	c.runner = task.NewRunner()
 
 	return c
 }

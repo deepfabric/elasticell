@@ -20,16 +20,17 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+	"context"
 
-	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
 	"github.com/deepfabric/elasticell/pkg/storage"
 	"github.com/deepfabric/elasticell/pkg/util"
 	"github.com/fagongzi/goetty"
 	"github.com/pkg/errors"
-	"golang.org/x/net/context"
 	"golang.org/x/time/rate"
+	"github.com/fagongzi/log"
 )
+
 
 var (
 	creating = 1

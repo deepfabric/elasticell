@@ -19,8 +19,8 @@ import (
 
 	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
 	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
-	"github.com/deepfabric/elasticell/pkg/util"
 	"github.com/fagongzi/goetty"
+	"github.com/fagongzi/util/protoc"
 )
 
 const (
@@ -97,7 +97,7 @@ func (encoder *ProxyEncoder) Encode(data interface{}, out *goetty.ByteBuf) error
 }
 
 // WriteProxyMessage write a proxy to the buf
-func WriteProxyMessage(tag byte, req util.Marashal, out *goetty.ByteBuf) error {
+func WriteProxyMessage(tag byte, req protoc.PB, out *goetty.ByteBuf) error {
 	value, err := req.Marshal()
 	if err != nil {
 		log.Fatalf("bug: marshal error, req=<%d> errors:%+v\n", req, err)
@@ -137,11 +137,11 @@ func readRedis(in *goetty.ByteBuf, size int) (bool, interface{}, error) {
 	}
 
 	resp := new(raftcmdpb.Response)
-	util.MustUnmarshal(resp, data)
+	protoc.MustUnmarshal(resp, data)
 	return true, resp, nil
 }
 
-func readPB(in *goetty.ByteBuf, size int, pb util.Unmarshal) (bool, interface{}, error) {
+func readPB(in *goetty.ByteBuf, size int, pb protoc.PB) (bool, interface{}, error) {
 	n, data, err := in.ReadBytes(size)
 	if err != nil {
 		return false, nil, err
@@ -151,6 +151,6 @@ func readPB(in *goetty.ByteBuf, size int, pb util.Unmarshal) (bool, interface{},
 		return false, nil, fmt.Errorf("read bytes not match length field, expect=<%d>, read=<%d>", size, n)
 	}
 
-	util.MustUnmarshal(pb, data)
+	protoc.MustUnmarshal(pb, data)
 	return true, pb, nil
 }

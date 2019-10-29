@@ -15,12 +15,12 @@ package raftstore
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"sync"
 	"time"
 
 	"github.com/coreos/etcd/raft/raftpb"
-	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
 	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
@@ -30,9 +30,11 @@ import (
 	"github.com/deepfabric/elasticell/pkg/redis"
 	"github.com/deepfabric/elasticell/pkg/storage"
 	"github.com/deepfabric/elasticell/pkg/util"
-	"github.com/deepfabric/elasticell/pkg/util/uuid"
+	"github.com/fagongzi/log"
+	"github.com/fagongzi/util/protoc"
+	"github.com/fagongzi/util/task"
+	"github.com/fagongzi/util/uuid"
 	"github.com/pkg/errors"
-	"golang.org/x/net/context"
 )
 
 const (
@@ -66,7 +68,7 @@ type Store struct {
 	trans              *transport
 	engines            []storage.Driver
 	enginesMask        uint64
-	runner             *util.Runner
+	runner             *task.Runner
 	redisReadHandles   map[raftcmdpb.CMDType]func(uint64, *raftcmdpb.Request) *raftcmdpb.Response
 	redisWriteHandles  map[raftcmdpb.CMDType]func(*applyContext, *raftcmdpb.Request) *raftcmdpb.Response
 	sendingSnapCount   uint32
@@ -97,7 +99,7 @@ func NewStore(clusterID uint64, pdClient *pd.Client, meta metapb.Store, engines 
 	s.delegates = newApplyDelegateMap()
 	s.keyConvertFun = util.NoConvert
 
-	s.runner = util.NewRunner()
+	s.runner = task.NewRunner()
 	for i := 0; i < int(globalCfg.WorkerCountApply); i++ {
 		s.runner.AddNamedWorker(fmt.Sprintf(applyWorker, i))
 	}
@@ -135,7 +137,7 @@ func (s *Store) startCells() {
 			totalCount++
 
 			localState := new(mraft.CellLocalState)
-			util.MustUnmarshal(localState, value)
+			protoc.MustUnmarshal(localState, value)
 
 			for _, p := range localState.Cell.Peers {
 				s.peerCache.put(p.ID, *p)
@@ -225,8 +227,8 @@ func (s *Store) startStoreHeartbeatTask() {
 		defer ticker.Stop()
 
 		var err error
-		var job *util.Job
-		cb := func(j *util.Job) {
+		var job *task.Job
+		cb := func(j *task.Job) {
 			job = j
 		}
 
@@ -510,7 +512,7 @@ func (s *Store) onSnapshotMessage(msg *mraft.SnapshotMessage) {
 
 func (s *Store) onSnapshotAsk(msg *mraft.SnapshotMessage) {
 	reply := &mraft.SnapshotMessage{}
-	util.MustUnmarshal(reply, util.MustMarshal(msg))
+	protoc.MustUnmarshal(reply, protoc.MustMarshal(msg))
 	reply.Header.FromPeer = msg.Header.ToPeer
 	reply.Header.ToPeer = msg.Header.FromPeer
 	reply.Ask = nil
@@ -588,7 +590,7 @@ func (s *Store) onSnapshotChunk(msg *mraft.SnapshotMessage) {
 		if msg.Chunk.Last {
 			msg.Chunk = nil
 			reply := &mraft.SnapshotMessage{}
-			util.MustUnmarshal(reply, util.MustMarshal(msg))
+			protoc.MustUnmarshal(reply, protoc.MustMarshal(msg))
 			reply.Header.FromPeer = msg.Header.ToPeer
 			reply.Header.ToPeer = msg.Header.FromPeer
 			reply.Ack = &mraft.SnapshotAckMessage{
@@ -903,7 +905,7 @@ func (s *Store) getPeer(id uint64) metapb.Peer {
 	return p
 }
 
-func (s *Store) addPDJob(task func() error, cb func(*util.Job)) error {
+func (s *Store) addPDJob(task func() error, cb func(*task.Job)) error {
 	return s.addNamedJobWithCB("", pdWorker, task, cb)
 }
 
@@ -911,11 +913,11 @@ func (s *Store) addRaftLogGCJob(task func() error) error {
 	return s.addNamedJob("", raftGCWorker, task)
 }
 
-func (s *Store) addSnapJob(task func() error, cb func(*util.Job)) error {
+func (s *Store) addSnapJob(task func() error, cb func(*task.Job)) error {
 	return s.addNamedJobWithCB("", snapWorker, task, cb)
 }
 
-func (s *Store) addApplyJob(cellID uint64, desc string, task func() error, cb func(*util.Job)) error {
+func (s *Store) addApplyJob(cellID uint64, desc string, task func() error, cb func(*task.Job)) error {
 	index := (globalCfg.WorkerCountApply - 1) & cellID
 	return s.addNamedJobWithCB(desc, fmt.Sprintf(applyWorker, index), task, cb)
 }
@@ -928,7 +930,7 @@ func (s *Store) addNamedJob(desc, worker string, task func() error) error {
 	return s.runner.RunJobWithNamedWorker(desc, worker, task)
 }
 
-func (s *Store) addNamedJobWithCB(desc, worker string, task func() error, cb func(*util.Job)) error {
+func (s *Store) addNamedJobWithCB(desc, worker string, task func() error, cb func(*task.Job)) error {
 	return s.runner.RunJobWithNamedWorkerWithCB(desc, worker, task, cb)
 }
 
