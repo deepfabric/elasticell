@@ -23,7 +23,6 @@ import (
 	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
 	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
 	"github.com/deepfabric/elasticell/pkg/pool"
-	"github.com/deepfabric/elasticell/pkg/redis"
 	"github.com/deepfabric/elasticell/pkg/storage"
 	"github.com/deepfabric/elasticell/pkg/util"
 )
@@ -407,7 +406,6 @@ func (d *applyDelegate) doExecRaftGC(ctx *applyContext) (*raftcmdpb.RaftCMDRespo
 
 func (d *applyDelegate) execWriteRequest(ctx *applyContext) *raftcmdpb.RaftCMDResponse {
 	resp := pool.AcquireRaftCMDResponse()
-	var err error
 	for _, req := range ctx.req.Requests {
 		log.Debugf("req: apply raft log. cell=<%d>, uuid=<%d>",
 			d.cell.ID,
@@ -416,53 +414,10 @@ func (d *applyDelegate) execWriteRequest(ctx *applyContext) *raftcmdpb.RaftCMDRe
 		if h, ok := d.store.redisWriteHandles[req.Type]; ok {
 			rsp := h(ctx, req)
 			resp.Responses = append(resp.Responses, rsp)
-			if err = d.execWriteRequestIndex(req, rsp); err != nil {
-				log.Errorf("raftstore-apply[cell-%d]: execWriteRequestIndex failed\n%+v",
-					d.cell.ID, err)
-			}
 		}
 	}
 
 	return resp
-}
-
-func (d *applyDelegate) execWriteRequestIndex(req *raftcmdpb.Request, rsp *raftcmdpb.Response) (err error) {
-	if (req.Type == raftcmdpb.HMSet || req.Type == raftcmdpb.HSet || req.Type == raftcmdpb.Del) && (rsp.ErrorResult == nil && len(rsp.ErrorResults) == 0) {
-		cmd := redis.Command(req.Cmd)
-		args := cmd.Args()
-		if req.Type == raftcmdpb.Del {
-			for i := 0; i < len(args); i++ {
-				key := args[i]
-				idxName := d.store.matchIndex(key)
-				if idxName != "" {
-					idxKeyReq := &pdpb.IndexKeyRequest{
-						CellID:  d.cell.ID,
-						IdxName: idxName,
-						CmdArgs: [][]byte{key},
-						IsDel:   true,
-					}
-					if err = d.store.handleIdxKeyReq(idxKeyReq); err != nil {
-						return
-					}
-				}
-			}
-		} else {
-			key := args[0]
-			idxName := d.store.matchIndex(key)
-			if idxName != "" {
-				idxKeyReq := &pdpb.IndexKeyRequest{
-					CellID:  d.cell.ID,
-					IdxName: idxName,
-					CmdArgs: args,
-					IsDel:   false,
-				}
-				if err = d.store.handleIdxKeyReq(idxKeyReq); err != nil {
-					return
-				}
-			}
-		}
-	}
-	return
 }
 
 func (pr *PeerReplicate) doExecReadCmd(c *cmd) {

@@ -18,7 +18,6 @@ import (
 	"time"
 
 	"github.com/Workiva/go-datastructures/queue"
-
 	"github.com/coreos/etcd/raft"
 	"github.com/deepfabric/elasticell/pkg/log"
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
@@ -28,7 +27,6 @@ import (
 	"github.com/deepfabric/elasticell/pkg/pd"
 	"github.com/deepfabric/elasticell/pkg/pool"
 	"github.com/deepfabric/elasticell/pkg/util"
-	"github.com/pilosa/pilosa"
 	"golang.org/x/net/context"
 )
 
@@ -66,7 +64,6 @@ type PeerReplicate struct {
 	deleteKeysHint    uint64
 	cancelTaskIds     []uint64
 	metrics           localMetrics
-	nextDocID         uint64
 }
 
 func createPeerReplicate(store *Store, cell *metapb.Cell) (*PeerReplicate, error) {
@@ -410,23 +407,4 @@ func (pr *PeerReplicate) getCell() metapb.Cell {
 
 func (pr *PeerReplicate) getPeer() metapb.Peer {
 	return pr.peer
-}
-
-// AllocateDocID allocates a docID which is unique among the cluster.
-// Note that the same document has different docID on multiple replicas if inserted separatly, has smae docID if a replica is initialized from a snapshot of another.
-func (pr *PeerReplicate) AllocateDocID() (docID uint64, err error) {
-	if pr.nextDocID&(pilosa.SliceWidth-1) == 0 {
-		// the first time to allocate, or current allocated SliceWidth is used up
-		var rsp *pdpb.AllocIDRsp
-		if rsp, err = pr.store.pdClient.AllocID(context.TODO(), new(pdpb.AllocIDReq)); err != nil {
-			return
-		}
-		docID = rsp.GetID() * pilosa.SliceWidth
-		pr.nextDocID = docID + 1
-		log.Infof("peer.go[cell-%d]: batch allocated docID [%v, %v)", pr.cellID, docID, docID+pilosa.SliceWidth)
-	} else {
-		docID = pr.nextDocID
-		pr.nextDocID++
-	}
-	return
 }

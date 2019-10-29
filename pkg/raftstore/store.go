@@ -16,9 +16,6 @@ package raftstore
 import (
 	"bytes"
 	"fmt"
-	"os"
-	"regexp"
-	"strings"
 	"sync"
 	"time"
 
@@ -27,7 +24,6 @@ import (
 	"github.com/deepfabric/elasticell/pkg/pb/metapb"
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
 	"github.com/deepfabric/elasticell/pkg/pb/pdpb"
-	"github.com/deepfabric/elasticell/pkg/pb/querypb"
 	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
 	"github.com/deepfabric/elasticell/pkg/pd"
 	"github.com/deepfabric/elasticell/pkg/pool"
@@ -35,9 +31,6 @@ import (
 	"github.com/deepfabric/elasticell/pkg/storage"
 	"github.com/deepfabric/elasticell/pkg/util"
 	"github.com/deepfabric/elasticell/pkg/util/uuid"
-	datastructures "github.com/deepfabric/go-datastructures"
-	"github.com/deepfabric/indexer"
-	"github.com/deepfabric/indexer/cql"
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 )
@@ -78,55 +71,9 @@ type Store struct {
 	redisWriteHandles  map[raftcmdpb.CMDType]func(*applyContext, *raftcmdpb.Request) *raftcmdpb.Response
 	sendingSnapCount   uint32
 	reveivingSnapCount uint32
-	rwlock             sync.RWMutex
-	indices            map[string]*pdpb.IndexDef   //index name -> IndexDef
-	reExps             map[string]*regexp.Regexp   //index name -> Regexp
-	docProts           map[string]*cql.Document    //index name -> cql.Document
-	indexers           map[uint64]*indexer.Indexer // cell id -> Indexer
-	cellIDToStores     map[uint64][]uint64         // cell id -> non-leader store ids, fetched from PD
-	storeIDToCells     map[uint64][]uint64         // store id -> leader cell ids, fetched from PD
-	syncEpoch          uint64
-	queryStates        map[string]*QueryState // query UUID -> query state
-	queryReqChan       chan *QueryRequestCb
-	queryRspChan       chan *querypb.QueryRsp
 
 	droppedLock     sync.Mutex
 	droppedVoteMsgs map[uint64]raftpb.Message
-}
-
-// DocPtr is alias of querypb.Document
-type DocPtr struct {
-	*querypb.Document
-}
-
-// Compare is part of Comparable interface
-func (d DocPtr) Compare(other datastructures.Comparable) int {
-	d2 := other.(DocPtr)
-	for i := 0; i < len(d.Order); i++ {
-		if d.Order[i] != d2.Order[i] {
-			return int(d.Order[i] - d2.Order[i])
-		}
-	}
-	return 0
-}
-
-// QueryState is state of a query
-type QueryState struct {
-	qrc *QueryRequestCb
-
-	cellIDToStores map[uint64][]uint64 // cell id -> non-leader store ids
-	storeIDToCells map[uint64][]uint64 // store id -> leader cell ids
-	doneCells      []uint64            // cells those done query
-	errorResults   [][]byte            // error messages during query
-
-	docs   []*querypb.Document
-	docsOa *datastructures.OrderedArray
-}
-
-// QueryRequestCb is query request from elasticell-proxy(cb!=nil) or a store(cb==nil)
-type QueryRequestCb struct {
-	qr *querypb.QueryReq
-	cb func(*raftcmdpb.RaftCMDResponse)
 }
 
 // NewStore returns store
@@ -161,16 +108,6 @@ func NewStore(clusterID uint64, pdClient *pd.Client, meta metapb.Store, engines 
 
 	s.redisReadHandles = make(map[raftcmdpb.CMDType]func(uint64, *raftcmdpb.Request) *raftcmdpb.Response)
 	s.redisWriteHandles = make(map[raftcmdpb.CMDType]func(*applyContext, *raftcmdpb.Request) *raftcmdpb.Response)
-
-	s.indices = make(map[string]*pdpb.IndexDef)
-	s.reExps = make(map[string]*regexp.Regexp)
-	s.indexers = make(map[uint64]*indexer.Indexer)
-	s.docProts = make(map[string]*cql.Document)
-	s.cellIDToStores = make(map[uint64][]uint64)
-	s.storeIDToCells = make(map[uint64][]uint64)
-	s.queryStates = make(map[string]*QueryState)
-	s.queryReqChan = make(chan *QueryRequestCb, queryChanSize)
-	s.queryRspChan = make(chan *querypb.QueryRsp, queryChanSize)
 
 	s.droppedVoteMsgs = make(map[uint64]raftpb.Message)
 
@@ -227,9 +164,6 @@ func (s *Store) startCells() {
 
 			s.keyRanges.Update(localState.Cell)
 			s.replicatesMap.put(cellID, pr)
-			if _, err := s.GetIndexer(cellID); err != nil {
-				return false, err
-			}
 
 			return true, nil
 		}, false)
@@ -249,10 +183,6 @@ func (s *Store) startCells() {
 		applyingCount)
 
 	s.cleanup()
-
-	if err := s.loadIndices(); err != nil && !os.IsNotExist(err) {
-		log.Fatalf("bootstrap: init store failed, errors:\n %+v", err)
-	}
 }
 
 // Start returns the error when start store
@@ -280,12 +210,6 @@ func (s *Store) Start() {
 
 	s.startCellReportTask()
 	log.Infof("bootstrap: ready to handle report cell task")
-
-	s.startServeIndexTask()
-	log.Infof("bootstrap: ready to serve index")
-
-	s.startRefreshRangesTask()
-	log.Infof("bootstrap: ready to refresh ranges")
 }
 
 func (s *Store) startTransfer() {
@@ -396,21 +320,6 @@ func (s *Store) startCellSplitCheckTask() {
 	})
 }
 
-func (s *Store) startServeIndexTask() {
-	s.runner.RunCancelableTask(func(ctx context.Context) {
-		s.readyToServeIndex(ctx)
-	})
-	s.runner.RunCancelableTask(func(ctx context.Context) {
-		s.readyToServeQuery(ctx)
-	})
-}
-
-func (s *Store) startRefreshRangesTask() {
-	s.runner.RunCancelableTask(func(ctx context.Context) {
-		s.refreshRangesLoop(ctx)
-	})
-}
-
 // Stop returns the error when stop store
 func (s *Store) Stop() error {
 	s.replicatesMap.foreach(func(pr *PeerReplicate) (bool, error) {
@@ -453,15 +362,6 @@ func (s *Store) searchCell(value []byte) metapb.Cell {
 
 // OnProxyReq process proxy req
 func (s *Store) OnProxyReq(req *raftcmdpb.Request, cb func(*raftcmdpb.RaftCMDResponse)) error {
-	if strings.ToLower(string(req.Cmd[0])) == "query" {
-		qr, err := convertToQueryReq(req, s.docProts)
-		if err != nil {
-			return err
-		}
-		log.Debugf("raftstore[store-%d]: received query request %v", s.id, qr)
-		s.handleQueryRequest(qr, cb)
-		return nil
-	}
 	key := req.Cmd[1]
 	pr, err := s.getTargetCell(key)
 	if err != nil {
@@ -508,12 +408,6 @@ func (s *Store) notify(n interface{}) {
 		s.onSplitCheckResult(msg)
 	} else if msg, ok := n.(*mraft.SnapshotMessage); ok {
 		s.onSnapshotMessage(msg)
-	} else if msg, ok := n.(*querypb.QueryReq); ok {
-		s.handleQueryRequest(msg, nil)
-		return
-	} else if msg, ok := n.(*querypb.QueryRsp); ok {
-		s.handleQueryRsp(msg)
-		return
 	}
 }
 
@@ -1093,7 +987,7 @@ func (s *Store) handleStoreHeartbeat() error {
 			rsp.SetLogLevel.NewLevel)
 		log.SetLevel(log.Level(rsp.SetLogLevel.NewLevel))
 	}
-	err = s._HandleIndicesChange(rsp.Indices)
+
 	return err
 }
 
