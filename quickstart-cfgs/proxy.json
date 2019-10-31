@@ -77,6 +77,14 @@
         "zscore",
         "lock",
         "unlock",
-        "lockable"
+        "lockable",
+        "bmcreate",
+        "bmadd",
+        "bmremove",
+        "bmclear",
+        "bmcontains",
+        "bmdel",
+        "bmcount",
+        "bmrange"
     ]
 }

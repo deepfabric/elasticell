@@ -126,10 +126,6 @@ func (rs *redisSession) doResp(resp *raftcmdpb.Response, buf *goetty.ByteBuf) {
 		redis.WriteStatus(resp.StatusResult, buf)
 	}
 
-	if len(resp.DocArrayResult) > 0 || resp.HasEmptyDocArrayResult {
-		credis.WriteDocArray(resp.DocArrayResult, buf)
-	}
-
 	log.Debugf("redis-[%s]: response normal, resp=<%+v>",
 		rs.addr,
 		resp)

@@ -153,8 +153,4 @@ func (s *session) doResp(resp *raftcmdpb.Response, buf *goetty.ByteBuf) {
 	if resp.StatusResult != nil {
 		gedis.WriteStatus(resp.StatusResult, buf)
 	}
-
-	if len(resp.DocArrayResult) > 0 || resp.HasEmptyDocArrayResult {
-		redis.WriteDocArray(resp.DocArrayResult, buf)
-	}
 }

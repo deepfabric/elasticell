@@ -15,7 +15,6 @@ package raftstore
 
 import (
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
-	"github.com/deepfabric/elasticell/pkg/pb/querypb"
 	"github.com/deepfabric/elasticell/pkg/pool"
 	"github.com/fagongzi/goetty"
 	"github.com/fagongzi/log"
@@ -28,11 +27,9 @@ var (
 )
 
 const (
-	typeRaft     = 1
-	typeSnap     = 2
-	typeAck      = 3
-	typeQueryReq = 4
-	typeQueryRsp = 5
+	typeRaft = 1
+	typeSnap = 2
+	typeAck  = 3
 )
 
 type raftDecoder struct {
@@ -73,16 +70,6 @@ func (decoder raftDecoder) Decode(in *goetty.ByteBuf) (bool, interface{}, error)
 		protoc.MustUnmarshal(msg, data)
 		in.MarkedBytesReaded()
 		return true, msg, nil
-	case typeQueryReq:
-		msg := &querypb.QueryReq{}
-		protoc.MustUnmarshal(msg, data)
-		in.MarkedBytesReaded()
-		return true, msg, nil
-	case typeQueryRsp:
-		msg := &querypb.QueryRsp{}
-		protoc.MustUnmarshal(msg, data)
-		in.MarkedBytesReaded()
-		return true, msg, nil
 	}
 
 	log.Fatalf("bug: not support msg type, type=<%d>", t)
@@ -101,12 +88,6 @@ func (e raftEncoder) Encode(data interface{}, out *goetty.ByteBuf) error {
 		m = msg
 	} else if msg, ok := data.(*mraft.ACKMessage); ok {
 		t = typeAck
-		m = msg
-	} else if msg, ok := data.(*querypb.QueryReq); ok {
-		t = typeQueryReq
-		m = msg
-	} else if msg, ok := data.(*querypb.QueryRsp); ok {
-		t = typeQueryRsp
 		m = msg
 	} else {
 		log.Fatalf("bug: unsupport msg: %+v", msg)

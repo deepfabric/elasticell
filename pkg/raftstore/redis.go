@@ -37,6 +37,11 @@ func (s *Store) initRedisHandle() {
 	s.redisWriteHandles[raftcmdpb.ZRemRangeByScore] = s.execZRemRangeByScore
 	s.redisWriteHandles[raftcmdpb.Lock] = s.execLock
 	s.redisWriteHandles[raftcmdpb.Unlock] = s.execUnlock
+	s.redisWriteHandles[raftcmdpb.BMCreate] = s.execBMCreate
+	s.redisWriteHandles[raftcmdpb.BMAdd] = s.execBMAdd
+	s.redisWriteHandles[raftcmdpb.BMRemove] = s.execBMRemove
+	s.redisWriteHandles[raftcmdpb.BMClear] = s.execBMClear
+	s.redisWriteHandles[raftcmdpb.BMDel] = s.execBMDel
 
 	// read
 	s.redisReadHandles[raftcmdpb.Get] = s.execKVGet
@@ -65,4 +70,7 @@ func (s *Store) initRedisHandle() {
 	s.redisReadHandles[raftcmdpb.ZRank] = s.execZRank
 	s.redisReadHandles[raftcmdpb.ZScore] = s.execZScore
 	s.redisReadHandles[raftcmdpb.Lockable] = s.execLockable
+	s.redisReadHandles[raftcmdpb.BMContains] = s.execBMContains
+	s.redisReadHandles[raftcmdpb.BMCount] = s.execBMCount
+	s.redisReadHandles[raftcmdpb.BMRange] = s.execBMRange
 }

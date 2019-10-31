@@ -32,7 +32,7 @@ func (s *Store) execKVSet(ctx *applyContext, req *raftcmdpb.Request) *raftcmdpb.
 		return rsp
 	}
 
-	ctx.rb.set(args[0], args[1])
+	ctx.kvBatch.set(args[0], args[1])
 
 	size := uint64(len(args[0]) + len(args[1]))
 	ctx.metrics.writtenKeys++

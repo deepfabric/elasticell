@@ -19,6 +19,10 @@ DIST_DIR 	= $(ROOT_DIR)dist/
 .PHONY: release
 release: dist_dir pd cell proxy;
 
+.PHONY: bench
+bench: ; $(info ======== compiled elasticell-pd:)
+	env CGO_ENABLED=$(CGO_ENABLED) GOOS=$(GOOS) go build -mod vendor -a -installsuffix cgo -o $(DIST_DIR)bench $(LD_FLAGS) $(ROOT_DIR)cmd/bench/*.go
+
 .PHONY: pd
 pd: ; $(info ======== compiled elasticell-pd:)
 	env CGO_ENABLED=$(CGO_ENABLED) GOOS=$(GOOS) go build -mod vendor -a -installsuffix cgo -o $(DIST_DIR)pd $(LD_FLAGS) $(ROOT_DIR)cmd/pd/*.go

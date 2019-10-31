@@ -6,6 +6,7 @@ import (
 	"github.com/coreos/etcd/raft/raftpb"
 	"github.com/deepfabric/elasticell/pkg/pb/mraft"
 	"github.com/fagongzi/goetty"
+	"github.com/pilosa/pilosa/roaring"
 )
 
 var (
@@ -16,7 +17,7 @@ var (
 	applyContextPool     sync.Pool
 	entryPool            sync.Pool
 	bufPool              sync.Pool
-	redisBatchPool       sync.Pool
+	bitmapPool           sync.Pool
 )
 
 var (
@@ -25,18 +26,18 @@ var (
 	emptyApplyMetrics = applyMetrics{}
 )
 
-func acquireRedisBatch() *redisBatch {
-	v := redisBatchPool.Get()
+func acquireBitmap() *roaring.Bitmap {
+	v := bitmapPool.Get()
 	if v == nil {
-		return &redisBatch{}
+		return roaring.NewBTreeBitmap()
 	}
 
-	return v.(*redisBatch)
+	return v.(*roaring.Bitmap)
 }
 
-func releaseRedisBatch(batch *redisBatch) {
-	batch.reset()
-	redisBatchPool.Put(batch)
+func releaseBitmap(value *roaring.Bitmap) {
+	value.Containers.Reset()
+	bitmapPool.Put(value)
 }
 
 func acquireBuf() *goetty.ByteBuf {
@@ -130,7 +131,7 @@ func releaseAsyncApplyResult(res *asyncApplyResult) {
 func acquireApplyContext() *applyContext {
 	v := applyContextPool.Get()
 	if v == nil {
-		return &applyContext{}
+		return newApplyContext()
 	}
 
 	return v.(*applyContext)

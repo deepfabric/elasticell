@@ -27,34 +27,26 @@ import (
 	"github.com/fagongzi/util/protoc"
 )
 
-type redisBatch struct {
-	kvKeys   [][]byte
-	kvValues [][]byte
-}
-
-func (rb *redisBatch) set(key, value []byte) {
-	rb.kvKeys = append(rb.kvKeys, key)
-	rb.kvValues = append(rb.kvValues, value)
-}
-
-func (rb *redisBatch) hasSetBatch() bool {
-	return len(rb.kvKeys) > 0
-}
-
-func (rb *redisBatch) reset() {
-	rb.kvKeys = make([][]byte, 0)
-	rb.kvValues = make([][]byte, 0)
-}
-
 type applyContext struct {
+	// raft state write batch
 	wb storage.WriteBatch
-	rb *redisBatch
+
+	// data
+	kvBatch     *redisKVBatch
+	bitmapBatch *bitmapBatch
 
 	applyState mraft.RaftApplyState
 	req        *raftcmdpb.RaftCMDRequest
 	index      uint64
 	term       uint64
 	metrics    applyMetrics
+}
+
+func newApplyContext() *applyContext {
+	return &applyContext{
+		kvBatch:     &redisKVBatch{},
+		bitmapBatch: &bitmapBatch{},
+	}
 }
 
 func (ctx *applyContext) reset() {
@@ -64,6 +56,9 @@ func (ctx *applyContext) reset() {
 	ctx.index = 0
 	ctx.term = 0
 	ctx.metrics = emptyApplyMetrics
+
+	ctx.kvBatch.reset()
+	ctx.bitmapBatch.reset()
 }
 
 func (d *applyDelegate) checkEpoch(req *raftcmdpb.RaftCMDRequest) bool {
@@ -92,7 +87,6 @@ func (d *applyDelegate) doApplyRaftCMD(ctx *applyContext) *execResult {
 	var result *execResult
 
 	ctx.wb = d.store.getDriver(d.cell.ID).NewWriteBatch()
-	ctx.rb = acquireRedisBatch()
 
 	if !d.checkEpoch(ctx.req) {
 		resp = errorStaleEpochResp(ctx.req.Header.UUID, d.term, d.cell)
@@ -107,16 +101,27 @@ func (d *applyDelegate) doApplyRaftCMD(ctx *applyContext) *execResult {
 		}
 	}
 
-	if ctx.rb.hasSetBatch() {
-		err = d.store.getKVEngine(d.cell.ID).MSet(ctx.rb.kvKeys, ctx.rb.kvValues)
+	if ctx.kvBatch.hasSetBatch() {
+		err = d.store.getKVEngine(d.cell.ID).MSet(ctx.kvBatch.kvKeys, ctx.kvBatch.kvValues)
+		if err != nil {
+			log.Fatalf("raftstore-apply[cell-%d]: save apply context failed, errors:\n %+v",
+				d.cell.ID,
+				err)
+		}
+		ctx.kvBatch.reset()
+	}
+
+	if ctx.bitmapBatch.hasBatch() {
+		size, err := ctx.bitmapBatch.do(d.cell.ID, d.store)
 		if err != nil {
 			log.Fatalf("raftstore-apply[cell-%d]: save apply context failed, errors:\n %+v",
 				d.cell.ID,
 				err)
 		}
 
-		releaseRedisBatch(ctx.rb)
-		ctx.rb = nil
+		ctx.metrics.writtenBytes += size
+		ctx.metrics.sizeDiffHint += size
+		ctx.bitmapBatch.reset()
 	}
 
 	ctx.applyState.AppliedIndex = ctx.index

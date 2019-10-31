@@ -14,11 +14,10 @@ require (
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible // indirect
 	github.com/fagongzi/goetty v1.3.1
 	github.com/fagongzi/log v0.0.0-20190424080438-6b79fa3fda5a
-	github.com/fagongzi/util v0.0.0-20191029074511-8ce736c4f671
+	github.com/fagongzi/util v0.0.0-20191031020235-c0f29a56724d
 	github.com/funny/slab v0.0.0-20180511031532-b1fad5e5d478 // indirect
 	github.com/funny/utest v0.0.0-20161029064919-43870a374500 // indirect
 	github.com/garyburd/redigo v1.6.0
-	github.com/go-ole/go-ole v1.2.4 // indirect
 	github.com/gogo/protobuf v1.3.1
 	github.com/golang/groupcache v0.0.0-20191027212112-611e8accdfc9 // indirect
 	github.com/golang/protobuf v1.3.2
@@ -31,6 +30,7 @@ require (
 	github.com/grpc-ecosystem/grpc-gateway v1.11.3 // indirect
 	github.com/jonboulle/clockwork v0.1.0 // indirect
 	github.com/montanaflynn/stats v0.5.0
+	github.com/pilosa/pilosa v1.4.0
 	github.com/pingcap/check v0.0.0-20190102082844-67f458068fc8
 	github.com/pkg/errors v0.8.1
 	github.com/prometheus/client_golang v1.2.1

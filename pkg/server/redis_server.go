@@ -136,6 +136,16 @@ func (s *RedisServer) init() {
 	s.handlers[raftcmdpb.Lock] = s.onLock
 	s.handlers[raftcmdpb.Unlock] = s.onUnlock
 	s.handlers[raftcmdpb.Lockable] = s.onLockable
+
+	// bitmap
+	s.handlers[raftcmdpb.BMCreate] = s.onBMCreate
+	s.handlers[raftcmdpb.BMAdd] = s.onBMAdd
+	s.handlers[raftcmdpb.BMRemove] = s.onBMRemove
+	s.handlers[raftcmdpb.BMClear] = s.onBMClear
+	s.handlers[raftcmdpb.BMDel] = s.onBMDel
+	s.handlers[raftcmdpb.BMRange] = s.onBMRange
+	s.handlers[raftcmdpb.BMCount] = s.onBMCount
+	s.handlers[raftcmdpb.BMContains] = s.onBMContains
 }
 
 func (s *RedisServer) doConnection(session goetty.IOSession) error {

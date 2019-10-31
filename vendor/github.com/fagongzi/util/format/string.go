@@ -152,3 +152,8 @@ func Float64ToString(v float64) []byte {
 func Int64ToString(v int64) []byte {
 	return strconv.AppendInt(nil, v, 10)
 }
+
+// UInt64ToString uint64 to str
+func UInt64ToString(v uint64) []byte {
+	return strconv.AppendUint(nil, v, 10)
+}
