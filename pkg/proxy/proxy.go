@@ -313,6 +313,7 @@ func (p *RedisProxy) initSupportCMDs() {
 	// bitmap
 	p.aggregationCmds["bmand"] = p.doBMAnd
 	p.aggregationCmds["bmor"] = p.doBMOr
+	p.aggregationCmds["bmxor"] = p.doBMXor
 	p.aggregationCmds["bmandnot"] = p.doBMAndNot
 }
 

@@ -1,14 +1,12 @@
 package proxy
 
 import (
-	"bytes"
 	"strconv"
 
 	"github.com/deepfabric/elasticell/pkg/pb/raftcmdpb"
 )
 
 var (
-	sep    = []byte("#")
 	cmdSet = []byte("SET")
 	cmdGet = []byte("GET")
 )
@@ -45,8 +43,7 @@ func isAggregationPart(id []byte) bool {
 }
 
 func parseAggregationPart(id []byte) ([]byte, int) {
-	data := bytes.Split(id, sep)
-	return data[0], parseStrInt64(data[1])
+	return id[0:16], parseStrInt64(id[16:])
 }
 
 func parseStrInt64(data []byte) int {

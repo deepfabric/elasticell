@@ -26,6 +26,11 @@ func (p *RedisProxy) doBMOr(rs *redisSession, cmd redis.Command) (bool, error) {
 	return p.doBMAggregation(rs, cmd, p.doBMOrMerge)
 }
 
+// bmxor [withbm|start count]  bm1 bm2 [bm3 bm4]
+func (p *RedisProxy) doBMXor(rs *redisSession, cmd redis.Command) (bool, error) {
+	return p.doBMAggregation(rs, cmd, p.doBMXorMerge)
+}
+
 // bmandnot [withbm|start count]  bm1 bm2 [bm3 bm4]
 func (p *RedisProxy) doBMAndNot(rs *redisSession, cmd redis.Command) (bool, error) {
 	return p.doBMAggregation(rs, cmd, p.doBMAndNotMerge)
@@ -35,12 +40,12 @@ func (p *RedisProxy) doBMAggregation(rs *redisSession, cmd redis.Command, mergeF
 	offset := 1
 	n := len(cmd.Args())
 	if n < 3 {
-		return false, nil
+		return false, errInvalidCommand
 	}
 
 	if strings.ToUpper(hack.SliceToString(cmd.Args()[0])) != optionWithBM {
 		if n < 4 {
-			return false, nil
+			return false, errInvalidCommand
 		}
 
 		offset = 2
@@ -51,7 +56,7 @@ func (p *RedisProxy) doBMAggregation(rs *redisSession, cmd redis.Command, mergeF
 
 	for idx, key := range cmd.Args()[offset:] {
 		cmd := redis.Command([][]byte{cmdGet, key})
-		p.addToForward(newReqUUID(bytes.Join([][]byte{id, format.UInt64ToString(uint64(idx))}, sep), cmd, rs))
+		p.addToForward(newReqUUID(append(id, format.UInt64ToString(uint64(idx))...), cmd, rs))
 	}
 
 	return true, nil
@@ -117,7 +122,7 @@ func (p *RedisProxy) doBMOrMerge(args [][]byte, rsps ...*raftcmdpb.Response) *ra
 	return p.buildResult(bm, args)
 }
 
-func (p *RedisProxy) doBMAndNotMerge(args [][]byte, rsps ...*raftcmdpb.Response) *raftcmdpb.Response {
+func (p *RedisProxy) doBMXorMerge(args [][]byte, rsps ...*raftcmdpb.Response) *raftcmdpb.Response {
 	bm := roaring.NewBTreeBitmap()
 	tmp := roaring.NewBTreeBitmap()
 	var target *roaring.Bitmap
@@ -145,6 +150,32 @@ func (p *RedisProxy) doBMAndNotMerge(args [][]byte, rsps ...*raftcmdpb.Response)
 	}
 
 	return p.buildResult(bm, args)
+}
+
+func (p *RedisProxy) doBMAndNotMerge(args [][]byte, rsps ...*raftcmdpb.Response) *raftcmdpb.Response {
+	targets := make([]*roaring.Bitmap, 0, len(rsps))
+	for _, rsp := range rsps {
+		if len(rsp.BulkResult) > 0 {
+			bm := roaring.NewBTreeBitmap()
+			targets = append(targets, bm)
+			_, _, err := bm.ImportRoaringBits(rsp.BulkResult, false, false, 0)
+			if err != nil {
+				return &raftcmdpb.Response{
+					ErrorResult: hack.StringToSlice(err.Error()),
+				}
+			}
+		}
+	}
+
+	union := targets[0]
+	and := targets[0]
+
+	for _, bm := range targets[1:] {
+		union = union.Union(bm)
+		and = and.Intersect(bm)
+	}
+
+	return p.buildResult(union.Xor(and), args)
 }
 
 func (p *RedisProxy) buildResult(bm *roaring.Bitmap, args [][]byte) *raftcmdpb.Response {
