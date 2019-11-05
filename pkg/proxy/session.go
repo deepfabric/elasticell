@@ -51,9 +51,11 @@ func (rs *redisSession) resp(rsp *raftcmdpb.Response) {
 		return
 	}
 
+	log.Debugf("read a aggregation part: %+v", rsp.UUID)
 	id, index := parseAggregationPart(rsp.UUID)
+	log.Debugf("parsed a aggregation part: %+v, %d", id, index)
 	rs.aggLock.RLock()
-	if req, ok := rs.aggregations[string(id)]; ok {
+	if req, ok := rs.aggregations[hack.SliceToString(id)]; ok {
 		if req.addPart(index, rsp) {
 			rs.resps.Put(req.merge())
 		}

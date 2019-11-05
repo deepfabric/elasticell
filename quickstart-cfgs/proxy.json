@@ -85,6 +85,9 @@
         "bmcontains",
         "bmdel",
         "bmcount",
-        "bmrange"
+        "bmrange",
+        "bmand",
+        "bmor",
+        "bmandnot"
     ]
 }

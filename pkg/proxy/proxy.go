@@ -307,8 +307,13 @@ func (p *RedisProxy) initSupportCMDs() {
 		p.supportCmds[cmd] = struct{}{}
 	}
 
+	// kv
 	p.aggregationCmds["mget"] = p.doMGet
-	p.aggregationCmds["mset"] = p.doMSet
+
+	// bitmap
+	p.aggregationCmds["bmand"] = p.doBMAnd
+	p.aggregationCmds["bmor"] = p.doBMOr
+	p.aggregationCmds["bmandnot"] = p.doBMAndNot
 }
 
 func (p *RedisProxy) refreshStores() {
