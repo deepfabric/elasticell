@@ -152,6 +152,7 @@ func (p *RedisProxy) doBMXorMerge(args [][]byte, rsps ...*raftcmdpb.Response) *r
 	return p.buildResult(bm, args)
 }
 
+// and not A - (A and B)
 func (p *RedisProxy) doBMAndNotMerge(args [][]byte, rsps ...*raftcmdpb.Response) *raftcmdpb.Response {
 	targets := make([]*roaring.Bitmap, 0, len(rsps))
 	for _, rsp := range rsps {
@@ -167,15 +168,14 @@ func (p *RedisProxy) doBMAndNotMerge(args [][]byte, rsps ...*raftcmdpb.Response)
 		}
 	}
 
-	union := targets[0]
+	bm := targets[0]
 	and := targets[0]
 
 	for _, bm := range targets[1:] {
-		union = union.Union(bm)
 		and = and.Intersect(bm)
 	}
 
-	return p.buildResult(union.Xor(and), args)
+	return p.buildResult(bm.Xor(and), args)
 }
 
 func (p *RedisProxy) buildResult(bm *roaring.Bitmap, args [][]byte) *raftcmdpb.Response {
