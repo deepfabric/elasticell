@@ -17,7 +17,7 @@ Store是一个运行在一个独立磁盘上的服务。一个Store管理多个`
 
 4. Epoch, Cell的版本，每当Cell发生分裂或者Peer变更的时候，这个值会单调递增
 
-在一个Raft Group中，Cell的副本数需要设置为基数，通常建议最少设置为3
+在一个Raft Group中，Cell的副本数需要设置为奇数，通常建议最少设置为3
 
 ### PD (Placement Driver)
 PD is the managing component of the entire cluster and is in charge of the following two operations:
